@@ -4,6 +4,8 @@
 
 Qard uses a compact deck list, a single breadcrumb trail, restrained blue accents, and a focused study screen. The interface shows only the controls needed for the current task. It runs as a native Obsidian `ItemView` containing React, not an iframe.
 
+**No prefilled decks.** A fresh install shows “No cards yet” unless your vault already contains Qard callouts. Installing or enabling Qard never creates sample notes or decks. The `example-vault/` folder contains development fixtures only and is not included in the plugin release assets.
+
 ## Install in a test vault
 
 Requires Obsidian 1.5.0 or newer. Develop and test in a separate vault first.
@@ -18,9 +20,11 @@ npm run test-vault
 1. In Obsidian, choose **Open another vault → Open folder as vault** and select `.test-vault`.
 2. Allow community plugins in this test vault, then enable **Qard** under **Settings → Community plugins** if necessary.
 3. Click the Qard ribbon icon or run **Qard: Open Qard** from the command palette.
-4. The example library contains **13 cards in 3 decks**. Computer Networks has **8 cards across two files**.
+4. A new test vault starts empty. Choose **Create a card** to add your first card.
 
-The test-vault script copies the example notes on the first run and installs the current build. Later runs update only plugin files; they preserve note edits and review data. Toggle Qard off/on after updating its build. The script never discovers or writes to your personal vault.
+The test-vault script installs the current build without adding notes. Existing notes and review data are preserved, including any examples created by older versions of the development script. Toggle Qard off/on after updating its build. The script never discovers or writes to your personal vault.
+
+For optional sample decks, run `npm run test-vault -- --examples` and open the separate `.example-test-vault` folder. Only that explicit option copies the development fixtures; rerunning it does not overwrite existing notes.
 
 For a prebuilt installation, download `main.js`, `manifest.json`, and `styles.css` from the GitHub release. For a local build, use the same files from `release/qard/`. Copy them into:
 
@@ -40,7 +44,8 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 - `npm test` — parser, indexing, writing, selection, scheduling, and UI lifecycle tests.
 - `npm run build` — create `main.js` and the installable `release/qard/` folder.
 - `npm run check` — typecheck, tests, and production build.
-- `npm run test-vault` — install the current build in the isolated example vault.
+- `npm run test-vault` — install the current build in an isolated vault without adding notes.
+- `npm run test-vault -- --examples` — install in a separate vault with optional example notes.
 
 See [architecture and reuse notes](docs/ARCHITECTURE.md).
 

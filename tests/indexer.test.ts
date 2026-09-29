@@ -10,6 +10,21 @@ function setup() {
   return { index: new VaultIndexer(app, plugin), file, read, handlers, plugin };
 }
 afterEach(() => vi.useRealTimers());
+it.each([{ paths: [] }, { paths: ['Notes.md'] }])('starts without decks when the vault has no Qard cards: $paths', async ({ paths }) => {
+  const files = paths.map(path => new (TFile as unknown as new (p: string) => TFile)(path));
+  const write = vi.fn(() => { throw new Error('Indexing must not create or modify notes'); });
+  const app = { vault: {
+    on: vi.fn(), getMarkdownFiles: () => files,
+    cachedRead: vi.fn(async () => '# My notes\n\nOrdinary Markdown, without flashcards.'),
+    getAbstractFileByPath: (path: string) => files.find(file => file.path === path),
+    create: write, createFolder: write, modify: write, process: write,
+  } } as unknown as App;
+  const index = new VaultIndexer(app, { registerEvent: vi.fn() } as unknown as Plugin);
+  await index.start();
+  expect(index.getSnapshot()).toMatchObject({ cards: [], decks: [], loading: false });
+  expect(write).not.toHaveBeenCalled();
+  index.dispose();
+});
 it('debounces edits to the affected note and cancels work on disposal', async () => {
   vi.useFakeTimers(); const { index, file, read, handlers, plugin } = setup(); await index.start();
   expect(plugin.registerEvent).toHaveBeenCalledTimes(4); expect(read).toHaveBeenCalledTimes(1);

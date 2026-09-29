@@ -3,6 +3,7 @@ main.js
 main.js.map
 release/
 .test-vault/
+.example-test-vault/
 coverage/
 
 .preview/
