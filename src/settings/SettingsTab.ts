@@ -36,5 +36,8 @@ export class QardSettingsTab extends PluginSettingTab {
       if (definition.desc) row.setDesc(definition.desc);
       definition.render(row);
     }
+    new Setting(this.containerEl).setName('Import').setHeading();
+    new Setting(this.containerEl).setName('Import from Spaced Repetition').setDesc('Convert flashcards made for the Spaced Repetition plugin into Qard cards, keeping their review schedule.')
+      .addButton(b => b.setButtonText('Import…').onClick(() => this.qard.openImport()));
   }
 }

@@ -8,6 +8,7 @@ vi.mock('../src/views/QardView', () => ({
 }));
 vi.mock('../src/settings/SettingsTab', () => ({ QardSettingsTab: class {} }));
 vi.mock('../src/views/SelectionModal', () => ({ SelectionModal: class {} }));
+vi.mock('../src/views/ImportModal', () => ({ ImportModal: class {} }));
 import QardPlugin from '../src/main';
 import { QardView } from '../src/views/QardView';
 

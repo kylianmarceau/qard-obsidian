@@ -5,6 +5,7 @@ import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
 import { QardSettingsTab } from './settings/SettingsTab';
 import { SelectionModal } from './views/SelectionModal';
+import { ImportModal } from './views/ImportModal';
 import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
@@ -47,6 +48,7 @@ export default class QardPlugin extends Plugin {
       }
       return true;
     } });
+    this.addCommand({ id: 'import-spaced-repetition', name: 'Import from Spaced Repetition', callback: () => this.openImport() });
     this.addSettingTab(new QardSettingsTab(this));
     this.app.workspace.onLayoutReady(() => { if (!this.disposed) void this.index.start().catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.')); });
   }
@@ -58,6 +60,7 @@ export default class QardPlugin extends Plugin {
     if (!(leaf.view instanceof QardView)) throw new Error('Qard workspace could not be opened.');
     return leaf.view;
   }
+  openImport() { new ImportModal(this).open(); }
   async openBuilder(selection: Selection) { const view = await this.open(); view.show({ serial: Date.now(), kind: 'builder', selection }); }
   async openSource(card: QardCard) {
     const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
