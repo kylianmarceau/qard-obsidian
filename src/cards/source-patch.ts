@@ -43,3 +43,14 @@ export function deleteCardInSource(source: string, original: QardCard): string {
   const current = locateCard(source, original);
   return source.slice(0, current.sourcePosition.start) + source.slice(current.sourcePosition.end);
 }
+/** Validate the whole file before removing any ranges; preserve all other bytes. */
+export function deleteDeckInSource(source: string, deck: string, originals: QardCard[]): string {
+  if (!originals.length || originals.some(card => card.deck !== deck || card.sourceFile !== originals[0]!.sourceFile)) throw new Error('Invalid deck selection.');
+  const parsed = parseCards(source, originals[0]!.sourceFile);
+  if (parsed.issues.length || parsed.cards.filter(card => card.deck === deck).length !== originals.length) throw new Error('This deck changed or contains invalid cards. Reopen it before deleting.');
+  const matches = originals.map(card => locateCard(source, card));
+  if (matches.some(card => card.deck !== deck) || new Set(matches.map(card => card.sourcePosition.start)).size !== originals.length) throw new Error('This deck changed. Reopen it before deleting.');
+  let next = source;
+  for (const card of matches.sort((a, b) => b.sourcePosition.start - a.sourcePosition.start)) next = next.slice(0, card.sourcePosition.start) + next.slice(card.sourcePosition.end);
+  return next;
+}

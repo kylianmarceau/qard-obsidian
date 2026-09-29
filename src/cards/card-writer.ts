@@ -1,7 +1,7 @@
 import { TFile, normalizePath, type App } from 'obsidian';
 import type { QardCard } from './card-types';
 import type { VaultIndexer } from './indexer';
-import { deleteCardInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
+import { deleteCardInSource, deleteDeckInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
 import { parseCards } from './parser';
 export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string }
 export function safeFolder(folder: string): string {
@@ -44,6 +44,24 @@ export class CardWriter {
     this.unique(card); const file = this.file(card.sourceFile);
     await this.app.vault.process(file, source => deleteCardInSource(source, card));
     await this.index.refresh(file);
+  }
+  async deleteDeck(deck: string, cards: QardCard[]) {
+    if (!cards.length || cards.some(card => card.deck !== deck)) throw new Error('Reopen the deck before deleting.');
+    const groups = new Map<string, QardCard[]>();
+    for (const card of cards) { this.unique(card); groups.set(card.sourceFile, [...(groups.get(card.sourceFile) || []), card]); }
+    // Check every note before the first write, then validate again inside each atomic operation.
+    for (const [path, group] of groups) deleteDeckInSource(await this.app.vault.read(this.file(path)), deck, group);
+    let removed = 0;
+    try {
+      for (const [path, group] of groups) {
+        const file = this.file(path);
+        await this.app.vault.process(file, source => deleteDeckInSource(source, deck, group));
+        removed += group.length;
+        await this.index.refresh(file);
+      }
+    } catch (error) {
+      throw new Error(`${removed ? `${removed} ${removed === 1 ? 'card was' : 'cards were'} deleted before deletion stopped. ` : ''}${(error as Error).message} Reopen the deck to check the remaining cards.`);
+    }
   }
   async create(draft: CardDraft): Promise<QardCard> {
     const deck = draft.deck.trim(), topic = draft.topic.trim() || 'General';

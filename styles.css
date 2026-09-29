@@ -174,3 +174,8 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
   .qard-summary-stats, .qard-summary-ratings { gap: 20px; }.qard-question-list { padding-left: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .qard-app *, .qard-app *::before, .qard-app *::after { transition: none !important; animation: none !important; } }
+
+.qard-deck-delete { margin: -8px 0 20px; }
+.qard-deck-delete > .qard-confirm { margin: 0; }
+
+.qard-deck-delete .qard-confirm > div { flex: 1 1 240px; min-width: 0; }

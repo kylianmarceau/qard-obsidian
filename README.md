@@ -149,6 +149,8 @@ Shortcuts are inactive in text fields, editable content, other workspace tabs, m
 
 Every preview and study card has **Open source**; previews also offer edit and delete. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
 
+To delete a deck, open it and choose **Delete deck**, then confirm. This removes all its indexed Qard callouts and adjacent IDs across its source notes. The Markdown files, headings, frontmatter, attachments and surrounding prose remain. Search does not limit deck deletion. Changed or ambiguous cards stop deletion; if a later note fails after earlier notes were saved, Qard reports how many cards were already removed. Review metadata is retained. Qard has no undo for this action; use Obsidian File Recovery or your normal backups if needed.
+
 ## Commands
 
 - Qard: Open Qard
