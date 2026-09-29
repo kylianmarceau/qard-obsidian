@@ -158,8 +158,26 @@ Every preview and study card has **Open source**; previews also offer edit and d
 - Qard: Study this topic
 - Qard: Study this note
 - Qard: Create card from selection
+- Qard: Import from Spaced Repetition
 
 The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
+
+## Importing from Spaced Repetition
+
+Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Import**. Qard reads the Spaced Repetition plugin's settings (deck tags, ignored tags, separators, end marker, folder decks and cloze options) when they are installed. Otherwise it uses that plugin's defaults.
+
+1. Qard scans the notes that Spaced Repetition treats as flashcard notes and lists them with card, schedule and skipped counts. Nothing is written yet.
+2. Choose which notes to convert. A note with exactly the same cards as an earlier note (for example an archived copy) is marked and starts unselected.
+3. **Convert notes** rewrites each selected note in place. Cards are converted as follows:
+   - `Question::Answer` and multiline `?` cards become `[!qard]` callouts with IDs.
+   - Reversed `:::` and `??` cards become two cards, one for each direction.
+   - Headings, prose and any other text in the note stay as they are, and headings become Qard topics.
+   - A nested deck tag such as `#flashcards/cs315/hmm` becomes `qard-deck: "cs315/hmm"`, unless the note already sets `qard-deck`.
+   - `<!--SR:...-->` due dates, intervals and ease become Qard review states. You can turn **Keep review schedule** off to import every card as new.
+
+Cloze cards are not converted, because Qard has no cloze cards. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
+
+The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
 
 ## Review data and settings
 

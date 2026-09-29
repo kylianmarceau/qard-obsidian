@@ -184,3 +184,11 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
   .qard-summary-stats, .qard-summary-ratings { gap: 20px; }.qard-question-list { padding-left: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .qard-root .qard-app *, .qard-root .qard-app *::before, .qard-root .qard-app *::after { transition: none; animation: none; } }
+
+.qard-import-modal { width: min(720px, 95vw); }
+.qard-import-warning { color: var(--text-warning); }
+.qard-import-summary { font-weight: var(--font-semibold); }
+.qard-import-list { max-height: 45vh; overflow-y: auto; border-block: 1px solid var(--background-modifier-border); margin-block: var(--size-4-2); }
+.qard-import-list .setting-item-name { word-break: break-word; }
+.qard-import-skipped { margin-block: var(--size-4-3); color: var(--text-muted); font-size: var(--font-ui-small); }
+.qard-import-skipped ul { max-height: 25vh; overflow-y: auto; }

@@ -39,6 +39,16 @@ export class ReviewStore {
       return { ...data, states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, { [cardId]: state }), history: [...data.history, { cardId, at: now, rating, scheduled }].slice(-10000) };
     });
   }
+  /** Adds migrated schedules. Existing Qard states always win. */
+  importStates(states: ReviewState[]) {
+    const valid = states.filter(s => /^[A-Za-z0-9_-]+$/.test(s.cardId) && Number.isFinite(s.interval) && Number.isFinite(s.ease) && s.reviewCount >= 0);
+    if (!valid.length) return Promise.resolve();
+    return this.change(data => {
+      const next = Object.assign(Object.create(null) as Record<string, ReviewState>, data.states);
+      for (const state of valid) if (!next[state.cardId]) next[state.cardId] = state;
+      return { ...data, states: next };
+    });
+  }
   flush() { return this.queue; }
   dispose() { this.listeners.clear(); }
 }
