@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Play } from 'lucide-react';
 import type { Deck, QardCard } from '../cards/card-types';
-import { DeleteDeck } from './DeleteDeck';
-export function TopicBrowser({ deck, remove, select, study, create }: { deck: Deck; remove: (cards: QardCard[]) => Promise<void>; select: (card: QardCard) => void; study: (topic?: string) => void; create: () => void }) {
+export function TopicBrowser({ deck, select, study, create }: { deck: Deck; select: (card: QardCard) => void; study: (topic?: string) => void; create: () => void }) {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [limits, setLimits] = useState<Record<string, number>>({});
   return <>
     <div className="qard-heading"><div><h1>{deck.name}</h1><p>{deck.cards.length} cards</p></div><div className="qard-actions"><button onClick={create}><Plus size={16}/>New card</button><button className="qard-primary" onClick={() => study()}><Play size={16}/>Study</button></div></div>
-    <DeleteDeck deck={deck} remove={remove}/>
     <div className="qard-topics">{deck.topics.map(topic => {
       const open = expanded.includes(topic.name), limit = limits[topic.name] || 60;
       return <section className="qard-topic" key={topic.name}><div className="qard-topic-heading"><button aria-expanded={open} onClick={() => setExpanded(open ? expanded.filter(t => t !== topic.name) : [...expanded, topic.name])}>{open ? <ChevronDown size={18}/> : <ChevronRight size={18}/>}<strong>{topic.name}</strong><span>{topic.cards.length} cards</span></button><button className="qard-icon-button" aria-label={`Study ${topic.name}`} onClick={() => study(topic.name)}><Play size={16}/></button></div>
