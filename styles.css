@@ -1,4 +1,14 @@
 /* A quiet workspace. Obsidian owns the chrome; Qard owns the card. */
+.qard-coffee-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 9px 14px; border: 1px solid #e6c900; border-radius: 8px;
+  background: #ffdd00; color: #242015; font-weight: 600; text-decoration: none;
+  text-align: center;
+}
+.qard-coffee-button:hover { background: #ffe733; color: #242015; text-decoration: none; }
+.qard-coffee-button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
+.qard-coffee-button > span:first-child { display: flex; flex-shrink: 0; }
+.qard-coffee-button svg { width: 18px; height: 18px; }
 .workspace-leaf-content .view-content.qard-view-content { padding: 0; overflow: hidden; }
 .qard-root { height: 100%; min-height: 0; container-type: inline-size; }
 .qard-app {

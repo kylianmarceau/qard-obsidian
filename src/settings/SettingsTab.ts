@@ -1,4 +1,4 @@
-import { PluginSettingTab, Setting, Notice } from 'obsidian';
+import { PluginSettingTab, Setting, Notice, setIcon } from 'obsidian';
 import type QardPlugin from '../main';
 import type { QardSettings } from './settings';
 import { safeFolder } from '../cards/card-writer';
@@ -25,7 +25,16 @@ export class QardSettingsTab extends PluginSettingTab {
       { name: 'New-card folder', desc: 'Vault-relative folder for new cards. Selections stay beside their source note.', render: row => { row.addText(t => {
         t.setValue(settings.cardFolder).setPlaceholder('Qard');
         t.inputEl.addEventListener('change', () => { try { const folder = safeFolder(t.getValue()); void save('cardFolder', folder); } catch (e) { new Notice((e as Error).message); t.setValue(this.qard.reviews.getSnapshot().settings.cardFolder); } });
-      }); } }
+      }); } },
+      { name: 'Support Qard', desc: 'Enjoying Qard? You can support its development with a coffee.', render: row => {
+        const link = row.controlEl.createEl('a', {
+          cls: 'qard-coffee-button',
+          href: 'https://buymeacoffee.com/kylianmarceau',
+          attr: { target: '_blank', rel: 'noopener noreferrer' }
+        });
+        setIcon(link.createSpan({ attr: { 'aria-hidden': 'true' } }), 'coffee');
+        link.createSpan({ text: 'Buy me a coffee' });
+      } }
     ];
   }
   display() {

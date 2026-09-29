@@ -5,5 +5,6 @@
   "minAppVersion": "1.7.2",
   "description": "A focused study workspace for Markdown flashcards, manual sessions, and optional spaced repetition.",
   "author": "Qard",
+  "fundingUrl": "https://buymeacoffee.com/kylianmarceau",
   "isDesktopOnly": false
 }

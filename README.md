@@ -190,3 +190,11 @@ Licensed under MIT; see [LICENSE](LICENSE).
 Version tags trigger GitHub Actions to run all checks, build the three install files, create GitHub artifact attestations, and publish the release. Tags must exactly match the manifest version. Release notes live in `docs/releases/<version>.md`. The build aliases React imports to Preact compatibility modules so the existing components work without bundling React DOM’s unused dynamic script loaders. UI tests run with the same renderer.
 
 Qard enumerates Markdown notes once after the workspace is ready to discover flashcards across files; subsequent indexing updates only affected files. This is expected vault access, not network access.
+
+## Support
+
+Finding Qard helpful? You can buy me a coffee to support its continued development. Thank you for helping make Qard better!
+
+Support @kylianmarceau:
+
+<a href="https://buymeacoffee.com/kylianmarceau" target="_blank" rel="noopener noreferrer"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="175" height="40"></a>
