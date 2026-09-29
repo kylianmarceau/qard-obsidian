@@ -9,20 +9,27 @@ import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
 import { parseCards, topicAtLine } from './cards/parser';
+import { TestService } from './tests/test-service';
+import { VaultTestStorage } from './tests/vault-storage';
+import { createRunner } from './agents/create-runner';
 export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
   writer!: CardWriter;
   reviews!: ReviewStore;
+  tests!: TestService;
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
   async onload() {
     this.reviews = new ReviewStore(data => this.saveData(data));
     try { this.reviews.load(await this.loadData()); } catch { new Notice('Could not load review data. Reload the plugin before reviewing.'); throw new Error('Unable to load Qard review metadata'); }
     this.index = new VaultIndexer(this.app, this); this.writer = new CardWriter(this.app, this.index);
+    this.tests = new TestService(new VaultTestStorage(this.app), () => this.reviews.getSnapshot().settings.tests, () => createRunner(this.app, this.reviews.getSnapshot().settings.tests));
     addIcon('qard', '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>');
     this.registerView(VIEW_TYPE, leaf => new QardView(leaf, this));
     this.addRibbonIcon('qard', 'Open study workspace', () => { void this.open().catch(e => new Notice(String(e))); });
     this.addCommand({ id: 'open', name: 'Open study workspace', callback: () => this.open() });
+    this.addCommand({ id: 'new-practice-test', name: 'New practice test', callback: () => this.show('new-test') });
+    this.addCommand({ id: 'open-practice-tests', name: 'Open practice tests', callback: () => this.show('tests') });
     this.addCommand({ id: 'study-selected-decks', name: 'Study selected deck(s)', callback: () => this.openBuilder({ decks: [], topics: [], cards: [] }) });
     for (const scope of ['deck', 'topic', 'note'] as const) this.addCommand({ id: `study-this-${scope}`, name: `Study this ${scope}`, checkCallback: checking => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView); if (!view?.file) return false;
@@ -58,6 +65,7 @@ export default class QardPlugin extends Plugin {
     if (!(leaf.view instanceof QardView)) throw new Error('Qard workspace could not be opened.');
     return leaf.view;
   }
+  async show(kind: 'tests' | 'new-test') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
   async openBuilder(selection: Selection) { const view = await this.open(); view.show({ serial: Date.now(), kind: 'builder', selection }); }
   async openSource(card: QardCard) {
     const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
@@ -71,6 +79,6 @@ export default class QardPlugin extends Plugin {
     this.disposed = true;
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
-    this.index?.dispose(); this.reviews?.dispose();
+    this.index?.dispose(); this.tests?.dispose(); this.reviews?.dispose();
   }
 }
