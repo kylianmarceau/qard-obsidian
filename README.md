@@ -159,6 +159,8 @@ Every preview and study card has **Open source**; previews also offer edit and d
 - Qard: Study this note
 - Qard: Create card from selection
 - Qard: Import from Spaced Repetition
+- Qard: New practice test
+- Qard: Open practice tests
 
 The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
 
@@ -178,6 +180,37 @@ Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Impor
 Cloze cards are not converted, because Qard has no cloze cards. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
 
 The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
+
+## Practice tests
+
+Practice tests are a second mode next to flashcards. An AI agent writes an exam-style test from your notes, you answer in text, and the agent marks each answer against a mark scheme. Open **Tests** in the Qard library, or run **Qard: New practice test**.
+
+1. **Describe the test.** Type what it should cover. Optionally tick **Flashcards** and choose decks, or add specific notes. With no sources, the agent finds the relevant notes itself.
+2. **Check the plan** (optional, on by default). The agent drafts a short plan: a goal, the sources it will use and why, and sections with their question mix and marks. You can remove sources or ask for changes, then choose **Generate test**. Untick **Plan first** to skip straight to the test.
+3. **Take the test.** Answer short, long, calculation (LaTeX shows a preview) and multiple-choice questions. Optionally mark how sure you were, and flag questions. By default each section is marked in the background when you submit it, while you carry on. Choose **Mark answers: At the end** in settings for exam conditions.
+4. **Review.** The results screen shows your score and the three most important things to fix. **Review answers** shows your answer marked up like a script:
+   - underlines for correct, incorrect, vague and insightful parts, and a + marker where a point was missing, each linked to a marker's note;
+   - the mark scheme, showing which points you earned;
+   - **Try again**, to attempt the missed points before you look at the model answer;
+   - **Model answer**, which can be compared side by side with yours;
+   - **Ask**, for a follow-up question;
+   - **Dispute**, to have the answer re-marked, or to set the mark yourself;
+   - **Make card**, to create a flashcard in the deck the question came from.
+5. **Close the gaps.** After marking, the agent suggests cards for the clear gaps and updates a study profile (`_profile.md` in the tests folder). Later tests use the profile to target your weak spots. You can read and edit it.
+
+### Choosing an agent
+
+Set this up once in **Settings → Qard → Practice tests**:
+
+| Provider | Notes |
+|---|---|
+| **Claude Code** (default) | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`). Editing, shell and web tools are denied. Desktop only. |
+| **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
+| **Anthropic API key** | Qard calls the Claude API directly. The model can read notes only through three read-only tools (list, search, read) and never sees the tests folder. The key is kept in Obsidian's secure storage (Obsidian 1.11.4+). Works on mobile. The default model is Claude Opus 5.5; you can choose another. Requests use server-side refusal fallback. |
+
+Agents never write files. They return JSON, which Qard checks against the expected format (retrying once if it doesn't match) before saving. Marks are recalculated from the awarded rubric points, so an agent cannot give more than a question is worth. Your notes are sent to the provider you choose. No other network requests are made.
+
+Each test is a folder under `Qard/Tests/` containing `request.json`, `plan.json`, `test.json` and `attempt.json`. Tests written by any agent outside Qard appear under Tests if they follow [the file format](docs/PRACTICE_TESTS.md).
 
 ## Review data and settings
 
