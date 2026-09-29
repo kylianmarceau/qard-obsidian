@@ -2,6 +2,12 @@ name: Release plugin
 on:
   push:
     tags: ['[0-9]*.[0-9]*.[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
@@ -15,11 +21,16 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Check requested version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: node -e 'const assert = require("node:assert/strict"); assert.match(process.env.RELEASE_TAG, /^\d+\.\d+\.\d+$/); assert.equal(process.env.RELEASE_TAG, require("./manifest.json").version);'
       - run: npm run check
       - name: Attest install files
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
@@ -31,7 +42,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: >-
           gh release create "$RELEASE_TAG"
           release/qard/main.js release/qard/manifest.json release/qard/styles.css
