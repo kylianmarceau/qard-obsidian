@@ -1,8 +1,8 @@
 {
   "id": "qard",
   "name": "Qard",
-  "version": "0.2.1",
-  "minAppVersion": "1.5.0",
+  "version": "0.2.2",
+  "minAppVersion": "1.7.2",
   "description": "A focused study workspace for Markdown flashcards, manual sessions, and optional spaced repetition.",
   "author": "Qard",
   "isDesktopOnly": false

@@ -1,6 +1,6 @@
 {
   "name": "qard-obsidian",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "The study layer for your Obsidian vault.",
@@ -10,23 +10,31 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm test && npm run build",
-    "test-vault": "node scripts/prepare-test-vault.mjs"
+    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:release",
+    "test-vault": "node scripts/prepare-test-vault.mjs",
+    "lint": "eslint src --max-warnings 0",
+    "check:release": "node scripts/check-release.mjs"
   },
   "dependencies": {
+    "lucide-react": "^1.31.0",
+    "preact": "10.29.8",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "lucide-react": "^1.31.0",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
-    "obsidian": "latest",
+    "@eslint/js": "10.0.1",
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3",
     "esbuild": "^0.25.12",
-    "vitest": "^3.2.4",
-    "jsdom": "^26.1.0"
+    "eslint": "10.11.0",
+    "eslint-plugin-obsidianmd": "0.4.2",
+    "jsdom": "^26.1.0",
+    "obsidian": "latest",
+    "preact-render-to-string": "6.7.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "8.71.0",
+    "vitest": "4.1.11"
   }
 }

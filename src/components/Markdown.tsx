@@ -9,8 +9,8 @@ export function Markdown({ text, path, services }: { text: string; path: string;
     if (!el) return;
     let disposed = false;
     const child = new Component(); services.owner.addChild(child);
-    const target = el.ownerDocument.createElement('div');
-    target.className = 'markdown-rendered';
+    const target = el.createDiv({ cls: 'markdown-rendered' });
+    target.remove();
     // Do not automatically request remote image URLs from a local study surface.
     const local = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/gi, '[$1 (remote image)]($2)');
     void MarkdownRenderer.render(services.app, local, target, path, child).then(() => {

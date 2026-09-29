@@ -38,9 +38,11 @@ export class QardView extends ItemView {
       if (!body.querySelector('.qard-focus-overlay')) body.removeClass('qard-focus-active');
     }
   }
-  async onClose() {
+  release() {
     this.setFocus(false); this.root?.unmount(); this.root = undefined;
-    this.host?.remove(); this.host = undefined; this.contentEl.removeClass('qard-view-content');
+    this.host?.remove(); this.host = undefined;
+    this.contentEl.removeClass('qard-view-content');
   }
-  onunload() { this.setFocus(false); this.root?.unmount(); this.root = undefined; this.host?.remove(); }
+  async onClose() { this.release(); }
+  onunload() { this.release(); }
 }

@@ -9,7 +9,7 @@ export class SelectionModal extends Modal {
   private root?: Root;
   constructor(private plugin: QardPlugin, private draft: Partial<CardDraft>) { super(plugin.app); }
   onOpen() {
-    this.setTitle('Create Qard from selection'); this.modalEl.addClass('qard-selection-modal');
+    this.setTitle('Create card from selection'); this.modalEl.addClass('qard-selection-modal');
     const host = this.contentEl.createDiv({ cls: 'qard-root' });
     const services: QardServices = { app: this.app, owner: this.plugin, host, index: this.plugin.index, writer: this.plugin.writer, reviews: this.plugin.reviews, setFocus: () => {}, isActive: () => false, openSource: card => this.plugin.openSource(card) };
     this.root = createRoot(host);

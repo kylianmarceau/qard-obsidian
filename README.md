@@ -2,13 +2,13 @@
 
 **Your learning, in focus.** Qard is the study layer for an Obsidian vault: a full workspace for browsing decks, choosing what to study, and reviewing Markdown flashcards. Your notes remain ordinary Markdown. No account, backend, analytics, or required network service.
 
-Qard uses a compact deck list, a single breadcrumb trail, restrained blue accents, and a focused study screen. The interface shows only the controls needed for the current task. It runs as a native Obsidian `ItemView` containing React, not an iframe.
+Qard uses a compact deck list, a single breadcrumb trail, restrained blue accents, and a focused study screen. The interface shows only the controls needed for the current task. It runs as a native Obsidian `ItemView` using React components with Preact’s compatibility renderer, not an iframe.
 
 **No prefilled decks.** A fresh install shows “No cards yet” unless your vault already contains Qard callouts. Installing or enabling Qard never creates sample notes or decks. The `example-vault/` folder contains development fixtures only and is not included in the plugin release assets.
 
 ## Install in a test vault
 
-Requires Obsidian 1.5.0 or newer. Develop and test in a separate vault first.
+Requires Obsidian 1.7.2 or newer. Develop and test in a separate vault first.
 
 ```sh
 cd qard-obsidian
@@ -19,7 +19,7 @@ npm run test-vault
 
 1. In Obsidian, choose **Open another vault → Open folder as vault** and select `.test-vault`.
 2. Allow community plugins in this test vault, then enable **Qard** under **Settings → Community plugins** if necessary.
-3. Click the Qard ribbon icon or run **Qard: Open Qard** from the command palette.
+3. Click the Qard ribbon icon or run **Qard: Open study workspace** from the command palette.
 4. A new test vault starts empty. Choose **Create a card** to add your first card.
 
 The test-vault script installs the current build without adding notes. Existing notes and review data are preserved, including any examples created by older versions of the development script. Toggle Qard off/on after updating its build. The script never discovers or writes to your personal vault.
@@ -40,10 +40,11 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 ## Development
 
 - `npm run dev` — rebuild the plugin on source changes.
+- `npm run lint` — official Obsidian source checks, with zero warnings.
 - `npm run typecheck` — strict TypeScript checking.
 - `npm test` — parser, indexing, writing, selection, scheduling, and UI lifecycle tests.
 - `npm run build` — create `main.js` and the installable `release/qard/` folder.
-- `npm run check` — typecheck, tests, and production build.
+- `npm run check` — typecheck, lint, tests, production build, and release-content checks.
 - `npm run test-vault` — install the current build in an isolated vault without adding notes.
 - `npm run test-vault -- --examples` — install in a separate vault with optional example notes.
 
@@ -151,7 +152,7 @@ Every preview and study card has **Open source**; previews also offer edit and d
 
 ## Commands
 
-- Qard: Open Qard
+- Qard: Open study workspace
 - Qard: Study selected deck(s)
 - Qard: Study this deck
 - Qard: Study this topic
@@ -183,3 +184,9 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
 
 Licensed under MIT; see [LICENSE](LICENSE).
+
+## Release verification
+
+Version tags trigger GitHub Actions to run all checks, build the three install files, create GitHub artifact attestations, and publish the release. Tags must exactly match the manifest version. Release notes live in `docs/releases/<version>.md`. The build aliases React imports to Preact compatibility modules so the existing components work without bundling React DOM’s unused dynamic script loaders. UI tests run with the same renderer.
+
+Qard enumerates Markdown notes once after the workspace is ready to discover flashcards across files; subsequent indexing updates only affected files. This is expected vault access, not network access.

@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useId, type SyntheticEvent } from 'react';
 import { Check } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { CardDraft } from '../cards/card-writer';
@@ -9,7 +9,7 @@ export function CardEditor({ services, card, initial, cancel, saved, compact = f
   const [deck, setDeck] = useState(card?.deck || initial?.deck || ''), [topic, setTopic] = useState(card?.topic || initial?.topic || 'General');
   const [preview, setPreview] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const id = useId(), path = card?.sourceFile || initial?.sourceFile || `${services.reviews.getSnapshot().settings.cardFolder}/Cards.md`;
-  async function submit(e: React.FormEvent) {
+  async function submit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true); setError('');
     try {
       const result = card ? await services.writer.edit(card, front, back) : await services.writer.create({ deck, topic, front, back, folder: services.reviews.getSnapshot().settings.cardFolder, sourceFile: initial?.sourceFile });

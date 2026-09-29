@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act } from 'preact/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Component } from 'obsidian';
@@ -19,12 +19,12 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); });
 async function mount() { await act(async () => root.render(<StudyView cards={cards} services={services} exit={exit} repeat={vi.fn()}/>)); }
-async function key(key: string, target: HTMLElement = host) { await act(async () => { target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); }); }
+async function key(key: string, target: HTMLElement = host) { await act(async () => { target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })); await services.reviews.flush(); }); }
 it('requires reveal, rates exactly once, completes every card, and escapes focus on the summary', async () => {
   await mount(); await key('3'); expect(services.reviews.getSnapshot().history).toHaveLength(0);
   await key('f'); expect(services.setFocus).toHaveBeenLastCalledWith(true);
   await key(' '); expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('false');
-  await act(async () => { for (let i = 0; i < 2; i++) host.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true })); });
+  await act(async () => { for (let i = 0; i < 2; i++) host.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true })); await services.reviews.flush(); });
   expect(services.reviews.getSnapshot().history).toHaveLength(1); expect(host.textContent).toContain('1 / 1');
   await key('Escape'); expect(services.setFocus).toHaveBeenLastCalledWith(false);
 });

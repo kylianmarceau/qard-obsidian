@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { TFile, type App, type Plugin } from 'obsidian';
 import { VaultIndexer } from '../src/cards/indexer';

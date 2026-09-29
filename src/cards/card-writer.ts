@@ -56,14 +56,14 @@ export class CardWriter {
       const existing = this.file(draft.sourceFile);
       const source = await this.app.vault.read(existing);
       const cards = parseCards(source, existing.path).cards;
-      const cacheDeck = this.app.metadataCache.getFileCache(existing)?.frontmatter?.['qard-deck'];
+      const cacheDeck: unknown = this.app.metadataCache.getFileCache(existing)?.frontmatter?.['qard-deck'];
       const existingDeck = typeof cacheDeck === 'string' ? cacheDeck.trim() : cards[0]?.deck || existing.basename;
       if (existingDeck === deck) file = existing;
     }
     if (file) {
       await this.app.vault.process(file, source => {
         const eol = source.includes('\r\n') ? '\r\n' : '\n';
-        const override = this.app.metadataCache.getFileCache(file!)?.frontmatter?.['qard-topic'];
+        const override: unknown = this.app.metadataCache.getFileCache(file!)?.frontmatter?.['qard-topic'];
         if (typeof override === 'string' && override.trim() !== topic) throw new Error(`This note fixes its topic to “${override}”. Choose that topic or create the card in a new note.`);
         const next = source + (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) + `# ${topic}${eol}${eol}` + serializeCard(id, draft.front, draft.back, eol);
         const created = parseCards(next, file!.path).cards.find(c => c.id === id);
@@ -75,7 +75,7 @@ export class CardWriter {
       const folder = safeFolder(draft.sourceFile ? draft.sourceFile.split('/').slice(0, -1).join('/') : draft.folder);
       let built = '';
       for (const part of folder.split('/').filter(Boolean)) { built = built ? `${built}/${part}` : part; if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built); }
-      const slug = deck.replace(/[\\/:*?"<>|#^\[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
+      const slug = deck.replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
       const base = [folder, slug].filter(Boolean).join('/');
       let path = base + '.md', n = 2;
       while (this.app.vault.getAbstractFileByPath(path)) path = `${base} ${n++}.md`;

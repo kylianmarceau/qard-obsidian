@@ -1,5 +1,5 @@
 /* A quiet workspace. Obsidian owns the chrome; Qard owns the card. */
-.qard-view-content { padding: 0 !important; overflow: hidden; }
+.workspace-leaf-content .view-content.qard-view-content { padding: 0; overflow: hidden; }
 .qard-root { height: 100%; min-height: 0; container-type: inline-size; }
 .qard-app {
   --qard-bg: var(--background-primary, #fff);
@@ -14,7 +14,7 @@
 }
 .theme-dark .qard-app { --qard-blue: #9aafff; }
 .qard-app * { box-sizing: border-box; }
-.qard-app [hidden] { display: none !important; }
+.qard-root .qard-app [hidden] { display: none; }
 .qard-app h1, .qard-app h2, .qard-app p { margin: 0; }
 .qard-app h1 { font-size: 26px; font-weight: 550; line-height: 1.25; letter-spacing: -.7px; overflow-wrap: anywhere; }
 .qard-app h2 { font-size: 14px; font-weight: 550; }
@@ -153,7 +153,7 @@
 .qard-summary .qard-actions { justify-content: center; }
 .qard-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 18px; border: 1px solid var(--qard-border); border-radius: 8px; background: var(--qard-soft); font-size: 13px; margin: 20px 0; }
 .qard-confirm > div { flex: 1; }.qard-confirm p { color: var(--qard-muted); }
-.qard-error { padding: 14px; border-radius: 7px; color: var(--text-error, #bc4051); background: var(--qard-soft); font-size: 13px; margin: 15px 0 !important; }
+.qard-app .qard-error { padding: 14px; border-radius: 7px; color: var(--text-error, #bc4051); background: var(--qard-soft); font-size: 13px; margin: 15px 0; }
 .qard-index-issues { margin-bottom: 24px; font-size: 12px; }.qard-index-issues > button { border: 0; color: var(--qard-muted); padding: 0; }.qard-index-issues li { margin-top: 8px; }
 .qard-voice { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; }.qard-voice button { font-size: 12px; }.qard-voice audio { max-width: 100%; height: 34px; }.qard-voice p { width: 100%; font-size: 12px; color: var(--qard-muted); text-align: center; }
 .qard-root.qard-focus-overlay { position: fixed; inset: 0; z-index: 100; width: 100%; height: 100%; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: var(--background-primary); }
@@ -173,4 +173,4 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
   .qard-preview-toolbar { flex-wrap: wrap; }.qard-preview-side { padding: 22px; }.qard-topic-heading strong { font-size: 13px; }
   .qard-summary-stats, .qard-summary-ratings { gap: 20px; }.qard-question-list { padding-left: 16px; }
 }
-@media (prefers-reduced-motion: reduce) { .qard-app *, .qard-app *::before, .qard-app *::after { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .qard-root .qard-app *, .qard-root .qard-app *::before, .qard-root .qard-app *::after { transition: none; animation: none; } }

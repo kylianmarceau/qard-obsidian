@@ -17,19 +17,19 @@ export default class QardPlugin extends Plugin {
   private selectionModals = new Set<SelectionModal>();
   async onload() {
     this.reviews = new ReviewStore(data => this.saveData(data));
-    try { this.reviews.load(await this.loadData()); } catch { new Notice('Qard could not load review data. Reload Qard before reviewing.'); throw new Error('Unable to load Qard review metadata'); }
+    try { this.reviews.load(await this.loadData()); } catch { new Notice('Could not load review data. Reload the plugin before reviewing.'); throw new Error('Unable to load Qard review metadata'); }
     this.index = new VaultIndexer(this.app, this); this.writer = new CardWriter(this.app, this.index);
     addIcon('qard', '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>');
     this.registerView(VIEW_TYPE, leaf => new QardView(leaf, this));
-    this.addRibbonIcon('qard', 'Open Qard', () => { void this.open().catch(e => new Notice(String(e))); });
-    this.addCommand({ id: 'open-qard', name: 'Open Qard', callback: () => this.open() });
+    this.addRibbonIcon('qard', 'Open study workspace', () => { void this.open().catch(e => new Notice(String(e))); });
+    this.addCommand({ id: 'open', name: 'Open study workspace', callback: () => this.open() });
     this.addCommand({ id: 'study-selected-decks', name: 'Study selected deck(s)', callback: () => this.openBuilder({ decks: [], topics: [], cards: [] }) });
     for (const scope of ['deck', 'topic', 'note'] as const) this.addCommand({ id: `study-this-${scope}`, name: `Study this ${scope}`, checkCallback: checking => {
       const view = this.app.workspace.getActiveViewOfType(MarkdownView); if (!view?.file) return false;
       const cards = this.index.getSnapshot().cards.filter(c => c.sourceFile === view.file!.path); if (!cards.length) return false;
       if (!checking) {
         const line = view.editor?.getCursor().line ?? 0;
-        const topic = topicAtLine(view.editor.getValue(), view.file!.path, line);
+        const topic = topicAtLine(view.editor.getValue(), view.file.path, line);
         const selection = scope === 'deck' ? { decks: [...new Set(cards.map(c => c.deck))], topics: [], cards: [] } : scope === 'topic' ? { decks: [], topics: [topicKey(cards[0]!.deck, topic)], cards: [] } : { decks: [], topics: [], cards: cards.map(c => c.id) };
         void this.openBuilder(selection);
       }
@@ -70,8 +70,7 @@ export default class QardPlugin extends Plugin {
   onunload() {
     this.disposed = true;
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
-    this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.setFocus(false); });
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+    this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
     this.index?.dispose(); this.reviews?.dispose();
   }
 }
