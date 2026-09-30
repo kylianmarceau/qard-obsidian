@@ -2,6 +2,7 @@ import { requestUrl } from 'obsidian';
 import { PREAMBLE } from '../tests/test-prompts';
 import { SCHEMA_INSTRUCTION, extractJson, type AgentRunner, type AgentTask } from './runner';
 import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
+import { addUsage, emptyUsage, fromOpenRouter } from './usage';
 
 const BASE = 'https://openrouter.ai/api/v1';
 const MAX_TURNS = 16;
@@ -16,7 +17,7 @@ export const obsidianHttp: Http = async (url, init) => {
 
 interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
 type Message = { role: 'system' | 'user'; content: string } | { role: 'assistant'; content: string | null; tool_calls?: ToolCall[] } | { role: 'tool'; tool_call_id: string; content: string };
-interface Completion { choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] }; finish_reason?: string }[]; error?: { message?: string } }
+interface Completion { usage?: Record<string, unknown>; model?: string; choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] }; finish_reason?: string }[]; error?: { message?: string } }
 const TOOLS = VAULT_TOOLS.map(t => ({ type: 'function' as const, function: { name: t.name, description: t.description, parameters: t.input_schema } }));
 const headers = (key: string) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://obsidian.md', 'X-Title': 'Qard' });
 
@@ -38,19 +39,25 @@ export class OpenRouterRunner implements AgentRunner {
     const tools = task.vault !== false;
     // Not every model supports structured output, so the schema is also in the prompt and replies are validated anyway.
     const messages: Message[] = [{ role: 'system', content: PREAMBLE }, { role: 'user', content: `${task.prompt}\n\n${SCHEMA_INSTRUCTION(task.schema)}` }];
-    let structured = true;
+    let structured = true, usage = emptyUsage();
+    const report = () => { if (usage.input || usage.output) task.onUsage?.(usage); };
+    try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (task.signal?.aborted) throw new Error('Cancelled.');
       const body = {
         model: this.model, messages, max_tokens: 16000,
         ...(tools ? { tools: TOOLS } : {}),
         ...(structured ? { response_format: { type: 'json_schema', json_schema: { name: 'qard_result', strict: false, schema: task.schema } } } : {}),
-        ...(task.effort ? { reasoning: { effort: task.effort } } : {})
+        ...(task.effort ? { reasoning: { effort: task.effort } } : {}),
+        // Ask OpenRouter to include token counts and cost in each response.
+        usage: { include: true }
       };
       const response = await this.http(`${BASE}/chat/completions`, { method: 'POST', headers: headers(key), body: JSON.stringify(body) });
       // Some providers reject response_format next to tools; the prompt still carries the schema.
       if (response.status === 400 && structured) { structured = false; turn--; continue; }
       if (response.status !== 200) throw failure(response.status, response.json);
+      const turnUsage = fromOpenRouter((response.json as Completion).usage, (response.json as Completion).model ?? this.model);
+      if (turnUsage) usage = addUsage(usage, turnUsage);
       const choice = (response.json as Completion).choices?.[0], message = choice?.message;
       if (!message) throw new Error((response.json as Completion).error?.message || 'OpenRouter returned no reply.');
       if (choice.finish_reason === 'length') throw new Error('The reply was cut off. Try a shorter request.');
@@ -66,6 +73,7 @@ export class OpenRouterRunner implements AgentRunner {
       return extractJson(message.content ?? '');
     }
     throw new Error('The agent took too many steps without finishing.');
+    } finally { report(); }
   }
 }
 

@@ -4,6 +4,7 @@ export interface Child { stdout: Stream | null; stderr: Stream | null; stdin: { 
 export interface SpawnOptions { cwd: string; env: Record<string, string | undefined>; stdio: ['pipe', 'pipe', 'pipe']; windowsHide: boolean }
 import { PREAMBLE } from '../tests/test-prompts';
 import { SCHEMA_INSTRUCTION, extractJson, type AgentRunner, type AgentTask } from './runner';
+import { fromClaudeCode, fromCodexEvents } from './usage';
 
 /** Node access, injected so tests never spawn anything and mobile never loads Node modules. */
 export interface NodeHost {
@@ -80,8 +81,9 @@ export class ClaudeCodeRunner extends CliRunner {
     if (this.model.trim()) args.push('--model', this.model.trim());
     if (task.effort) args.push('--effort', task.effort);
     const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });
-    let envelope: { result?: unknown; structured_output?: unknown; is_error?: boolean };
+    let envelope: { result?: unknown; structured_output?: unknown; is_error?: boolean; usage?: Record<string, unknown>; total_cost_usd?: unknown; modelUsage?: Record<string, unknown> };
     try { envelope = JSON.parse(out) as typeof envelope; } catch { return extractJson(out); }
+    const usage = fromClaudeCode(envelope); if (usage) task.onUsage?.(usage);
     if (envelope.is_error) throw new Error(typeof envelope.result === 'string' && envelope.result ? envelope.result : 'Claude Code returned an error.');
     // --json-schema yields validated structured_output; older versions only return the text.
     if (envelope.structured_output !== undefined) return envelope.structured_output;
@@ -96,13 +98,18 @@ export class CodexRunner extends CliRunner {
   async run(task: AgentTask) {
     const { bin, path } = await this.command();
     const last = this.host.tempFile(`qard-codex-${Date.now()}.txt`);
-    const args = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', '--output-last-message', last];
+    // --json streams events to stdout, including each turn's token usage; the reply itself is read from the last-message file.
+    const args = ['exec', '--json', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', '--output-last-message', last];
     if (this.model.trim()) args.push('--model', this.model.trim());
     if (task.effort) args.push('-c', `model_reasoning_effort=${task.effort}`);
     args.push('-');
     try {
       const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });
-      return extractJson(this.host.exists(last) ? this.host.readFile(last) : out);
+      const usage = fromCodexEvents(out); if (usage) task.onUsage?.({ ...usage, model: this.model.trim() || undefined });
+      if (this.host.exists(last)) return extractJson(this.host.readFile(last));
+      // Without the file, the final agent message is the last completed item in the event stream.
+      const items = out.split('\n').map(l => { try { return JSON.parse(l) as { type?: string; item?: { type?: string; text?: string } }; } catch { return undefined; } }).filter(e => e?.type === 'item.completed' && e.item?.type === 'agent_message');
+      return extractJson(items.at(-1)?.item?.text ?? out);
     } finally { if (this.host.exists(last)) this.host.remove(last); }
   }
 }

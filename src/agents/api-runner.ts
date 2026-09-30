@@ -3,6 +3,7 @@ import { requestUrl } from 'obsidian';
 import { PREAMBLE } from '../tests/test-prompts';
 import { extractJson, type AgentRunner, type AgentTask } from './runner';
 import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
+import { addUsage, emptyUsage, fromAnthropic } from './usage';
 
 export const API_MODELS: Record<string, string> = { 'claude-opus-5-5': 'Claude Opus 5.5', 'claude-sonnet-5-5': 'Claude Sonnet 5.5', 'claude-haiku-4-5': 'Claude Haiku 4.5' };
 export const DEFAULT_API_MODEL = 'claude-opus-5-5';
@@ -30,6 +31,10 @@ export class AnthropicRunner implements AgentRunner {
     // Server-side fallback reroutes a declined request instead of failing it (Opus 5.5 / Sonnet 5.5).
     const fallback = model === 'claude-opus-5-5' || model === 'claude-sonnet-5-5';
     const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: task.prompt }];
+    let usage = emptyUsage();
+    // Usage is reported once per run, summed over the tool loop, including runs that end in an error after some turns.
+    const report = () => { if (usage.input || usage.output) task.onUsage?.(usage); };
+    try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       let response: Anthropic.Beta.BetaMessage;
       try {
@@ -45,6 +50,7 @@ export class AnthropicRunner implements AgentRunner {
         if (error instanceof Anthropic.APIError) throw new Error(`Anthropic API error ${error.status ?? ''}: ${error.message}`);
         throw error;
       }
+      usage = addUsage(usage, fromAnthropic(response.usage, response.model));
       if (response.stop_reason === 'refusal') throw new Error('Claude declined this request.');
       if (response.stop_reason === 'max_tokens') throw new Error('The reply was cut off. Try a shorter test.');
       messages.push({ role: 'assistant', content: response.content });
@@ -59,5 +65,6 @@ export class AnthropicRunner implements AgentRunner {
       return extractJson(response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join(''));
     }
     throw new Error('The agent took too many steps without finishing.');
+    } finally { report(); }
   }
 }
