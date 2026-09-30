@@ -6,7 +6,7 @@ import type { Rating } from '../../review/scheduler';
 import { scheduler } from '../../review/scheduler';
 import { questions } from '../../tests/test-types';
 import { timeLeft } from '../../jobs/job-clock';
-import { Markdown } from '../Markdown';
+import { InlineMarkdown, Markdown } from '../Markdown';
 import { Waiting, useTestFolder } from '../tests/common';
 import { CheckView } from '../learn/CheckView';
 import { useTick } from './RunningJobs';
@@ -135,7 +135,7 @@ function RetryPoint({ services, folder, question, onEngage }: { services: QardSe
   return <div className="qard-wait-card">
     <div className="qard-muted qard-small">{test.title} · you scored {mark?.score ?? 0}/{q.marks}</div>
     <div className="qard-wait-front"><Markdown text={q.prompt} path={path} services={services}/></div>
-    <div className="qard-small"><span className="qard-label">Missed</span><ul className="qard-wait-missed">{q.rubric.filter((_, i) => !mark?.awarded[i]).map((r, i) => <li key={i}>{r.point}</li>)}</ul></div>
+    <div className="qard-small"><span className="qard-label">Missed</span><ul className="qard-wait-missed">{q.rubric.filter((_, i) => !mark?.awarded[i]).map((r, i) => <li key={i}><InlineMarkdown text={r.point} path={path} services={services}/></li>)}</ul></div>
     {retry ? <div className="qard-panel"><Markdown text={`${retry.feedback} (${retry.score}/${q.marks} together.)`} path={path} services={services}/></div>
       : <form className="qard-wait-retry" onSubmit={e => { e.preventDefault(); if (text.trim()) void services.tests.retry(folder, q.id, text); }}>
         <textarea aria-label="Try the missed points again" rows={3} placeholder="Try the missed points again…" value={text} disabled={!!running && !running.error} onChange={e => { onEngage(); setText(e.target.value); }}/>

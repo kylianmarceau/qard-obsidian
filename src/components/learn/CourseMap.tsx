@@ -4,6 +4,8 @@ import type { Mastery, MasteryState, Objective } from '../../learn/mastery';
 import type { LessonSummary } from '../../learn/learn-types';
 import { isoDay, readyToLearn, shortLabel, topicKey } from '../../learn/mastery';
 import { STATE_LABEL, StateChip, relativeDay } from './common';
+import { InlineMarkdown } from '../Markdown';
+import type { QardServices } from '../../views/services';
 
 export interface Size { w: number; h: number; gapX: number; gapY: number }
 export const TOPIC: Size = { w: 212, h: 84, gapX: 46, gapY: 64 };
@@ -150,7 +152,9 @@ export interface MapActions { teach: (o: Objective) => void; openLesson?: (path:
  * its objectives. Pan, zoom, search, filter by state, select for details, and plan a route to any objective.
  */
 /** initial: an objective to open the map at (its topic drilled into, the objective selected). lessons: this course's lessons. */
-export function CourseMap({ course, actions, filter, today = isoDay(Date.now()), lessons = [], initial }: { course: Mastery; actions: MapActions; filter?: Set<string>; today?: string; lessons?: LessonSummary[]; initial?: string }) {
+export function CourseMap({ course, actions, filter, today = isoDay(Date.now()), lessons = [], initial, services }: { course: Mastery; actions: MapActions; filter?: Set<string>; today?: string; lessons?: LessonSummary[]; initial?: string; services?: QardServices }) {
+  // Titles may hold maths; render them when the renderer is available.
+  const md = (text: string) => services ? <InlineMarkdown text={text} path={course.path} services={services}/> : text;
   const grouped = hasTopics(course);
   const ready = useMemo(() => readyToLearn(course), [course]);
   const topics = useMemo(() => topicsOf(course, ready), [course, ready]);
@@ -253,7 +257,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()),
   const chosen = selected ? byId.get(selected) : undefined;
   const status = (o: Objective) => o.state === 'planned' ? 'Not covered yet' : ready.has(o.id) ? 'Ready to learn' : o.due && !['new', 'gap', 'misconception', 'mastered'].includes(o.state) ? `${STATE_LABEL[o.state]} · check ${relativeDay(o.due, today)}` : STATE_LABEL[o.state];
   const titleOf = (id: string) => byId.get(id)?.title ?? id;
-  const links = (ids: string[]) => ids.map(n => <button key={n} className="qard-map-link" onClick={() => open(n, true)}><i className={cls(byId.get(n)?.state ?? 'new')}/>{titleOf(n)}{grouped && topicOf(n) !== topic ? <small className="qard-muted">{byId.get(n)?.group}</small> : null}</button>);
+  const links = (ids: string[]) => ids.map(n => <button key={n} className="qard-map-link" onClick={() => open(n, true)}><i className={cls(byId.get(n)?.state ?? 'new')}/>{md(titleOf(n))}{grouped && topicOf(n) !== topic ? <small className="qard-muted">{byId.get(n)?.group}</small> : null}</button>);
   const topicName = (key: string) => topics.find(t => t.key === key)?.name ?? key;
   const routeCount = (t: Topic) => route ? t.ids.filter(id => route.includes(id)).length : 0;
 
@@ -303,7 +307,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()),
             <title>{o.title}</title>
             <rect className="qard-map-card" width={w} height={h} rx={10}/>
             <rect className="qard-map-bar" x={9} y={10} width={4} height={h - 20} rx={2}/>
-            <foreignObject x={20} y={3} width={w - 28 - (step >= 0 ? 10 : 0)} height={h - 6}><div className="qard-map-label"><span className="qard-map-title">{shortLabel(o)}</span></div></foreignObject>
+            <foreignObject x={20} y={3} width={w - 28 - (step >= 0 ? 10 : 0)} height={h - 6}><div className="qard-map-label"><span className="qard-map-title">{md(shortLabel(o))}</span></div></foreignObject>
             {step >= 0 ? <g className="qard-map-step" transform={`translate(${w - 2},2)`}><circle r={11}/><text textAnchor="middle" y={4}>{step + 1}</text></g>
               : inProgress.has(o.id) && <g className="qard-map-lesson" transform={`translate(${w - 2},2)`}><title>Lesson in progress</title><circle r={9}/><path d="M-2.5,-4 L4,0 L-2.5,4 Z"/></g>}
           </g>;
@@ -324,7 +328,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()),
     </div>
     {chosen && !atTopics && <aside className="qard-map-panel" aria-label={chosen.title}>
       <div className="qard-map-panel-head"><StateChip state={chosen.state}/><button className="qard-icon-button" aria-label="Close" onClick={() => open(undefined)}><X size={15}/></button></div>
-      <h3>{chosen.title}</h3>
+      <h3>{md(chosen.title)}</h3>
       <p className="qard-muted qard-small">{[chosen.group, status(chosen)].filter(Boolean).join(' · ')}</p>
       <div className="qard-map-panel-actions">
         {inProgress.has(chosen.id) && actions.openLesson ? <button className="qard-primary" onClick={() => actions.openLesson!(inProgress.get(chosen.id)!)}>Continue lesson</button>
@@ -333,7 +337,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()),
         {chosen.needs.length > 0 && <button className={route ? 'is-on' : ''} aria-pressed={!!route} onClick={() => { if (route) { setRoute(undefined); return; } const next = routeTo(course, chosen.id); setRoute(next); frame([...next, chosen.id].filter(id => layout.nodes.has(id)), true, true); }}><Route size={14}/>Route here</button>}
       </div>
       {route && <section><div className="qard-label">Route · {route.length ? `${route.length} to learn` : 'nothing left to learn'}</div>
-        {route.length ? <div className="qard-map-route">{route.map((id, i) => <button key={id} className="qard-map-link" onClick={() => open(id, true)}><span className="qard-map-route-n">{i + 1}</span><i className={cls(byId.get(id)?.state ?? 'new')}/>{titleOf(id)}</button>)}</div> : <p className="qard-muted qard-small">Everything this builds on has been taught.</p>}
+        {route.length ? <div className="qard-map-route">{route.map((id, i) => <button key={id} className="qard-map-link" onClick={() => open(id, true)}><span className="qard-map-route-n">{i + 1}</span><i className={cls(byId.get(id)?.state ?? 'new')}/>{md(titleOf(id))}</button>)}</div> : <p className="qard-muted qard-small">Everything this builds on has been taught.</p>}
         {route[0] && route[0] !== chosen.id && <button className="qard-primary" onClick={() => actions.teach(byId.get(route[0]!)!)}>Teach step 1</button>}
       </section>}
       {chosen.needs.length > 0 && <section><div className="qard-label">Builds on</div>{links(chosen.needs)}</section>}
