@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { placeAnnotations } from '../src/tests/annotate';
-import { readMarks, readTest, validate, planSchema } from '../src/tests/test-schema';
+import { readMarks, readTest, validate, planSchema, testSchema, marksSchema } from '../src/tests/test-schema';
 import { extractJson, runValidated, type AgentRunner, type AgentTask } from '../src/agents/runner';
 import { runVaultTool } from '../src/agents/vault-tools';
 import { ClaudeCodeRunner, type NodeHost } from '../src/agents/cli-runner';
@@ -235,4 +235,20 @@ it('moves the old single agent setting into roles, with a fast tutor', () => {
   expect(readSettings({ tests: { provider: 'codex', agentPath: '/bin/codex' } }).agents).toMatchObject({ codexPath: '/bin/codex', claudePath: '' });
   // Once roles exist they win, and unknown providers fall back per role.
   expect(readSettings({ tests: { provider: 'codex' }, agents: { roles: { tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'bad' } } } }).agents.roles).toMatchObject({ tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'claude-code', model: '' } });
+});
+
+it('after a reload, writes again a test that was being written, and marks sections left marking', async () => {
+  const now = Date.now();
+  const files: Record<string, string> = {
+    'Qard/Tests/a/request.json': JSON.stringify({ prompt: 'HMM', decks: [], notes: [], sources: [], writing: now - 60_000 }),
+    'Qard/Tests/b/request.json': JSON.stringify({ prompt: 'Old', decks: [], notes: [], sources: [], writing: now - 3 * 86_400_000 }),
+    'Qard/Tests/c/test.json': JSON.stringify({ version: 1, createdAt: now, ...TEST }),
+    'Qard/Tests/c/attempt.json': JSON.stringify({ version: 1, startedAt: now - 1000, answers: { q1: { text: 'x' } }, marks: {}, review: {}, sections: { s1: { status: 'marking' }, s2: { status: 'open' } } })
+  };
+  const storage = memory(files), roles: string[] = [];
+  const service = new TestService(storage, () => DEFAULT_TEST_SETTINGS, role => ({ name: 'fake', run: async (task: AgentTask) => { roles.push(`${role}:${task.schema === testSchema ? 'test' : task.schema === marksSchema ? 'marks' : 'other'}`); return new Promise(() => {}); } }), () => now);
+  await service.resume();
+  await new Promise(r => setTimeout(r, 0));
+  expect(roles.sort()).toEqual(['marker:marks', 'writer:test']);
+  expect(JSON.parse(files['Qard/Tests/a/request.json']!).writing).toBeGreaterThan(now - 1000);
 });

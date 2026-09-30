@@ -47,7 +47,8 @@ export interface Attempt {
   cards?: Record<number, 'added' | 'skipped'>;
 }
 /** What the user asked for on the New test screen. */
-export interface TestRequest { prompt: string; decks: string[]; notes: string[]; sources: string[] }
+/** writing: set while the test is being written, so a reload knows to start it again. */
+export interface TestRequest { prompt: string; decks: string[]; notes: string[]; sources: string[]; writing?: number }
 export interface TestFolder { folder: string; request?: TestRequest; plan?: TestPlan; test?: PracticeTest; attempt?: Attempt }
 
 export function questions(test: PracticeTest): Question[] { return test.sections.flatMap(s => s.questions); }

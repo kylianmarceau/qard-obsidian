@@ -81,7 +81,13 @@ export default class QardPlugin extends Plugin {
     } });
     this.addCommand({ id: 'import-spaced-repetition', name: 'Import from Spaced Repetition', callback: () => this.openImport() });
     this.addSettingTab(new QardSettingsTab(this));
-    this.app.workspace.onLayoutReady(() => { if (!this.disposed) void this.index.start().catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.')); });
+    this.app.workspace.onLayoutReady(() => {
+      if (this.disposed) return;
+      void this.index.start().catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
+      // Pick up background work that a reload of Obsidian or Qard interrupted.
+      void this.learn.resumeBackground().catch(() => {});
+      void this.tests.resume().catch(() => {});
+    });
   }
   async open() {
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];

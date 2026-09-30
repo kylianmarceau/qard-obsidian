@@ -310,6 +310,27 @@ describe('learning service', () => {
     expect((await later.pending()).proposals).toEqual([]);
   });
 
+  it('restarts a course mapping a reload interrupted, and keeps failures visible until retried', async () => {
+    const t = setup();
+    t.reply(objectivesSchema, () => new Promise(() => {}));
+    void t.learn.mapCourse('Notes/DS346', 'Focus on A1');
+    await vi.waitFor(() => expect([...t.files.keys()].some(f => f.startsWith('Qard/Proposals/'))).toBe(true));
+    // Qard reloads mid-mapping: the new instance finds the record and starts the mapping again, with the same request.
+    t.replies.splice(0);
+    t.reply(objectivesSchema, () => { throw new Error('Claude Code was not found.'); });
+    const later = t.restart();
+    await later.resumeBackground();
+    await vi.waitFor(async () => expect((await later.pending()).failed).toMatchObject([{ kind: 'map', target: 'Notes/DS346', request: 'Focus on A1', error: 'Claude Code was not found.' }]));
+    expect(t.calls.filter(c => c.task.schema === objectivesSchema).at(-1)!.task.prompt).toContain('Focus on A1');
+    // The failure survives another restart, and retrying clears it.
+    const again = t.restart();
+    expect((await again.pending()).failed).toHaveLength(1);
+    t.replies.splice(0);
+    t.reply(objectivesSchema, () => ({ course: 'DS346', objectives: [{ id: 'a', title: 'A', label: 'A', notes: [], needs: [], group: 'G', state: 'new', evidence: '' }] }));
+    await again.mapCourse('Notes/DS346', 'Focus on A1');
+    expect(await again.pending()).toMatchObject({ failed: [], proposals: [{ folder: 'Notes/DS346' }] });
+  });
+
   it('writes lesson steps in parallel as soon as the plan exists, and redoes them when the plan changes', async () => {
     const t = await mapped();
     t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));

@@ -68,6 +68,9 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
     <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions"><button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
     {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}/></div>)}
+    {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
+      <button className="qard-text-button" onClick={() => void (f.kind === 'map' ? services.learn.mapCourse(f.target, f.request) : services.learn.updateCourse(f.target, f.request))}>Try again</button>
+      <button className="qard-text-button" onClick={() => void services.learn.dismissFailure(f.kind, f.target)}>Dismiss</button></div>)}
     {pending?.proposals.map(p => <button key={p.folder} className="qard-resume" onClick={() => nav.mapCourse(p.folder)}><span className="qard-muted">Ready to review</span><strong>{p.course} · {plural(p.objectives.length, 'objective')}</strong><ChevronRight size={16}/></button>)}
     {pending?.updates.map(u => <button key={u.mastery} className="qard-resume" onClick={() => nav.course(u.mastery)}><span className="qard-muted">Update ready</span><strong>{u.course}</strong><ChevronRight size={16}/></button>)}
     {open.map(l => <button key={l.path} className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong>{l.title}</strong>{l.course && <span className="qard-muted">{l.course}</span>}<ChevronRight size={16}/></button>)}

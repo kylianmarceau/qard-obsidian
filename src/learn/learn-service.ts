@@ -31,6 +31,8 @@ export interface LearnJob { kind: LearnJobKind; id: string; startedAt?: number; 
 export interface CourseProposal { folder: string; course: string; objectives: Objective[] }
 export interface CourseUpdate { mastery: string; course: string; notes: string[]; added: Objective[]; extended: { id: string; title: string; notes: string[]; needs: string[]; group?: string; label?: string }[]; outdated: { id: string; title: string; reason: string }[] }
 export interface LearnSnapshot { revision: number; jobs: Record<string, LearnJob> }
+/** A course mapping or update in flight or failed, kept on disk so a reload restarts it and failures stay visible. */
+export interface CourseJobRecord { kind: 'map' | 'update'; target: string; request: string; status: 'running' | 'failed'; startedAt: number; error?: string }
 
 const LESSONS_PER_DAY = 3;
 /** Lesson steps are written this many at a time, so the whole lesson is ready soon after the plan. */
@@ -66,6 +68,7 @@ export class LearnService {
   private lessons = new Map<string, Lesson>();
   private proposals = new Map<string, CourseProposal>();
   private updates = new Map<string, CourseUpdate>();
+  private failures = new Map<string, CourseJobRecord>();
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
   private disposed = false;
@@ -135,9 +138,14 @@ export class LearnService {
     return this.proposalsLoaded ??= (async () => {
       for (const path of this.storage.files(`${this.root()}/Proposals`, 'json')) {
         try {
-          const value = JSON.parse((await this.storage.read(path)) ?? '') as ({ kind: 'map' } & CourseProposal) | ({ kind: 'update' } & CourseUpdate);
-          if (value.kind === 'map' && !this.proposals.has(value.folder)) this.proposals.set(value.folder, value);
-          if (value.kind === 'update' && !this.updates.has(value.mastery)) this.updates.set(value.mastery, value);
+          const value = JSON.parse((await this.storage.read(path)) ?? '') as ({ kind: 'map' } & CourseProposal) | ({ kind: 'update' } & CourseUpdate) | CourseJobRecord;
+          if ('status' in value) {
+            // Interrupted by a reload: start it again. Failed: keep it visible under Learn until retried or dismissed.
+            if (value.status === 'running') void (value.kind === 'map' ? this.mapCourse(value.target, value.request) : this.updateCourse(value.target, value.request));
+            else this.failures.set(`${value.kind}:${value.target}`, value);
+          }
+          else if (value.kind === 'map' && !this.proposals.has(value.folder)) this.proposals.set(value.folder, value);
+          else if (value.kind === 'update' && !this.updates.has(value.mastery)) this.updates.set(value.mastery, value);
         } catch { /* a broken file is skipped */ }
       }
       this.publish();
@@ -148,7 +156,36 @@ export class LearnService {
     await this.loadProposals();
     // Course mappings are keyed by folder; updates by their mastery file.
     const mapping = Object.entries(this.snapshot.jobs).filter(([, j]) => j.kind === 'map-course' && !j.error).map(([k]) => k.split('|')[0]!).filter(t => !t.endsWith('.md'));
-    return { mapping, proposals: [...this.proposals.values()], updates: [...this.updates.values()] };
+    return { mapping, proposals: [...this.proposals.values()], updates: [...this.updates.values()], failed: [...this.failures.values()] };
+  }
+  /** Runs a course mapping or update with a record on disk while it runs, and keeps its error if it fails. */
+  private async courseJob<T>(kind: 'map' | 'update', target: string, request: string, work: () => Promise<T>): Promise<T> {
+    const file = this.proposalFile(kind, target), record = (status: 'running' | 'failed', error?: string): CourseJobRecord => ({ kind, target, request, status, startedAt: this.now(), error });
+    this.failures.delete(`${kind}:${target}`);
+    await this.storage.write(file, JSON.stringify(record('running'), null, 2) + '\n');
+    try { return await work(); }
+    catch (error) {
+      const failed = record('failed', (error as Error).message || 'Something went wrong.');
+      this.failures.set(`${kind}:${target}`, failed); await this.storage.write(file, JSON.stringify(failed, null, 2) + '\n').catch(() => {});
+      throw error;
+    }
+  }
+  async dismissFailure(kind: 'map' | 'update', target: string) {
+    this.failures.delete(`${kind}:${target}`); this.publish();
+    const file = this.proposalFile(kind, target); if (this.storage.exists(file)) await this.storage.remove(file);
+  }
+  /**
+   * After Obsidian or Qard starts: restart course jobs a reload interrupted, and finish today's lessons (their steps
+   * and wrap-ups) without waiting for them to be opened.
+   */
+  async resumeBackground() {
+    await this.loadProposals();
+    for (const path of this.storage.files(`${this.root()}/Lessons`, 'json')) {
+      const l = await this.loadLesson(path).catch(() => undefined);
+      if (!l || this.now() - l.createdAt > 86_400_000) continue;
+      if (l.finishedAt && !l.close) void this.close(path);
+      else if (!l.finishedAt && l.map && (l.steps.length !== l.map.steps.length || l.steps.some(x => !x))) void this.prepareSteps(path);
+    }
   }
   /** Turns the Writer's objectives into rows: clean unique ids, prerequisites remapped to them, no cycles. */
   private toObjectives(replies: ObjectiveReply[], taken: Set<string>): Objective[] {
@@ -165,7 +202,7 @@ export class LearnService {
   /** The writer proposes objectives for a course folder; nothing is written until the student accepts. */
   mapCourse(folder: string, request = '') {
     const clean = folder.replace(/\/+$/, '');
-    return this.track(clean, 'map-course', '', async () => {
+    return this.track(clean, 'map-course', '', () => this.courseJob('map', clean, request, async () => {
       const notes = this.storage.files(clean, 'md');
       const result = await runValidated(this.runner('writer'), { prompt: mapCoursePrompt(clean, notes, request, await this.profile()), schema: objectivesSchema, effort: 'high' }, readObjectives);
       const objectives = breakCycles(this.toObjectives(result.objectives, new Set()));
@@ -173,7 +210,7 @@ export class LearnService {
       this.proposals.set(clean, proposal); this.publish();
       await this.storage.write(this.proposalFile('map', clean), JSON.stringify({ kind: 'map', ...proposal }, null, 2) + '\n');
       this.notify(`${proposal.course}: ${objectives.length} objectives ready to review in Qard → Learn.`);
-    });
+    }));
   }
   async acceptCourse(folder: string, keep: string[]): Promise<string> {
     const proposal = this.proposals.get(folder);
@@ -202,7 +239,7 @@ export class LearnService {
   update(mastery: string) { return this.updates.get(mastery); }
   /** The writer proposes additions from new or changed notes. Existing rows are never renamed or rewritten. */
   updateCourse(mastery: string, request = '') {
-    return this.track(mastery, 'map-course', '', async () => {
+    return this.track(mastery, 'map-course', '', () => this.courseJob('update', mastery, request, async () => {
       const m = await this.course(mastery), changed = this.changedNotes(m);
       const notes = changed.length ? changed : this.storage.files(this.folderOf(mastery), 'md').filter(p => p !== mastery);
       const result = await runValidated(this.runner('writer'), { prompt: updateCoursePrompt(m, notes, request), schema: courseUpdateSchema, effort: 'high' }, readCourseUpdate);
@@ -220,7 +257,7 @@ export class LearnService {
       this.updates.set(mastery, update); this.publish();
       await this.storage.write(this.proposalFile('update', mastery), JSON.stringify({ kind: 'update', ...update }, null, 2) + '\n');
       this.notify(`${m.course}: an update is ready to review on its course page.`);
-    });
+    }));
   }
   /** Applies the ticked parts of an update and records the new mapping time. */
   async acceptUpdate(mastery: string, choice: { added: string[]; extended: string[]; remove: string[] }) {

@@ -158,12 +158,15 @@ export class TestService {
     const entry = this.cache.get(folder);
     const request = entry?.request ?? { prompt: '', decks: [], notes: [], sources: [] };
     void this.track(folder, 'generate', '', async () => {
+      await this.save(folder, 'request', { ...request, writing: this.now() });
       const course = await this.course([...new Set([...request.sources, ...(entry?.plan?.sources.map(s => s.path) ?? [])])]);
       const written = await runValidated(this.runner('writer'), { prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
       const test: PracticeTest = { version: 1, createdAt: this.now(), ...written, ...(course ? { mastery: course.mastery } : {}) };
       const attempt = emptyAttempt(test, this.now());
       await this.save(folder, 'test', test); await this.save(folder, 'attempt', attempt);
-      this.update(folder, { test, attempt });
+      const { writing: _done, ...finished } = request; void _done;
+      await this.save(folder, 'request', finished);
+      this.update(folder, { test, attempt, request: finished });
       this.notify(`Practice test ready: ${test.title}`);
     });
     return folder;
@@ -264,6 +267,22 @@ export class TestService {
     const { attempt } = this.attemptOf(folder);
     if ('question' in target) await this.setAttempt(folder, { ...attempt, review: { ...attempt.review, [target.question]: { ...attempt.review[target.question], card: state === 'added' ? 'added' : undefined } } });
     else { const cards = { ...attempt.cards }; if (state) cards[target.suggestion] = state; else delete cards[target.suggestion]; await this.setAttempt(folder, { ...attempt, cards }); }
+  }
+  /**
+   * After Obsidian or Qard starts: restart what a reload interrupted in the last day. Tests being written are written
+   * again, sections left marking are marked, and finished tests without a summary get one.
+   */
+  async resume() {
+    const root = this.settings().folder.replace(/\/+$/, ''), recent = (t?: number) => !!t && this.now() - t < 86_400_000;
+    for (const folder of await this.storage.folders(root)) {
+      const entry = await this.load(folder).catch(() => undefined);
+      if (!entry) continue;
+      if (!entry.test) { if (recent(entry.request?.writing)) void this.generate({ folder }); continue; }
+      const attempt = entry.attempt; if (!attempt || !recent(attempt.finishedAt ?? attempt.startedAt)) continue;
+      const pending = entry.test.sections.filter(s => { const st = attempt.sections[s.id]?.status; return st === 'marking' || (st === 'submitted' && (this.settings().marking === 'section' || !!attempt.finishedAt)); }).map(s => s.id);
+      if (pending.length) void this.mark(folder, pending);
+      else if (attempt.finishedAt && scoreOf(entry.test, attempt).marked && !attempt.wrapup) void this.wrapup(folder);
+    }
   }
   async flush() { this.timers.forEach((timer, folder) => { window.clearTimeout(timer); void this.save(folder, 'attempt', this.cache.get(folder)?.attempt); }); this.timers.clear(); await Promise.all(this.writes.values()); }
   dispose() { this.disposed = true; void this.flush(); this.listeners.clear(); }
