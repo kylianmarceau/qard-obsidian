@@ -98,6 +98,13 @@ describe('Claude Code runner', () => {
     expect(call.args).toEqual(expect.arrayContaining(['-p', '--json-schema', '--allowedTools', 'Read,Grep,Glob', '--disallowedTools']));
     expect(call.args.join(' ')).toMatch(/Bash,Edit,Write/);
     expect(call.input).toMatch(/never create, edit or delete files/);
+    expect(call.args).toContain('--no-session-persistence');
+    // A self-contained tutor task gets no tools at all, and its effort level.
+    await runner.run({ prompt: 'Mark', schema: { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }, vault: false, effort: 'low' });
+    const fast = calls.filter(c => c.command === '/opt/claude').at(-1)!.args;
+    expect(fast.join(' ')).toMatch(/--tools {2}--effort low$|--tools  .*--effort low/);
+    expect(fast).not.toContain('--allowedTools');
+    expect(fast[fast.indexOf('--tools') + 1]).toBe('');
   });
 });
 
@@ -218,5 +225,14 @@ it('marking prompts include rubric, model answer and confidence', () => {
 });
 it('settings default to Claude Code with plans and per-section marking', () => {
   expect(readSettings({}).tests).toEqual(DEFAULT_TEST_SETTINGS);
-  expect(readSettings({ tests: { provider: 'nope', questions: 999, folder: '' } }).tests).toMatchObject({ provider: 'claude-code', questions: 10, folder: 'Qard/Tests' });
+  expect(readSettings({ tests: { provider: 'nope', questions: 999, folder: '' } }).tests).toMatchObject({ questions: 10, folder: 'Qard/Tests' });
+  expect(readSettings({}).agents.roles).toEqual({ tutor: { provider: 'claude-code', model: 'haiku' }, writer: { provider: 'claude-code', model: '' }, marker: { provider: 'claude-code', model: '' } });
+});
+
+it('moves the old single agent setting into roles, with a fast tutor', () => {
+  const agents = readSettings({ tests: { provider: 'anthropic', model: 'claude-sonnet-5-5' } }).agents;
+  expect(agents.roles).toEqual({ tutor: { provider: 'anthropic', model: 'claude-haiku-4-5' }, writer: { provider: 'anthropic', model: 'claude-sonnet-5-5' }, marker: { provider: 'anthropic', model: 'claude-sonnet-5-5' } });
+  expect(readSettings({ tests: { provider: 'codex', agentPath: '/bin/codex' } }).agents).toMatchObject({ codexPath: '/bin/codex', claudePath: '' });
+  // Once roles exist they win, and unknown providers fall back per role.
+  expect(readSettings({ tests: { provider: 'codex' }, agents: { roles: { tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'bad' } } } }).agents.roles).toMatchObject({ tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'claude-code', model: '' } });
 });

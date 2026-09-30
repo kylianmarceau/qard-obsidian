@@ -6,10 +6,11 @@ import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
 
 export const API_MODELS: Record<string, string> = { 'claude-opus-5-5': 'Claude Opus 5.5', 'claude-sonnet-5-5': 'Claude Sonnet 5.5', 'claude-haiku-4-5': 'Claude Haiku 4.5' };
 export const DEFAULT_API_MODEL = 'claude-opus-5-5';
+export const FAST_API_MODEL = 'claude-haiku-4-5';
 const MAX_TURNS = 16;
 
 /** Obsidian's requestUrl avoids CORS and works on mobile; the SDK accepts any fetch. */
-async function obsidianFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+export async function obsidianFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const headers: Record<string, string> = {};
   new Headers(init?.headers).forEach((value, key) => { if (key !== 'content-length') headers[key] = value; });
@@ -33,9 +34,9 @@ export class AnthropicRunner implements AgentRunner {
       let response: Anthropic.Beta.BetaMessage;
       try {
         response = await client.beta.messages.create({
-          model, max_tokens: 16000, system: PREAMBLE, messages, tools: VAULT_TOOLS,
+          model, max_tokens: 16000, system: PREAMBLE, messages, ...(task.vault === false ? {} : { tools: VAULT_TOOLS }),
           cache_control: { type: 'ephemeral' },
-          output_config: { ...(model.startsWith('claude-haiku') ? {} : { effort: 'medium' as const }), format: { type: 'json_schema', schema: task.schema } },
+          output_config: { ...(model.startsWith('claude-haiku') ? {} : { effort: task.effort ?? 'medium' }), format: { type: 'json_schema', schema: task.schema } },
           ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {})
         }, { signal: task.signal });
       } catch (error) {

@@ -1,7 +1,13 @@
 import type { Schema } from '../tests/test-schema';
 
-export type AgentProvider = 'claude-code' | 'codex' | 'anthropic';
-export interface AgentTask { prompt: string; schema: Schema; signal?: AbortSignal }
+export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter';
+/** Tutor replies live and should be fast; the writer and marker favour quality. */
+export type AgentRole = 'tutor' | 'writer' | 'marker';
+/**
+ * vault: false when the prompt already holds everything needed, so API runners skip the note tools.
+ * effort: how hard to think, where the provider supports it.
+ */
+export interface AgentTask { prompt: string; schema: Schema; signal?: AbortSignal; vault?: boolean; effort?: 'low' | 'medium' | 'high' }
 /** Runs one task and returns the parsed JSON reply. Validation happens in the caller. */
 export interface AgentRunner { readonly name: string; run(task: AgentTask): Promise<unknown> }
 

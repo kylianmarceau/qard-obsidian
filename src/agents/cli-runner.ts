@@ -74,8 +74,11 @@ export class ClaudeCodeRunner extends CliRunner {
   readonly name = 'Claude Code'; protected readonly binary = 'claude';
   async run(task: AgentTask) {
     const { bin, path } = await this.command();
-    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(task.schema), '--allowedTools', 'Read,Grep,Glob', '--disallowedTools', 'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch'];
+    // Qard's calls stay out of the user's session history. When the prompt holds everything, no tools at all: faster, and nothing to wander into.
+    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(task.schema), '--no-session-persistence',
+      ...(task.vault === false ? ['--tools', ''] : ['--allowedTools', 'Read,Grep,Glob', '--disallowedTools', 'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch'])];
     if (this.model.trim()) args.push('--model', this.model.trim());
+    if (task.effort) args.push('--effort', task.effort);
     const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });
     let envelope: { result?: unknown; structured_output?: unknown; is_error?: boolean };
     try { envelope = JSON.parse(out) as typeof envelope; } catch { return extractJson(out); }
@@ -95,6 +98,7 @@ export class CodexRunner extends CliRunner {
     const last = this.host.tempFile(`qard-codex-${Date.now()}.txt`);
     const args = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', '--output-last-message', last];
     if (this.model.trim()) args.push('--model', this.model.trim());
+    if (task.effort) args.push('-c', `model_reasoning_effort=${task.effort}`);
     args.push('-');
     try {
       const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });

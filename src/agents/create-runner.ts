@@ -1,10 +1,12 @@
 import { FileSystemAdapter, Platform, TFile, type App } from 'obsidian';
-import type { TestSettings } from '../settings/settings';
-import type { AgentRunner } from './runner';
-import { AnthropicRunner } from './api-runner';
+import type { QardSettings } from '../settings/settings';
+import type { AgentProvider, AgentRole, AgentRunner } from './runner';
+import { AnthropicRunner, DEFAULT_API_MODEL, FAST_API_MODEL } from './api-runner';
+import { OpenRouterRunner } from './openrouter-runner';
 import { ClaudeCodeRunner, CodexRunner, findBinary, type NodeHost } from './cli-runner';
 
 export const API_KEY_SECRET = 'qard-anthropic-api-key';
+export const OPENROUTER_KEY_SECRET = 'qard-openrouter-api-key';
 
 /** Node built-ins exist only on desktop; load them lazily so mobile never touches them. */
 export function nodeHost(): NodeHost | undefined {
@@ -24,19 +26,29 @@ export function vaultPath(app: App) { return app.vault.adapter instanceof FileSy
 export function secrets(app: App): { getSecret(id: string): string | null; setSecret(id: string, secret: string): void } | undefined {
   return (app as unknown as { secretStorage?: { getSecret(id: string): string | null; setSecret(id: string, secret: string): void } }).secretStorage;
 }
-export function readApiKey(app: App) { return secrets(app)?.getSecret(API_KEY_SECRET) ?? null; }
+export function readSecret(app: App, id: string) { return secrets(app)?.getSecret(id) ?? null; }
 
-export function createRunner(app: App, settings: TestSettings): AgentRunner {
-  if (settings.provider === 'anthropic') {
-    const reader = { paths: () => app.vault.getMarkdownFiles().map(f => f.path), read: (p: string) => { const f = app.vault.getAbstractFileByPath(p); return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve(''); } };
-    return new AnthropicRunner(reader, () => readApiKey(app), settings.model, [settings.folder]);
-  }
-  const host = nodeHost(), vault = vaultPath(app);
-  if (!host || !vault) return { name: 'Unavailable', run: () => Promise.reject(new Error('Claude Code and Codex need the desktop app. On mobile, choose the Anthropic API key provider in Settings → Qard.')) };
-  return settings.provider === 'codex' ? new CodexRunner(host, vault, settings.agentPath, settings.model) : new ClaudeCodeRunner(host, vault, settings.agentPath, settings.model);
+/** The tutor defaults to each connection's fast model; the writer and marker to its best. */
+export function defaultModel(provider: AgentProvider, role: AgentRole) {
+  const fast = role === 'tutor';
+  if (provider === 'anthropic') return fast ? FAST_API_MODEL : DEFAULT_API_MODEL;
+  if (provider === 'openrouter') return fast ? 'anthropic/claude-haiku-4.5' : 'anthropic/claude-opus-5.5';
+  return provider === 'claude-code' && fast ? 'haiku' : '';
 }
-/** For the settings status line. */
-export async function detectAgent(settings: TestSettings): Promise<string | undefined> {
+
+export function createRunner(app: App, settings: QardSettings, role: AgentRole): AgentRunner {
+  const { provider } = settings.agents.roles[role], model = settings.agents.roles[role].model.trim() || defaultModel(provider, role);
+  const reader = { paths: () => app.vault.getMarkdownFiles().map(f => f.path), read: (p: string) => { const f = app.vault.getAbstractFileByPath(p); return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve(''); } };
+  // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
+  const exclude = [settings.tests.folder.replace(/\/+$/, '')];
+  if (provider === 'anthropic') return new AnthropicRunner(reader, () => readSecret(app, API_KEY_SECRET), model, exclude);
+  if (provider === 'openrouter') return new OpenRouterRunner(reader, () => readSecret(app, OPENROUTER_KEY_SECRET), model, exclude);
+  const host = nodeHost(), vault = vaultPath(app);
+  if (!host || !vault) return { name: 'Unavailable', run: () => Promise.reject(new Error('Claude Code and Codex need the desktop app. On mobile, choose an API key connection in Settings → Qard.')) };
+  return provider === 'codex' ? new CodexRunner(host, vault, settings.agents.codexPath, model) : new ClaudeCodeRunner(host, vault, settings.agents.claudePath, model);
+}
+/** For the settings status lines. */
+export async function detectAgent(settings: QardSettings, provider: AgentProvider): Promise<string | undefined> {
   const host = nodeHost(); if (!host) return undefined;
-  return findBinary(host, settings.provider === 'codex' ? 'codex' : 'claude', settings.agentPath);
+  return provider === 'codex' ? findBinary(host, 'codex', settings.agents.codexPath) : findBinary(host, 'claude', settings.agents.claudePath);
 }
