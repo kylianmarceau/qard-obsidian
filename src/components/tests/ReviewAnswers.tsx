@@ -6,6 +6,7 @@ import { placeAnnotations } from '../../tests/annotate';
 import { ignoresStudyKey } from '../../review/keyboard';
 import { Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
+import { AskThread } from '../common/AskThread';
 import { Check, JobError, Waiting, cardTarget, scoreTone, useTestFolder, type TestNav } from './common';
 
 const KIND: Record<AnnotationKind, string> = { correct: 'Correct', wrong: 'Incorrect', vague: 'Too vague', missing: 'Missing', insight: 'Good insight' };
@@ -52,7 +53,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
   const mark = attempt.marks[q.id], answer = attempt.answers[q.id], review = attempt.review[q.id];
   const section = sectionOf(test, q.id)!, path = q.source?.path || folder;
   const [selected, setSelected] = useState<number>(), [panel, setPanel] = useState<Panel>(null), [compare, setCompare] = useState(false);
-  const [retryText, setRetryText] = useState(''), [askText, setAskText] = useState(''), [disputeText, setDisputeText] = useState(''), [override, setOverride] = useState<boolean[]>();
+  const [retryText, setRetryText] = useState(''), [disputeText, setDisputeText] = useState(''), [override, setOverride] = useState<boolean[]>();
   const target = cardTarget(services, q, test.title, section.title);
   const [front, setFront] = useState(''), [back, setBack] = useState(''), [cardError, setCardError] = useState(''), [saving, setSaving] = useState(false);
   const placed = useMemo(() => placeAnnotations(answer?.text ?? '', mark?.annotations ?? []), [answer?.text, mark?.annotations]);
@@ -114,13 +115,10 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
       <div className="qard-panel-actions is-split"><button className="qard-text-button" onClick={() => setCompare(!compare)}>{compare ? 'Model answer only' : 'Compare with mine'}</button>{q.source && <button className="qard-link" onClick={() => void services.app.workspace.openLinkText(q.source!.heading ? `${q.source!.path}#${q.source!.heading}` : q.source!.path, '', true)}>{q.source.path.split('/').pop()!.replace(/\.md$/, '')}{q.source.heading ? ` › ${q.source.heading}` : ''}</button>}</div>
     </section>}
 
-    {panel === 'ask' && <section className="qard-panel">
-      {review?.followups?.map((f, i) => <div key={i} className="qard-followup"><strong>{f.q}</strong><Markdown text={f.a} path={path} services={services}/></div>)}
-      <form className="qard-inline-form" onSubmit={e => { e.preventDefault(); if (askText.trim()) { void services.tests.ask(folder, q.id, askText); setAskText(''); } }}>
-        <input aria-label="Ask about this question" autoFocus placeholder={running(askJob) ? 'Thinking…' : 'Ask about this question…'} value={askText} disabled={running(askJob)} onChange={e => setAskText(e.target.value)}/>
-        <button type="submit" className="qard-primary" disabled={running(askJob) || !askText.trim()}>Ask</button>
-      </form>
-      <JobError job={askJob} dismiss={() => services.tests.dismiss(folder, 'ask', q.id)}/>
+    {panel === 'ask' && <section className="qard-panel qard-panel-ask">
+      <AskThread services={services} path={path} items={review?.followups ?? []} busy={running(askJob)} error={askJob?.error} role="tutor" title="Questions" placeholder="Ask about this question…"
+        ask={text => void services.tests.ask(folder, q.id, text)} dismiss={() => services.tests.dismiss(folder, 'ask', q.id)}
+        card={target} onCard={() => void services.tests.cardState(folder, { question: q.id }, 'added')}/>
     </section>}
 
     {panel === 'dispute' && <section className="qard-panel">

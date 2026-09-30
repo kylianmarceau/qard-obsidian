@@ -6,6 +6,7 @@ import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
 import { Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
+import { AskThread, type CardTarget } from '../common/AskThread';
 import { JobError, Waiting } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
@@ -27,6 +28,13 @@ function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: L
     {objective && <><span aria-hidden="true">›</span><button className="qard-link" onClick={open}>{objective.label || objective.title}</button><StateChip state={objective.state}/></>}
     <button className="qard-text-button qard-lesson-trail-map" onClick={open}>Show on map</button>
   </nav>;
+}
+
+/** Cards from a lesson go into the deck of its first note when that note has cards, else a deck named after the course. */
+function lessonCardTarget(services: QardServices, lesson: Lesson): CardTarget {
+  const noteCards = services.index.getSnapshot().cards.filter(c => lesson.notes.includes(c.sourceFile));
+  const topic = lesson.map?.title ?? lesson.topic;
+  return noteCards.length ? { deck: noteCards[0]!.deck, topic, sourceFile: noteCards[0]!.sourceFile } : { deck: lesson.course ?? lesson.topic, topic };
 }
 
 export function LessonView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
@@ -86,12 +94,12 @@ function LessonMapView({ services, path, lesson }: { services: QardServices; pat
 function LessonSteps({ services, path, lesson, context }: { services: QardServices; path: string; lesson: Lesson; context: WaitContext }) {
   const hold = useHold();
   const { job } = useLearn(services);
-  const [ask, setAsk] = useState(''), [retry, setRetry] = useState('');
+  const [retry, setRetry] = useState('');
   const index = lesson.current, step = lesson.steps[index], st = lesson.state[index], plan = lesson.map!.steps[index];
   const writing = job(path, 'steps'), tutor = job(path, 'tutor', String(index)), retrying = job(path, 'tutor', `${index}-retry`), asking = job(path, 'ask', String(index));
   const running = (j?: { error?: string }) => !!j && !j.error;
   const where = lesson.notes[0] ?? path, last = index === lesson.steps.length - 1;
-  useEffect(() => { setAsk(''); setRetry(''); }, [index]);
+  useEffect(() => { setRetry(''); }, [index]);
   const explain = step && (!step.checkFirst || !!st?.mark);
   return <div className="qard-test qard-lesson">
     <div className="qard-test-steps" aria-label="Steps">{lesson.map!.steps.map((s, i) => <button key={i} className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''} disabled={!lesson.steps[i]} aria-current={i === index ? 'step' : undefined} onClick={() => void services.learn.go(path, i)}>{i + 1}. {s.title}{lesson.state[i]?.mark ? ' ✓' : ''}</button>)}</div>
@@ -117,14 +125,9 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
             <div className="qard-panel-actions">{running(retrying) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button type="submit" disabled={!retry.trim()}>Try again</button>}</div>
           </form>)}
       </section>}
-      <section className="qard-ask">
-        {st?.asks.map((a, i) => <div key={i} className="qard-followup"><strong>{a.q}</strong><Markdown text={a.a} path={where} services={services}/></div>)}
-        <form className="qard-inline-form" onSubmit={e => { e.preventDefault(); if (ask.trim()) { void services.learn.ask(path, ask); setAsk(''); } }}>
-          <input aria-label="Ask about this step" placeholder={running(asking) ? 'Thinking…' : 'Ask anything about this step…'} value={ask} disabled={running(asking)} onChange={e => setAsk(e.target.value)}/>
-          <button type="submit" className="qard-text-button" disabled={running(asking) || !ask.trim()}>Ask</button>
-        </form>
-        <JobError job={asking} dismiss={() => services.learn.dismiss(path, 'ask', String(index))}/>
-      </section>
+      <AskThread key={index} services={services} path={where} items={st?.asks ?? []} busy={running(asking)} error={asking?.error} role="tutor" title="Questions about this step" placeholder="Ask anything about this step…"
+        ask={q => void services.learn.ask(path, q)} dismiss={() => services.learn.dismiss(path, 'ask', String(index))}
+        card={lessonCardTarget(services, lesson)} onCard={id => { if (lesson.mastery && lesson.objective) void services.learn.linkCard(id, lesson.mastery, lesson.objective); }}/>
     </>}
     <div className="qard-test-footer">
       {index > 0 && <button className="qard-text-button" onClick={() => void services.learn.go(path, index - 1)}>← Previous</button>}
@@ -145,9 +148,7 @@ function LessonClose({ services, nav, path, lesson }: { services: QardServices; 
   }, [services, lesson.mastery, lesson.objective, revision]);
   const closing = job(path, 'close'), close = lesson.close, where = lesson.notes[0] ?? path;
   if (!close) return <div className="qard-doc">{closing?.error ? <JobError job={closing} retry={() => void services.learn.close(path)}/> : <><Waiting text="Wrapping up…"><AgentLabel services={services} role="writer"/></Waiting><p className="qard-muted">Saving the lesson, suggesting cards and writing your next check.</p></>}</div>;
-  // Cards go into the deck of the lesson's first note when it has cards, else a deck named after the course.
-  const noteCards = services.index.getSnapshot().cards.filter(c => lesson.notes.includes(c.sourceFile));
-  const target = noteCards.length ? { deck: noteCards[0]!.deck, topic: lesson.map?.title ?? lesson.topic, sourceFile: noteCards[0]!.sourceFile } : { deck: lesson.course ?? lesson.topic, topic: lesson.map?.title ?? lesson.topic, sourceFile: undefined };
+  const target = lessonCardTarget(services, lesson);
   async function add(i: number) {
     setBusy(i); setError('');
     try { const card = await services.writer.create({ ...target, front: close!.cards[i]!.front, back: close!.cards[i]!.back, folder: services.reviews.getSnapshot().settings.cardFolder }); await services.learn.lessonCard(path, i, 'added', card.id); }

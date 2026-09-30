@@ -604,3 +604,29 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-probe-prompt { flex: 1; min-width: 0; }
 .qard-probe-prompt .qard-markdown { font-size: 13.5px; line-height: 1.5; }
 .qard-doc-why .qard-markdown { color: var(--qard-muted); font-size: 13.5px; line-height: 1.55; margin: 2px 0; }
+
+/* Ask: your question right-aligned and tinted, the answer full width with an accent bar; older exchanges fold. */
+.qard-ask-head { display: flex; align-items: center; justify-content: space-between; }
+.qard-ask-head .qard-label { margin: 0; }
+.qard-ask-list { display: flex; flex-direction: column; gap: 6px; }
+.qard-ask-item.is-open { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 14px; }
+.qard-app button.qard-ask-q, .qard-ask-q { align-self: flex-end; max-width: 80%; border: 0; min-height: 0; padding: 8px 12px; border-radius: 12px 12px 4px 12px; background: var(--qard-tint); color: var(--qard-text); font-size: 14px; line-height: 1.45; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer; }
+div.qard-ask-q { cursor: default; }
+.qard-ask-a { padding: 2px 0 2px 14px; border-left: 3px solid color-mix(in srgb, var(--qard-blue) 55%, transparent); }
+.qard-ask-a .qard-markdown { font-size: 15px; line-height: 1.65; }
+.qard-ask-a .qard-waiting { margin: 4px 0; }
+.qard-ask-tools { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.qard-ask-tools .qard-agent { margin-left: 0; }
+.qard-app .qard-ask-tools .qard-text-button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--qard-muted); }
+.qard-app .qard-ask-tools .qard-text-button:hover { color: var(--qard-text); }
+.qard-ask-tools .is-full { display: inline-flex; align-items: center; gap: 4px; }
+.qard-app button.qard-ask-item.is-folded { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 40px; padding: 6px 8px; border: 0; border-radius: 8px; text-align: left; background: transparent; color: var(--qard-muted); }
+.qard-app button.qard-ask-item.is-folded:hover { background: var(--qard-soft); }
+.qard-ask-fold { display: flex; flex-direction: column; min-width: 0; }
+.qard-ask-fold strong, .qard-ask-fold span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qard-ask-fold strong { color: var(--qard-text); font-weight: 550; font-size: 13.5px; }
+.qard-ask-fold span { font-size: 12.5px; }
+.qard-ask-card { margin-top: 10px; }
+.qard-ask-input { display: flex; align-items: flex-end; gap: 8px; margin-top: 4px; }
+.qard-app .qard-ask-input textarea { flex: 1; min-height: 38px; max-height: 180px; field-sizing: content; resize: none; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.45; }
+.qard-panel-ask { background: transparent; padding: 0; }
