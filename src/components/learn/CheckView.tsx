@@ -9,7 +9,8 @@ import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay,
 
 const GOAL: Record<string, string> = { recognise: 'Tell apart', recall: 'Recall', explain: 'Explain', apply: 'Apply' };
 
-export function CheckView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
+/** onFinish: shown inside another screen (while waiting), Next hands back instead of navigating. */
+export function CheckView({ services, nav, path, onFinish }: { services: QardServices; nav?: LearnNav; path: string; onFinish?: () => void }) {
   const { revision, job } = useLearn(services);
   const [error, setError] = useState(''), [objective, setObjective] = useState<Objective>();
   useEffect(() => { services.learn.loadCheck(path).catch(e => setError((e as Error).message)); }, [services, path]);
@@ -24,6 +25,7 @@ export function CheckView({ services, nav, path }: { services: QardServices; nav
   const marking = job(path, 'check-mark'), done = !!record.finishedAt, busy = !!marking && !marking.error;
   const score = record.questions.reduce((n, q) => n + (record.marks[q.id]?.score ?? 0), 0), marks = record.questions.reduce((n, q) => n + q.marks, 0);
   async function next() {
+    if (onFinish || !nav) { onFinish?.(); return; }
     const today = await services.learn.todayList(), following = today.checks.find(c => c.check && c.check !== path);
     if (following) nav.check(following.check!); else if (today.cards) nav.studyDue(); else nav.today();
   }

@@ -2,16 +2,26 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import { JobError, Waiting, useTestFolder, type TestNav } from './common';
+import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
 export function PlanView({ services, nav, folder }: { services: QardServices; nav: TestNav; folder: string }) {
   const { entry, error, job } = useTestFolder(services, folder);
   const [change, setChange] = useState('');
+  const hold = useHold();
   const planning = job('plan'), writing = job('generate');
-  useEffect(() => { if (entry?.test) nav.take(folder); }, [entry?.test, folder, nav]);
+  useEffect(() => { if (entry?.test && !hold.held) nav.take(folder); }, [entry?.test, folder, nav, hold.held]);
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   const plan = entry?.plan;
-  if (writing && !writing.error) return <div className="qard-doc"><Waiting text="Writing your test…"/><p className="qard-muted">This usually takes a minute or two. You can leave this screen; the test appears under Tests when it is ready.</p></div>;
-  if (!plan) return <div className="qard-doc">{planning?.error ? <JobError job={planning} dismiss={() => services.tests.dismiss(folder, 'plan')}/> : <><Waiting text="Planning your test…"/><p className="qard-muted">Reading your prompt and looking for the right notes.</p></>}</div>;
+  if (!entry) return <Waiting text="Loading…"/>;
+  const waitingPlan = !plan && !planning?.error, waitingTest = !!writing && !writing.error;
+  if (waitingPlan || waitingTest || hold.held) {
+    // One waiting screen for both phases; once something is started it stays until the student continues.
+    const forTest = waitingTest || !!entry?.test;
+    return <WhileYouWait services={services} title={forTest ? 'Writing your test…' : 'Planning your test…'} job={forTest ? writing : planning} ready={forTest ? !!entry?.test : !!plan}
+      readyLabel={forTest ? 'Your test is ready' : 'Your test plan is ready'} onEngage={hold.engage} onContinue={() => { hold.release(); if (entry?.test) nav.take(folder); }}
+      context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(plan?.sources.map(x => x.path) ?? [])] } }}/>;
+  }
+  if (!plan) return <div className="qard-doc"><JobError job={planning} dismiss={() => services.tests.dismiss(folder, 'plan')}/></div>;
   const revising = !!planning && !planning.error;
   return <article className="qard-doc">
     <header><span className="qard-muted">Test plan</span><h1>{plan.title}</h1><p className="qard-muted">{plan.questionCount} questions · {plan.totalMarks} marks · about {plan.minutes} minutes · marked {services.reviews.getSnapshot().settings.tests.marking === 'end' ? 'at the end' : 'after each section'}</p></header>

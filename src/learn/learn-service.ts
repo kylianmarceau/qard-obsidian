@@ -369,6 +369,14 @@ export class LearnService {
     if (!this.lessons.has(path)) { const text = await this.storage.read(path); if (!text) throw new Error('This lesson no longer exists.'); this.lessons.set(path, JSON.parse(text) as Lesson); this.publish(); }
     return this.lessons.get(path)!;
   }
+  /** What a lesson builds on, for warming up while it is prepared: its notes and its objective's prerequisites (and their notes). */
+  async warmupFor(path: string): Promise<{ files: string[]; objectives: string[] }> {
+    const lesson = this.lessons.get(path); if (!lesson) return { files: [], objectives: [] };
+    const m = lesson.mastery ? await this.course(lesson.mastery).catch(() => undefined) : undefined, o = m?.objectives.find(x => x.id === lesson.objective);
+    const needs = o?.needs ?? [], files = new Set(lesson.notes);
+    for (const id of needs) for (const n of m!.objectives.find(x => x.id === id)?.notes ?? []) { const p = this.storage.resolve(n, m!.path); if (p) files.add(p); }
+    return { files: [...files], objectives: needs };
+  }
   /** Opens a lesson and picks up any work a reload interrupted: the probe, the plan, unwritten steps or the wrap-up. */
   async openLesson(path: string) {
     const l = await this.loadLesson(path);

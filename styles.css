@@ -549,3 +549,22 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-jobs-item strong { font-size: 13px; font-weight: 600; }
 .qard-jobs-item small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qard-jobs-note { margin: 6px 8px 4px; }
+
+/* While you wait */
+.qard-wait { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.qard-wait-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qard-wait-head .qard-waiting { margin: 0; }
+.qard-wait-ready { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--qard-ok-bg); color: var(--qard-ok); }
+.qard-wait-ready strong { color: var(--qard-text); font-weight: 600; }
+.qard-wait-body { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--qard-border); }
+.qard-wait-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.qard-wait-tabs .qard-label { margin: 0 6px 0 0; }
+.qard-wait-card { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid var(--qard-border); border-radius: 14px; background: var(--qard-bg); }
+.qard-wait-front .qard-markdown { font-size: 17px; }
+.qard-wait-back { padding-top: 14px; border-top: 1px dashed var(--qard-border); }
+.qard-wait-ratings { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.qard-wait-done { display: flex; align-items: center; gap: 8px; color: var(--qard-ok); }
+.qard-wait-missed { margin: 4px 0 0; padding-left: 20px; color: var(--qard-muted); }
+.qard-wait-retry { display: flex; flex-direction: column; gap: 10px; }
+.qard-wait-notes { display: flex; flex-wrap: wrap; gap: 14px; }
+.qard-wait-check .qard-test { max-width: none; }

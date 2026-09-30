@@ -7,6 +7,7 @@ import { isoDay } from '../../learn/mastery';
 import { Markdown } from '../Markdown';
 import { JobError, Waiting } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
+import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: LearnNav; lesson: Lesson }) {
@@ -28,15 +29,22 @@ function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: L
 }
 
 export function LessonView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
-  useLearn(services);
-  const [error, setError] = useState('');
-  useEffect(() => { services.learn.openLesson(path).catch(e => setError((e as Error).message)); }, [services, path]);
+  const { job } = useLearn(services);
+  const [error, setError] = useState(''), [warmup, setWarmup] = useState<WaitContext['prefer']>();
+  const hold = useHold();
+  useEffect(() => { services.learn.openLesson(path).then(() => services.learn.warmupFor(path)).then(setWarmup, e => setError((e as Error).message)); }, [services, path]);
   const lesson = services.learn.lessonAt(path);
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   if (!lesson) return <Waiting text="Loading…"/>;
   const trail = <LessonTrail services={services} nav={nav} lesson={lesson}/>;
+  const context: WaitContext = { kind: 'lesson', prefer: warmup };
   if (lesson.finishedAt) return <>{trail}<LessonClose services={services} nav={nav} path={path} lesson={lesson}/></>;
-  if (lesson.accepted) return <>{trail}<LessonSteps services={services} path={path} lesson={lesson}/></>;
+  if (lesson.accepted) return <>{trail}<LessonSteps services={services} path={path} lesson={lesson} context={context}/></>;
+  // While the tutor finds where to start and plans, warm up on what the lesson builds on.
+  const probing = job(path, 'probe'), planning = job(path, 'map');
+  const waitingProbe = !lesson.probe && !probing?.error, waitingPlan = !!lesson.probe?.submitted && !lesson.map && !planning?.error;
+  if (waitingProbe || waitingPlan || hold.held) return <>{trail}<WhileYouWait services={services} title={lesson.map || waitingPlan ? 'Planning the lesson…' : 'Finding where to start…'} job={waitingProbe ? probing : planning}
+    ready={!waitingProbe && !waitingPlan} readyLabel={lesson.map ? 'Your lesson plan is ready' : 'A few quick questions are ready'} onEngage={hold.engage} onContinue={hold.release} context={context}/><TutorHint services={services}/></>;
   if (lesson.map) return <>{trail}<LessonMapView services={services} path={path} lesson={lesson}/></>;
   return <>{trail}<LessonProbe services={services} path={path} lesson={lesson}/></>;
 }
@@ -74,7 +82,8 @@ function LessonMapView({ services, path, lesson }: { services: QardServices; pat
   </article>;
 }
 
-function LessonSteps({ services, path, lesson }: { services: QardServices; path: string; lesson: Lesson }) {
+function LessonSteps({ services, path, lesson, context }: { services: QardServices; path: string; lesson: Lesson; context: WaitContext }) {
+  const hold = useHold();
   const { job } = useLearn(services);
   const [ask, setAsk] = useState(''), [retry, setRetry] = useState('');
   const index = lesson.current, step = lesson.steps[index], st = lesson.state[index], plan = lesson.map!.steps[index];
@@ -87,7 +96,8 @@ function LessonSteps({ services, path, lesson }: { services: QardServices; path:
     <div className="qard-test-steps" aria-label="Steps">{lesson.map!.steps.map((s, i) => <button key={i} className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''} disabled={!lesson.steps[i]} aria-current={i === index ? 'step' : undefined} onClick={() => void services.learn.go(path, i)}>{i + 1}. {s.title}{lesson.state[i]?.mark ? ' ✓' : ''}</button>)}</div>
     <div className="qard-test-heading"><div><span className="qard-muted">Step {index + 1} of {lesson.steps.length}</span><h1>{step?.title ?? plan?.title}</h1></div></div>
     {plan && <p className="qard-lesson-why">{plan.why}</p>}
-    {!step ? (writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/> : <Waiting text="Writing this step…"/>) : <>
+    {!step && writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/>
+      : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}/> : <>
       {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/><p className="qard-muted">{step.connect}</p></section>}
       {!st?.mark ? <>
         {step.checkFirst && <p className="qard-label">Try this first. Work it out from what you know.</p>}

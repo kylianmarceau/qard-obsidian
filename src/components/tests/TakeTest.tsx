@@ -5,6 +5,7 @@ import type { Confidence, Question, SectionStatus } from '../../tests/test-types
 import { scoreOf } from '../../tests/test-types';
 import { Markdown } from '../Markdown';
 import { JobError, Waiting, useTestFolder, type TestNav } from './common';
+import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
 const CONFIDENCE: { id: Confidence; label: string }[] = [{ id: 'sure', label: 'Sure' }, { id: 'unsure', label: 'Unsure' }, { id: 'guess', label: 'Guess' }];
 
@@ -12,13 +13,17 @@ export function TakeTest({ services, nav, folder }: { services: QardServices; na
   const { entry, error, job } = useTestFolder(services, folder);
   const test = entry?.test, attempt = entry?.attempt;
   const [index, setIndex] = useState<number>();
+  const hold = useHold();
   const marking = services.reviews.getSnapshot().settings.tests.marking;
   const top = useRef<HTMLDivElement>(null);
   useEffect(() => { if (test && index === undefined) { const next = test.sections.findIndex(s => (attempt?.sections[s.id]?.status ?? 'open') === 'open'); setIndex(next < 0 ? test.sections.length - 1 : next); } }, [test, attempt, index]);
   useEffect(() => { top.current?.scrollIntoView({ block: 'start' }); }, [index]);
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   const writing = job('generate');
-  if (!test) return <div className="qard-doc">{writing?.error ? <JobError job={writing} retry={() => void services.tests.generate({ folder })}/> : <><Waiting text="Writing your test…"/><p className="qard-muted">This usually takes a minute or two. You can leave this screen; the test appears under Tests when it is ready.</p></>}</div>;
+  if (!entry) return <Waiting text="Loading…"/>;
+  if (!test && writing?.error) return <div className="qard-doc"><JobError job={writing} retry={() => void services.tests.generate({ folder })}/></div>;
+  if (!test || hold.held) return <WhileYouWait services={services} title="Writing your test…" job={writing} ready={!!test} readyLabel="Your test is ready" onEngage={hold.engage} onContinue={hold.release}
+    context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(entry?.plan?.sources.map(x => x.path) ?? [])] } }}/>;
   if (index === undefined) return null;
   const section = test.sections[index]!, status: SectionStatus = attempt?.sections[section.id]?.status ?? 'open';
   // Exam mode keeps every answer editable until Finish; section mode locks a section once submitted.

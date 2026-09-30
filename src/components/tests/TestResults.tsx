@@ -3,18 +3,20 @@ import type { QardServices } from '../../views/services';
 import { questions, scoreOf } from '../../tests/test-types';
 import { Markdown } from '../Markdown';
 import { JobError, Waiting, scoreTone, useTestFolder, type TestNav } from './common';
+import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
 export function TestResults({ services, nav, folder }: { services: QardServices; nav: TestNav; folder: string }) {
   const { entry, error, job } = useTestFolder(services, folder);
+  const hold = useHold();
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   const test = entry?.test, attempt = entry?.attempt;
   if (!test) return <Waiting text="Loading…"/>;
   const total = scoreOf(test, attempt);
   const failed = test.sections.filter(s => attempt?.sections[s.id]?.status === 'error');
-  if (!total.marked) return <div className="qard-results">
-    {failed.length ? failed.map(s => <div key={s.id} className="qard-error" role="alert"><span>Couldn't mark {s.title}: {attempt?.sections[s.id]?.error}</span><button className="qard-text-button" onClick={() => void services.tests.mark(folder, [s.id])}>Try again</button></div>)
-      : <><Waiting text="Marking your answers…"/><p className="qard-muted">You can leave this screen. Results appear under Tests when marking is done.</p></>}
-  </div>;
+  if (failed.length && !total.marked) return <div className="qard-results">{failed.map(s => <div key={s.id} className="qard-error" role="alert"><span>Couldn't mark {s.title}: {attempt?.sections[s.id]?.error}</span><button className="qard-text-button" onClick={() => void services.tests.mark(folder, [s.id])}>Try again</button></div>)}</div>;
+  // While marking, review anything except this test's own material.
+  if (!total.marked || hold.held) return <WhileYouWait services={services} title="Marking your answers…" job={services.tests.jobsFor(folder).find(j => j.kind === 'mark')} ready={total.marked} readyLabel="Your results are ready"
+    onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'marking', avoid: { files: questions(test).map(q => q.source?.path ?? '').filter(Boolean) } }}/>;
   const wrapup = attempt?.wrapup, summary = job('wrapup'), all = questions(test);
   const sure = new Set(all.filter(q => attempt?.answers[q.id]?.confidence === 'sure' && (attempt.marks[q.id]?.score ?? 0) < q.marks).map(q => q.id));
   const suggestions = wrapup?.cards.filter((_, i) => !attempt?.cards?.[i]).length ?? 0;
