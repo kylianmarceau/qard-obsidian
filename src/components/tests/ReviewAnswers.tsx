@@ -8,7 +8,7 @@ import { Markdown } from '../Markdown';
 import { Check, JobError, Waiting, cardTarget, scoreTone, useTestFolder, type TestNav } from './common';
 
 const KIND: Record<AnnotationKind, string> = { correct: 'Correct', wrong: 'Incorrect', vague: 'Too vague', missing: 'Missing', insight: 'Good insight' };
-const MISTAKE: Record<string, string> = { misconception: 'Misconception', careless: 'Careless slip', imprecise: 'Imprecise', incomplete: 'Incomplete' };
+const MISTAKE: Record<string, string> = { misconception: 'Misconception', careless: 'Careless slip', imprecise: 'Imprecise', incomplete: 'Incomplete', unknown: "Didn't know" };
 type Panel = 'retry' | 'model' | 'ask' | 'dispute' | 'card' | null;
 
 export function ReviewAnswers({ services, nav, folder, initial }: { services: QardServices; nav: TestNav; folder: string; initial?: string }) {
@@ -82,7 +82,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
     {q.type === 'mcq' ? <section><div className="qard-label">Your answer</div>{q.options?.map((o, i) => <div key={i} className={'qard-mcq-row' + (answer?.choice === i ? ' is-chosen' : '')}><span className={i === q.answer ? 'is-full' : answer?.choice === i ? 'is-zero' : ''}>{i === q.answer ? '✓' : answer?.choice === i ? '✕' : ''}</span><Markdown text={o} path={path} services={services}/></div>)}</section>
       : <section className="qard-review-answer">
         <div><div className="qard-label">Your answer</div>
-          {answer?.text?.trim() ? <div className="qard-marked-text">{placed.segments.map((s, i) => s.kind ? <span key={i}>{s.text && <span className={`qard-seg qard-seg-${s.kind}` + (selected === s.note ? ' is-selected' : '')}>{s.text}</span>}<button className={`qard-pin qard-pin-${s.kind}`} aria-label={`Note ${s.note}: ${KIND[s.kind]}`} onClick={() => setSelected(selected === s.note ? undefined : s.note)}>{s.kind === 'missing' ? '+' : ''}{s.note}</button></span> : <span key={i}>{s.text}</span>)}</div> : <p className="qard-muted">(No answer)</p>}
+          {answer?.unknown ? <p className="qard-muted">You said you didn't know.</p> : answer?.text?.trim() ? <div className="qard-marked-text">{placed.segments.map((s, i) => s.kind ? <span key={i}>{s.text && <span className={`qard-seg qard-seg-${s.kind}` + (selected === s.note ? ' is-selected' : '')}>{s.text}</span>}<button className={`qard-pin qard-pin-${s.kind}`} aria-label={`Note ${s.note}: ${KIND[s.kind]}`} onClick={() => setSelected(selected === s.note ? undefined : s.note)}>{s.kind === 'missing' ? '+' : ''}{s.note}</button></span> : <span key={i}>{s.text}</span>)}</div> : <p className="qard-muted">(No answer)</p>}
         </div>
         <div className="qard-notes">{placed.notes.map(n => <button key={n.n} className={`qard-note qard-note-${n.kind}` + (selected === n.n ? ' is-selected' : '')} aria-pressed={selected === n.n} onClick={() => setSelected(selected === n.n ? undefined : n.n)}><span className="qard-note-kind">{n.n} · {KIND[n.kind]}</span><Markdown text={n.note} path={path} services={services}/></button>)}
           {!placed.notes.length && mark.feedback && <p className="qard-muted">{mark.feedback}</p>}</div>

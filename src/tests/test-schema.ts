@@ -40,8 +40,9 @@ const question = obj({
   id: str('Unique across the test: q1, q2, …'), type: oneOf(['short', 'long', 'mcq', 'calc']), prompt: str('Markdown; LaTeX in $…$.'), marks: num(),
   options: arr(str()), answer: num('Index of the correct option (multiple choice only).'),
   rubric: arr(obj({ point: str('One checkable idea.'), marks: num() })), model: str('A full-marks answer in Markdown.'),
-  source: obj({ path: str(), heading: str() }, ['heading'])
-}, ['options', 'answer', 'source']);
+  source: obj({ path: str(), heading: str() }, ['heading']),
+  objective: str('Mastery objective id from the list given, if any.'), goal: oneOf(['recognise', 'recall', 'explain', 'apply'])
+}, ['options', 'answer', 'source', 'objective', 'goal']);
 export const testSchema = obj({ title: str(), sections: arr(obj({ id: str('s1, s2, …'), title: str(), questions: arr(question) })) });
 const annotation = obj({ quote: str('Exact text copied from the answer.'), kind: oneOf(['correct', 'wrong', 'vague', 'missing', 'insight']), note: str('One or two sentences, second person.') });
 const mark = obj({ score: num(), awarded: arr({ type: 'boolean' }), annotations: arr(annotation), mistake: oneOf(['misconception', 'careless', 'imprecise', 'incomplete', 'none']), feedback: str('One sentence.') });
@@ -55,7 +56,7 @@ export const retrySchema = obj({ feedback: str('One or two sentences.'), score: 
 export const askSchema = obj({ answer: str('Markdown, at most 150 words.') });
 export const disputeSchema = obj({ ...(mark as { properties: Record<string, Schema> }).properties, reply: str('Two sentences at most, addressed to the student.') });
 
-function check<T>(schema: Schema, value: unknown, extra: (v: T) => string[] = () => []): T {
+export function check<T>(schema: Schema, value: unknown, extra: (v: T) => string[] = () => []): T {
   const errors = validate(schema, value);
   if (!errors.length) errors.push(...extra(value as T));
   if (errors.length) throw new SchemaError(errors);
@@ -89,3 +90,4 @@ export const readWrapup = (v: unknown) => check<Wrapup & { profile: string }>(wr
 export const readRetry = (v: unknown) => check<{ feedback: string; score: number }>(retrySchema, v);
 export const readAsk = (v: unknown) => check<{ answer: string }>(askSchema, v);
 export const readDispute = (v: unknown, rubric: number) => check<QuestionMark & { reply: string }>(disputeSchema, v, d => d.awarded.length === rubric ? [] : [`awarded needs ${rubric} entries`]);
+export { question as questionSchema, mark as markSchema, obj, arr, str, num, oneOf };

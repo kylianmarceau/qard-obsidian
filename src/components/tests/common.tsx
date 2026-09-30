@@ -27,7 +27,7 @@ export function cardTarget(services: QardServices, q: Question, testTitle: strin
 export function Waiting({ text }: { text: string }) {
   return <p className="qard-waiting" role="status"><span className="qard-dot" aria-hidden="true"/>{text}</p>;
 }
-export function JobError({ job, retry, dismiss }: { job?: Job; retry?: () => void; dismiss?: () => void }) {
+export function JobError({ job, retry, dismiss }: { job?: { error?: string }; retry?: () => void; dismiss?: () => void }) {
   if (!job?.error) return null;
   return <div className="qard-error" role="alert"><span>{job.error}</span>{retry && <button className="qard-text-button" onClick={retry}>Try again</button>}{dismiss && <button className="qard-text-button" onClick={dismiss}>Dismiss</button>}</div>;
 }

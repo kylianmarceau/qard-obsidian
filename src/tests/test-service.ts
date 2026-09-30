@@ -1,8 +1,8 @@
 import type { TestSettings } from '../settings/settings';
-import { runValidated, type AgentRunner } from '../agents/runner';
+import { runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { askPrompt, disputePrompt, generatePrompt, markPrompt, planPrompt, retryPrompt, revisePrompt, wrapupPrompt, type TestDefaults } from './test-prompts';
 import { askSchema, disputeSchema, marksSchema, planSchema, readAsk, readDispute, readMarks, readPlan, readRetry, readTest, readWrapup, retrySchema, testSchema, wrapupSchema } from './test-schema';
-import { emptyAttempt, markChoice, questions, scoreOf, type AnswerState, type Attempt, type PracticeTest, type TestFolder, type TestPlan, type TestRequest } from './test-types';
+import { emptyAttempt, markChoice, markUnknown, questions, scoreOf, type AnswerState, type Attempt, type PracticeTest, type TestFolder, type TestPlan, type TestRequest } from './test-types';
 
 /** File access for test folders; the Obsidian adapter lives in vault-storage.ts. */
 export interface TestStorage {
@@ -15,6 +15,11 @@ export type JobKind = 'plan' | 'generate' | 'mark' | 'wrapup' | 'retry' | 'ask' 
 export interface Job { kind: JobKind; id: string; error?: string }
 export interface TestSummary { folder: string; title: string; created: number; status: 'planning' | 'plan' | 'writing' | 'ready' | 'in-progress' | 'marked' | 'failed'; score?: number; marks?: number }
 export interface ServiceSnapshot { revision: number; jobs: Record<string, Job> }
+/** The link to course mastery files: objectives for writing, evidence after marking. */
+export interface TestLearning {
+  objectives(paths: string[]): Promise<{ mastery: string; lines: string } | undefined>;
+  record(test: PracticeTest, attempt: Attempt): Promise<void>;
+}
 
 const FILES = { request: 'request.json', plan: 'plan.json', test: 'test.json', attempt: 'attempt.json' };
 const key = (folder: string, kind: JobKind, id = '') => `${folder}|${kind}|${id}`;
@@ -28,7 +33,7 @@ export class TestService {
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
   private disposed = false;
-  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: () => AgentRunner, private now = () => Date.now()) {}
+  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -52,7 +57,8 @@ export class TestService {
       return undefined;
     }
   }
-  private defaults(profile?: string): TestDefaults { const s = this.settings(); return { questions: s.questions, marking: s.marking, profile }; }
+  private defaults(profile?: string, objectives?: string): TestDefaults { const s = this.settings(); return { questions: s.questions, marking: s.marking, profile, objectives }; }
+  private async course(paths: string[]) { return paths.length ? await this.learning?.objectives(paths).catch(() => undefined) : undefined; }
   private profilePath() { return `${this.settings().folder.replace(/\/+$/, '')}/_profile.md`; }
   private async profile() { return this.settings().useProfile ? (await this.storage.read(this.profilePath())) ?? undefined : undefined; }
 
@@ -124,8 +130,8 @@ export class TestService {
   async plan(request: TestRequest): Promise<string> {
     const folder = await this.newFolder(request);
     void this.track(folder, 'plan', '', async () => {
-      const profile = await this.profile();
-      const plan = await runValidated(this.runner(), { prompt: planPrompt(request, this.defaults(profile)), schema: planSchema }, readPlan);
+      const profile = await this.profile(), course = await this.course(request.sources);
+      const plan = await runValidated(this.runner('writer'), { prompt: planPrompt(request, this.defaults(profile, course?.lines)), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
     return folder;
@@ -133,7 +139,7 @@ export class TestService {
   revise(folder: string, change: string) {
     return this.track(folder, 'plan', '', async () => {
       const current = this.cache.get(folder)?.plan; if (!current) throw new Error('There is no plan to revise.');
-      const plan = await runValidated(this.runner(), { prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
+      const plan = await runValidated(this.runner('writer'), { prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
   }
@@ -148,8 +154,9 @@ export class TestService {
     const entry = this.cache.get(folder);
     const request = entry?.request ?? { prompt: '', decks: [], notes: [], sources: [] };
     void this.track(folder, 'generate', '', async () => {
-      const written = await runValidated(this.runner(), { prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile())), schema: testSchema }, readTest);
-      const test: PracticeTest = { version: 1, createdAt: this.now(), ...written };
+      const course = await this.course([...new Set([...request.sources, ...(entry?.plan?.sources.map(s => s.path) ?? [])])]);
+      const written = await runValidated(this.runner('writer'), { prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
+      const test: PracticeTest = { version: 1, createdAt: this.now(), ...written, ...(course ? { mastery: course.mastery } : {}) };
       const attempt = emptyAttempt(test, this.now());
       await this.save(folder, 'test', test); await this.save(folder, 'attempt', attempt);
       this.update(folder, { test, attempt });
@@ -166,8 +173,8 @@ export class TestService {
     const { test, attempt } = this.attemptOf(folder);
     const section = test.sections.find(s => s.id === sectionId); if (!section) return;
     const marks = { ...attempt.marks };
-    for (const q of section.questions) if (q.type === 'mcq') marks[q.id] = markChoice(q, attempt.answers[q.id]);
-    const needsAgent = section.questions.some(q => q.type !== 'mcq');
+    for (const q of section.questions) if (attempt.answers[q.id]?.unknown) marks[q.id] = markUnknown(q); else if (q.type === 'mcq') marks[q.id] = markChoice(q, attempt.answers[q.id]);
+    const needsAgent = section.questions.some(q => !marks[q.id]);
     await this.setAttempt(folder, { ...attempt, marks, sections: { ...attempt.sections, [sectionId]: { status: needsAgent ? 'submitted' : 'marked' } } });
     if (needsAgent && this.settings().marking === 'section') void this.mark(folder, [sectionId]);
   }
@@ -187,9 +194,11 @@ export class TestService {
         return this.setAttempt(folder, { ...a, sections: { ...a.sections, ...Object.fromEntries(sectionIds.map(id => [id, error ? { status, error } : { status }])) } });
       };
       await setStatus('marking');
-      const targets = test.sections.filter(s => sectionIds.includes(s.id)).flatMap(s => s.questions).filter(q => q.type !== 'mcq');
+      // Multiple choice and "I don't know" were marked on submit.
+      const answers = this.attemptOf(folder).attempt.answers;
+      const targets = test.sections.filter(s => sectionIds.includes(s.id)).flatMap(s => s.questions).filter(q => q.type !== 'mcq' && !answers[q.id]?.unknown);
       try {
-        const marks = await runValidated(this.runner(), { prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length }))));
+        const marks = targets.length ? await runValidated(this.runner('marker'), { prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length })))) : {};
         for (const q of targets) { const m = marks[q.id]!; m.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0)); }
         const a = this.attemptOf(folder).attempt;
         await this.setAttempt(folder, { ...a, marks: { ...a.marks, ...marks }, sections: { ...a.sections, ...Object.fromEntries(sectionIds.map(id => [id, { status: 'marked' as const }])) } });
@@ -202,7 +211,11 @@ export class TestService {
     return this.track(folder, 'wrapup', '', async () => {
       const { test, attempt } = this.attemptOf(folder);
       const profile = await this.profile();
-      const result = await runValidated(this.runner(), { prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
+      if (test.mastery && !test.recorded && this.learning) {
+        await this.learning.record(test, attempt);
+        const recorded = { ...test, recorded: true }; await this.save(folder, 'test', recorded); this.update(folder, { test: recorded });
+      }
+      const result = await runValidated(this.runner('writer'), { prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
       const ids = new Set(questions(test).map(q => q.id));
       const latest = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...latest, wrapup: { fixes: result.fixes.filter(f => ids.has(f.questionId)).slice(0, 3), cards: result.cards.filter(c => ids.has(c.questionId)).slice(0, 6) } });
@@ -212,7 +225,7 @@ export class TestService {
   retry(folder: string, id: string, text: string) {
     return this.track(folder, 'retry', id, async () => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner(), { prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
+      const result = await runValidated(this.runner('tutor'), { prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], retry: { text, feedback: result.feedback, score: Math.min(q.marks, result.score) } } } });
     });
@@ -220,7 +233,7 @@ export class TestService {
   ask(folder: string, id: string, question: string) {
     return this.track(folder, 'ask', id, async () => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner(), { prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
+      const result = await runValidated(this.runner('tutor'), { prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
       const a = this.attemptOf(folder).attempt, prior = a.review[id]?.followups ?? [];
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], followups: [...prior, { q: question, a: result.answer }] } } });
     });
@@ -228,7 +241,7 @@ export class TestService {
   dispute(folder: string, id: string, argument: string) {
     return this.track(folder, 'dispute', id, async () => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const { reply, ...mark } = await runValidated(this.runner(), { prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
+      const { reply, ...mark } = await runValidated(this.runner('marker'), { prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
       mark.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (mark.awarded[i] ? r.marks : 0), 0));
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, marks: { ...a.marks, [id]: mark }, review: { ...a.review, [id]: { ...a.review[id], dispute: { text: argument, reply } } } });
