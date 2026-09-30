@@ -40,6 +40,7 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 ## Development
 
 - `npm run dev` — rebuild the plugin on source changes.
+- `QARD_VAULT=~/path/to/vault npm run dev` (or `npm run dev -- --vault=~/path/to/vault`) — also copy `main.js`, `manifest.json` and `styles.css` into that vault's `.obsidian/plugins/qard/` after every rebuild, including edits to `styles.css`. It never touches `data.json` (settings and review history), refuses folders that aren't vaults, and adds the `.hotreload` marker so the [Hot Reload](https://github.com/pjeby/hot-reload) plugin reloads Qard automatically. `npm run build -- --vault=…` installs a production build once.
 - `npm run lint` — official Obsidian source checks, with zero warnings.
 - `npm run typecheck` — strict TypeScript checking.
 - `npm test` — parser, indexing, writing, selection, scheduling, and UI lifecycle tests.
@@ -161,6 +162,9 @@ Every preview and study card has **Open source**; previews also offer edit and d
 - Qard: Import from Spaced Repetition
 - Qard: New practice test
 - Qard: Open practice tests
+- Qard: Open today
+- Qard: Open courses
+- Qard: Teach me this note
 
 The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
 
@@ -187,7 +191,7 @@ Practice tests are a second mode next to flashcards. An AI agent writes an exam-
 
 1. **Describe the test.** Type what it should cover. Optionally tick **Flashcards** and choose decks, or add specific notes. With no sources, the agent finds the relevant notes itself.
 2. **Check the plan** (optional, on by default). The agent drafts a short plan: a goal, the sources it will use and why, and sections with their question mix and marks. You can remove sources or ask for changes, then choose **Generate test**. Untick **Plan first** to skip straight to the test.
-3. **Take the test.** Answer short, long, calculation (LaTeX shows a preview) and multiple-choice questions. Optionally mark how sure you were, and flag questions. By default each section is marked in the background when you submit it, while you carry on. Choose **Mark answers: At the end** in settings for exam conditions.
+3. **Take the test.** Answer short, long, calculation (LaTeX shows a preview) and multiple-choice questions. Optionally mark how sure you were, choose **I don't know** rather than guessing, and flag questions. By default each section is marked in the background when you submit it, while you carry on. Choose **Mark answers: At the end** in settings for exam conditions.
 4. **Review.** The results screen shows your score and the three most important things to fix. **Review answers** shows your answer marked up like a script:
    - underlines for correct, incorrect, vague and insightful parts, and a + marker where a point was missing, each linked to a marker's note;
    - the mark scheme, showing which points you earned;
@@ -200,21 +204,95 @@ Practice tests are a second mode next to flashcards. An AI agent writes an exam-
 
 ### Choosing an agent
 
-Set this up once in **Settings → Qard → Practice tests**:
-
-| Provider | Notes |
-|---|---|
-| **Claude Code** (default) | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`). Editing, shell and web tools are denied. Desktop only. |
-| **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
-| **Anthropic API key** | Qard calls the Claude API directly. The model can read notes only through three read-only tools (list, search, read) and never sees the tests folder. The key is kept in Obsidian's secure storage (Obsidian 1.11.4+). Works on mobile. The default model is Claude Opus 5.5; you can choose another. Requests use server-side refusal fallback. |
+See [AI connections and roles](#ai-connections-and-roles).
 
 Agents never write files. They return JSON, which Qard checks against the expected format (retrying once if it doesn't match) before saving. Marks are recalculated from the awarded rubric points, so an agent cannot give more than a question is worth. Your notes are sent to the provider you choose. No other network requests are made.
 
+When a test's notes belong to a course with a [mastery file](#learn-mastery-checks-and-lessons), the writer tags each question with the objective it tests, and the marks are recorded in the mastery file.
+
 Each test is a folder under `Qard/Tests/` containing `request.json`, `plan.json`, `test.json` and `attempt.json`. Tests written by any agent outside Qard appear under Tests if they follow [the file format](docs/PRACTICE_TESTS.md).
+
+## Learn: mastery, checks and lessons
+
+Learn is a third mode next to flashcards and tests. It keeps a record of what you know for each course, teaches what you don't, and checks later whether it stuck. Open **Learn** in the Qard library, or run **Qard: Open today**.
+
+### The mastery file
+
+**Map a course** asks the writer to read a course folder and list its objectives: the specific things you need to be able to explain or do, and which objectives each one builds on. It uses your study profile to mark ones you've already struggled with, and adds topics from the course outline that no note covers yet as **not covered yet**. Nothing is saved until you accept the list. Qard then writes `<Course> Mastery.md` in that folder: a normal note with a table, one row per objective (state, due date, needs, notes, evidence). You can edit it freely: change a state or date, add or remove rows, change what an objective needs, or add your own columns. Qard only rewrites the table's rows.
+
+### The course map
+
+Each course page opens on a **topic map**: one node per topic (the **Group** column), with arrows showing which topics build on which. Thicker arrows mean more links. Each topic shows how many of its objectives you've learned (taught or better) as a bar, how many are ready to learn, and a ⚠ count for misconceptions and slipping objectives. Topics the outline lists but no note covers yet are faded. Everything shown is worked out from the objectives each time, so nothing extra is stored and checks, lessons and evidence work per objective as before.
+
+**Click a topic** to open its objectives, each shown by its short **Label** (the full title is in the side panel). Topics it builds on appear as links along the top and topics it unlocks along the bottom; click one to go there, or **Topics** (or Escape) to go back. Objectives are coloured by state, and those that are **ready to learn** (untaught, with everything they build on already taught) are outlined. Lessons suggested on Today favour them.
+
+- **Move around:** drag to pan, scroll to move, pinch or ⌘/Ctrl + scroll to zoom. The toolbar has zoom, **Fit** and **Full screen**. Keys: arrow keys move along the arrows and across a row, Enter opens a topic, `/` searches, `+`, `-` and `0` zoom, and Escape goes back.
+- **Find and filter:** type in **Find** to highlight matching topics or objectives (Enter jumps to the first match, opening its topic), or click states in the legend above the map to show only those.
+- **Select an objective** to see everything it builds on and everything that builds on it, with a side panel listing them (including objectives in other topics), its notes and all its evidence, with **Teach** and **Check**.
+- **Route here** lists every prerequisite you haven't been taught yet, in the order to learn it, across topics. Steps are numbered on the map, topics show how many steps they hold, and **Teach step 1** starts the first lesson.
+
+**List** shows the same objectives as rows. A mastery file without groups shows the objectives directly; **Update objectives** can add groups and labels to it. A loop in the Needs column is ignored by dropping the link that closes it.
+
+### As the course grows
+
+The mastery file records when the course was last mapped (`qard-mapped`). When notes in the course folder are added or edited after that, the course page says so. **Update objectives** asks the writer to read only those notes and propose new objectives, more notes or prerequisites for existing ones (a "not covered yet" objective becomes new once its notes arrive), and objectives that may be outdated. Existing objectives are never renamed or rewritten, so your progress stays attached to them, and nothing is removed unless you tick it. New objectives start as new, so an update doesn't fill Today.
+
+Every mode reads the mastery file before writing anything, and adds evidence after:
+
+| State | Meaning | What happens next |
+|---|---|---|
+| New | No evidence yet | Teach it when you're ready |
+| Gap | Couldn't answer | A lesson is suggested |
+| Misconception | Wrong while sure | A lesson is suggested |
+| Taught | A lesson covered it | A check in 3 days |
+| Shaky | Right but guessing, or partly right | A check in 2–3 days |
+| Right once | One correct check or test | A harder check in a week |
+| Mastered | Right again, at least 2 days later | Cards keep it fresh |
+| Slipping | Mastered, but its cards are lapsing | A check today |
+
+The rules: answering correctly straight after a lesson doesn't count, so a lesson moves an objective to **taught** at most. Mastery needs two correct answers at least two days apart, the second at a harder goal (explain, then apply). A wrong answer you were sure of is a misconception; **I don't know** is a gap. Passing a flashcard never promotes an objective, but two lapses on a card made for a mastered objective mark it as slipping.
+
+### Today
+
+The home page shows one **Today** row with what is due: checks first, then cards, and any objectives that need a lesson. **Start** works through them in that order.
+
+A **check** is one to three new questions on one objective, marked straight away with the same underlines and notes as a test. The writer writes each check ahead of time, as soon as the previous result is recorded, so a check opens instantly. If the objective's notes change before you start it, it is written again. The question format follows its goal: multiple choice to tell ideas apart, short answers to recall, long answers to explain, calculations or code to apply. Every check is kept in `Qard/Checks/` as evidence, and later checks avoid repeating it.
+
+### Lessons
+
+Choose **Teach** on an objective, or run **Qard: Teach me this note**.
+
+1. **Probe.** A few quick questions on what the lesson depends on, skipping anything the mastery file already shows you know.
+2. **Plan.** The tutor marks the probe and proposes where to start, with a short plan and a map of the steps from what you know to the goal. Ask for changes, or choose **Start lesson**.
+3. **Teach.** The writer prepares each step, starting with the first, while you work. Each step says why it is needed, explains the idea from what you already accept, and ends with a check. When you can work it out yourself, the check comes before the explanation. The tutor marks your answer live and, if you made a mistake the writer expected, shows an explanation aimed at it. You can try again once, and ask questions at any point.
+4. **Close.** The lesson is recorded in the mastery file and saved as a note in `Qard/Lessons/`. The writer suggests cards (linked to the objective) and, when a note was missing something the lesson had to explain, a paragraph to add to it. Nothing is added to your notes unless you accept it. The first check is written for three days later.
+
+## AI connections and roles
+
+In **Settings → Qard → AI connections**, set up the tools and keys Qard may use:
+
+| Connection | Notes |
+|---|---|
+| **Claude Code** | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`). Editing, shell and web tools are denied. Desktop only. |
+| **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
+| **Anthropic API** | Calls the Claude API directly. The model reads notes only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
+| **OpenRouter** | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile. |
+
+API keys are kept in Obsidian's secure storage (Obsidian 1.11.4+), not in your vault or plugin data.
+
+Then, under **AI roles**, choose a connection and model for each job:
+
+| Role | Does | Default |
+|---|---|---|
+| **Tutor** | Replies live in lessons, marks checks, answers questions. Should be fast. | Claude Code with Haiku |
+| **Writer** | Maps courses, and writes tests, checks and lesson steps. Should be your best model. | Claude Code's default model |
+| **Marker** | Marks practice tests in the background. | Claude Code's default model |
+
+Each Claude Code or Codex call starts a new process, which adds a few seconds. For the most responsive tutor, use an API key or OpenRouter with a fast model.
 
 ## Review data and settings
 
-Review states, the most recent 10,000 rating events and settings live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+Review states, the most recent 10,000 rating events, settings and the links between cards and mastery objectives live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
 
 The scheduler is deliberately small and isolated behind an interface; it is **not FSRS**. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease. Disabling scheduling still saves ratings without changing due dates. **All cards never consults the scheduler.**
 
