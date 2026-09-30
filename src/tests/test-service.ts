@@ -12,7 +12,8 @@ export interface TestStorage {
   exists(path: string): boolean;
 }
 export type JobKind = 'plan' | 'generate' | 'mark' | 'wrapup' | 'retry' | 'ask' | 'dispute';
-export interface Job { kind: JobKind; id: string; error?: string }
+/** startedAt lets the UI show elapsed time and how long is left. */
+export interface Job { kind: JobKind; id: string; startedAt?: number; error?: string }
 export interface TestSummary { folder: string; title: string; created: number; status: 'planning' | 'plan' | 'writing' | 'ready' | 'in-progress' | 'marked' | 'failed'; score?: number; marks?: number }
 export interface ServiceSnapshot { revision: number; jobs: Record<string, Job> }
 /** The link to course mastery files: objectives for writing, evidence after marking. */
@@ -33,8 +34,8 @@ export class TestService {
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
   private disposed = false;
-  /** notify tells the student when background work finishes, wherever they are in Obsidian. */
-  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning, private notify: (message: string) => void = () => {}) {}
+  /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
+  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning, private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -48,13 +49,15 @@ export class TestService {
   private async track<T>(folder: string, kind: JobKind, id: string, work: () => Promise<T>): Promise<T | undefined> {
     const k = key(folder, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    this.publish({ ...this.snapshot.jobs, [k]: { kind, id } });
+    const startedAt = this.now();
+    this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     try {
       const result = await work();
       const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed) this.publish(jobs);
+      this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, error: (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: (error as Error).message || 'Something went wrong.' } });
       return undefined;
     }
   }

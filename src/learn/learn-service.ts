@@ -27,7 +27,7 @@ export interface LearnStorage {
 }
 export interface CardLinks { get(cardId: string): CardLink | undefined; set(cardId: string, link: CardLink): Promise<void> }
 export type LearnJobKind = 'map-course' | 'check-write' | 'check-mark' | 'probe' | 'map' | 'revise' | 'steps' | 'tutor' | 'ask' | 'close';
-export interface LearnJob { kind: LearnJobKind; id: string; error?: string }
+export interface LearnJob { kind: LearnJobKind; id: string; startedAt?: number; error?: string }
 export interface CourseProposal { folder: string; course: string; objectives: Objective[] }
 export interface CourseUpdate { mastery: string; course: string; notes: string[]; added: Objective[]; extended: { id: string; title: string; notes: string[]; needs: string[]; group?: string; label?: string }[]; outdated: { id: string; title: string; reason: string }[] }
 export interface LearnSnapshot { revision: number; jobs: Record<string, LearnJob> }
@@ -70,8 +70,8 @@ export class LearnService {
   private timers = new Map<string, number>();
   private disposed = false;
   private proposalsLoaded?: Promise<void>;
-  /** notify tells the student when background work finishes, wherever they are in Obsidian. */
-  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}) {}
+  /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
+  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -81,13 +81,15 @@ export class LearnService {
   private async track<T>(target: string, kind: LearnJobKind, id: string, work: () => Promise<T>): Promise<T | undefined> {
     const k = key(target, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    this.publish({ ...this.snapshot.jobs, [k]: { kind, id } });
+    const startedAt = this.now();
+    this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     try {
       const result = await work();
       const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed) this.publish(jobs);
+      this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, error: (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: (error as Error).message || 'Something went wrong.' } });
       return undefined;
     }
   }

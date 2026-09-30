@@ -2,9 +2,9 @@ import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/s
 import { scheduler, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 /** A card made for a mastery objective; lapses count Again ratings since the objective was last marked. */
 export interface CardLink { mastery: string; objective: string; lapses: number }
-export interface PluginData { version: 1; settings: QardSettings; states: Record<string, ReviewState>; history: ReviewEvent[]; links: Record<string, CardLink> }
+export interface PluginData { version: 1; settings: QardSettings; states: Record<string, ReviewState>; history: ReviewEvent[]; links: Record<string, CardLink>; timings: Record<string, number[]> }
 export class ReviewStore {
-  private data: PluginData = { version: 1, settings: DEFAULT_SETTINGS, states: Object.create(null) as Record<string, ReviewState>, history: [], links: Object.create(null) as Record<string, CardLink> };
+  private data: PluginData = { version: 1, settings: DEFAULT_SETTINGS, states: Object.create(null) as Record<string, ReviewState>, history: [], links: Object.create(null) as Record<string, CardLink>, timings: {} };
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
   constructor(private persist: (data: PluginData) => Promise<void>) {}
@@ -20,7 +20,9 @@ export class ReviewStore {
     for (const [id, link] of Object.entries(value.links || {})) {
       if (/^[A-Za-z0-9_-]+$/.test(id) && link && typeof link.mastery === 'string' && typeof link.objective === 'string') links[id] = { mastery: link.mastery, objective: link.objective, lapses: Number.isFinite(link.lapses) ? link.lapses : 0 };
     }
-    this.data = { version: 1, settings: readSettings(value.settings), states, history, links };
+    const timings: Record<string, number[]> = {};
+    for (const [k, list] of Object.entries(value.timings || {})) if (Array.isArray(list)) timings[k] = list.filter(n => Number.isFinite(n) && n > 0).slice(-9);
+    this.data = { version: 1, settings: readSettings(value.settings), states, history, links, timings };
   }
   getSnapshot = () => this.data;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -57,6 +59,10 @@ export class ReviewStore {
   }
   link(cardId: string, link: CardLink) {
     return this.change(data => ({ ...data, links: Object.assign(Object.create(null) as Record<string, CardLink>, data.links, { [cardId]: link }) }));
+  }
+  /** Recent job durations (ms) by job kind, connection and model, for time-left estimates. */
+  recordTiming(key: string, ms: number) {
+    return this.change(data => ({ ...data, timings: { ...data.timings, [key]: [...(data.timings[key] ?? []), Math.round(ms)].slice(-9) } }));
   }
   flush() { return this.queue; }
   dispose() { this.listeners.clear(); }

@@ -6,8 +6,9 @@ import type { ReviewStore } from '../review/review-store';
 import type { Selection } from '../review/session';
 import type { TestService } from '../tests/test-service';
 import type { LearnService } from '../learn/learn-service';
+import type { JobClock } from '../jobs/job-clock';
 export interface QardServices {
-  app: App; owner: Component; index: VaultIndexer; writer: CardWriter; reviews: ReviewStore; tests: TestService; learn: LearnService;
+  app: App; owner: Component; index: VaultIndexer; writer: CardWriter; reviews: ReviewStore; tests: TestService; learn: LearnService; jobs?: JobClock;
   host: HTMLElement; setFocus: (enabled: boolean) => void; isActive: () => boolean;
   openSource: (card: QardCard) => Promise<void>;
 }
