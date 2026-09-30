@@ -8,6 +8,25 @@ import { Markdown } from '../Markdown';
 import { JobError, Waiting } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
 
+/** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
+function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: LearnNav; lesson: Lesson }) {
+  const { revision } = useLearn(services);
+  const [objective, setObjective] = useState<Objective>();
+  useEffect(() => {
+    if (!lesson.mastery || !lesson.objective) return;
+    let live = true; services.learn.course(lesson.mastery).then(m => { if (live) setObjective(m.objectives.find(o => o.id === lesson.objective)); }, () => {});
+    return () => { live = false; };
+  }, [services, lesson.mastery, lesson.objective, revision]);
+  if (!lesson.mastery) return null;
+  const open = () => nav.course(lesson.mastery!, lesson.objective);
+  return <nav className="qard-lesson-trail" aria-label="Where this lesson sits in the course">
+    <button className="qard-link" onClick={() => nav.course(lesson.mastery!)}>{lesson.course ?? 'Course'}</button>
+    {objective?.group && <><span aria-hidden="true">›</span><button className="qard-link" onClick={open}>{objective.group}</button></>}
+    {objective && <><span aria-hidden="true">›</span><button className="qard-link" onClick={open}>{objective.label || objective.title}</button><StateChip state={objective.state}/></>}
+    <button className="qard-text-button qard-lesson-trail-map" onClick={open}>Show on map</button>
+  </nav>;
+}
+
 export function LessonView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
   useLearn(services);
   const [error, setError] = useState('');
@@ -15,10 +34,11 @@ export function LessonView({ services, nav, path }: { services: QardServices; na
   const lesson = services.learn.lessonAt(path);
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   if (!lesson) return <Waiting text="Loading…"/>;
-  if (lesson.finishedAt) return <LessonClose services={services} nav={nav} path={path} lesson={lesson}/>;
-  if (lesson.accepted) return <LessonSteps services={services} path={path} lesson={lesson}/>;
-  if (lesson.map) return <LessonMapView services={services} path={path} lesson={lesson}/>;
-  return <LessonProbe services={services} path={path} lesson={lesson}/>;
+  const trail = <LessonTrail services={services} nav={nav} lesson={lesson}/>;
+  if (lesson.finishedAt) return <>{trail}<LessonClose services={services} nav={nav} path={path} lesson={lesson}/></>;
+  if (lesson.accepted) return <>{trail}<LessonSteps services={services} path={path} lesson={lesson}/></>;
+  if (lesson.map) return <>{trail}<LessonMapView services={services} path={path} lesson={lesson}/></>;
+  return <>{trail}<LessonProbe services={services} path={path} lesson={lesson}/></>;
 }
 
 function LessonProbe({ services, path, lesson }: { services: QardServices; path: string; lesson: Lesson }) {

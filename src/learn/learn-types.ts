@@ -51,6 +51,6 @@ export interface Lesson {
   finishedAt?: number;
   close?: LessonClose;
 }
-export interface LessonSummary { path: string; title: string; created: number; finished: boolean; objective?: string }
+export interface LessonSummary { path: string; title: string; created: number; finished: boolean; mastery?: string; objective?: string; course?: string }
 export interface TodayItem { mastery: string; course: string; objective: string; title: string; state: MasteryState; due: string; check?: string }
 export interface Today { checks: TodayItem[]; lessons: TodayItem[]; moreLessons: number; cards: number }

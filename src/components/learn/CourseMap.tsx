@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
 import { ChevronLeft, Maximize2, Minimize2, Minus, Plus, Route, Scan, Search, X } from 'lucide-react';
 import type { Mastery, MasteryState, Objective } from '../../learn/mastery';
+import type { LessonSummary } from '../../learn/learn-types';
 import { isoDay, readyToLearn, shortLabel, topicKey } from '../../learn/mastery';
 import { STATE_LABEL, StateChip, relativeDay } from './common';
 
@@ -142,21 +143,25 @@ export function routeTo(course: Mastery, target: string): string[] {
 }
 
 const cls = (state: MasteryState) => `qard-node-${state.replace(' ', '-')}`;
-export interface MapActions { teach: (o: Objective) => void; check?: (o: Objective) => void; openNote: (note: string) => void; busy?: (id: string) => boolean }
+export interface MapActions { teach: (o: Objective) => void; openLesson?: (path: string) => void; check?: (o: Objective) => void; openNote: (note: string) => void; busy?: (id: string) => boolean }
 
 /**
  * The course map. It opens on topics (one node per Group, with progress and warnings); clicking a topic drills into
  * its objectives. Pan, zoom, search, filter by state, select for details, and plan a route to any objective.
  */
-export function CourseMap({ course, actions, filter, today = isoDay(Date.now()) }: { course: Mastery; actions: MapActions; filter?: Set<string>; today?: string }) {
+/** initial: an objective to open the map at (its topic drilled into, the objective selected). lessons: this course's lessons. */
+export function CourseMap({ course, actions, filter, today = isoDay(Date.now()), lessons = [], initial }: { course: Mastery; actions: MapActions; filter?: Set<string>; today?: string; lessons?: LessonSummary[]; initial?: string }) {
   const grouped = hasTopics(course);
   const ready = useMemo(() => readyToLearn(course), [course]);
   const topics = useMemo(() => topicsOf(course, ready), [course, ready]);
   const byId = useMemo(() => new Map(course.objectives.map(o => [o.id, o])), [course]);
-  const [topic, setTopic] = useState<string>(), [selected, setSelected] = useState<string>(), [hovered, setHovered] = useState<string>(), [cursor, setCursor] = useState<string>();
+  // Lessons in progress are marked on the map and continued from the panel.
+  const inProgress = useMemo(() => new Map(lessons.filter(l => !l.finished && l.objective).map(l => [l.objective!, l.path])), [lessons]);
+  const start = initial && byId.has(initial) ? initial : undefined;
+  const [topic, setTopic] = useState<string | undefined>(start && grouped ? topicKey(byId.get(start)?.group) : undefined), [selected, setSelected] = useState<string | undefined>(start), [hovered, setHovered] = useState<string>(), [cursor, setCursor] = useState<string>();
   const [route, setRoute] = useState<string[]>(), [query, setQuery] = useState(''), [expanded, setExpanded] = useState(false);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 }), [animate, setAnimate] = useState(false);
-  const box = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null), drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | undefined>(undefined), pending = useRef<string | undefined>(undefined);
+  const box = useRef<HTMLDivElement>(null), search = useRef<HTMLInputElement>(null), drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | undefined>(undefined), pending = useRef<string | undefined>(start);
   const atTopics = grouped && topic === undefined;
   const layout = useMemo(() => atTopics ? layoutGraph(topics.map(t => ({ id: t.key, needs: t.needs })), TOPIC) : layoutTopic(course, grouped ? topic : undefined), [atTopics, topics, course, grouped, topic]);
   const topicOf = useCallback((id: string) => topicKey(byId.get(id)?.group), [byId]);
@@ -279,7 +284,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()) 
               <rect className="qard-topic-track" width={barW} height={8} rx={4}/>
               {LEARNED.map(s => { const n = t.counts[s] ?? 0; if (!n) return null; const seg = <rect key={s} className={'qard-topic-seg ' + cls(s)} x={at} width={Math.max(2, (n / total) * barW - 1)} height={8} rx={2}/>; at += (n / total) * barW; return seg; })}
             </g>
-            <foreignObject x={16} y={58} width={w - 32} height={18}><div className="qard-map-text qard-topic-meta">{t.planned ? 'Not covered yet' : `${t.learned} of ${total} learned`}{!t.planned && t.ready > 0 && <span className="qard-topic-ready"> · {t.ready} ready</span>}</div></foreignObject>
+            <foreignObject x={16} y={58} width={w - 32} height={18}><div className="qard-map-text qard-topic-meta">{t.planned ? 'Not covered yet' : `${t.learned} of ${total} learned`}{t.ids.some(id => inProgress.has(id)) ? <span className="qard-topic-ready"> · lesson in progress</span> : !t.planned && t.ready > 0 && <span className="qard-topic-ready"> · {t.ready} ready</span>}</div></foreignObject>
             {steps > 0 && <g className="qard-map-step" transform={`translate(${w - 2},2)`}><circle r={11}/><text textAnchor="middle" y={4}>{steps}</text></g>}
           </g>;
         }) : [...layout.nodes.values()].map(p => {
@@ -292,14 +297,15 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()) 
           }
           const o = byId.get(p.id)!, step = route ? route.indexOf(o.id) : -1;
           const names = ['qard-map-node', cls(o.state), ready.has(o.id) ? 'is-ready' : '', selected === o.id ? 'is-selected' : '', dimObjective(o.id) ? 'is-dim' : ''].filter(Boolean).join(' ');
-          return <g key={p.id} className={names} transform={`translate(${p.x},${p.y})`} role="button" tabIndex={-1} aria-pressed={selected === o.id} aria-label={`${o.title}: ${STATE_LABEL[o.state]}${ready.has(o.id) ? ', ready to learn' : ''}`}
+          return <g key={p.id} className={names} transform={`translate(${p.x},${p.y})`} role="button" tabIndex={-1} aria-pressed={selected === o.id} aria-label={`${o.title}: ${STATE_LABEL[o.state]}${ready.has(o.id) ? ', ready to learn' : ''}${inProgress.has(o.id) ? ', lesson in progress' : ''}`}
             onPointerEnter={() => setHovered(o.id)} onPointerLeave={() => setHovered(x => x === o.id ? undefined : x)}
             onClick={e => { e.stopPropagation(); open(selected === o.id ? undefined : o.id); }} onDoubleClick={(e: MouseEvent) => { e.stopPropagation(); open(o.id, true); }}>
             <title>{o.title}</title>
             <rect className="qard-map-card" width={w} height={h} rx={10}/>
             <rect className="qard-map-bar" x={9} y={10} width={4} height={h - 20} rx={2}/>
             <foreignObject x={20} y={3} width={w - 28 - (step >= 0 ? 10 : 0)} height={h - 6}><div className="qard-map-label"><span className="qard-map-title">{shortLabel(o)}</span></div></foreignObject>
-            {step >= 0 && <g className="qard-map-step" transform={`translate(${w - 2},2)`}><circle r={11}/><text textAnchor="middle" y={4}>{step + 1}</text></g>}
+            {step >= 0 ? <g className="qard-map-step" transform={`translate(${w - 2},2)`}><circle r={11}/><text textAnchor="middle" y={4}>{step + 1}</text></g>
+              : inProgress.has(o.id) && <g className="qard-map-lesson" transform={`translate(${w - 2},2)`}><title>Lesson in progress</title><circle r={9}/><path d="M-2.5,-4 L4,0 L-2.5,4 Z"/></g>}
           </g>;
         })}
       </g>
@@ -321,7 +327,8 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()) 
       <h3>{chosen.title}</h3>
       <p className="qard-muted qard-small">{[chosen.group, status(chosen)].filter(Boolean).join(' · ')}</p>
       <div className="qard-map-panel-actions">
-        <button className={UNTAUGHT.includes(chosen.state) && chosen.state !== 'planned' ? 'qard-primary' : ''} onClick={() => actions.teach(chosen)}>Teach</button>
+        {inProgress.has(chosen.id) && actions.openLesson ? <button className="qard-primary" onClick={() => actions.openLesson!(inProgress.get(chosen.id)!)}>Continue lesson</button>
+          : <button className={UNTAUGHT.includes(chosen.state) && chosen.state !== 'planned' ? 'qard-primary' : ''} onClick={() => actions.teach(chosen)}>Teach</button>}
         {actions.check && !UNTAUGHT.includes(chosen.state) && <button disabled={actions.busy?.(chosen.id)} onClick={() => actions.check!(chosen)}>{actions.busy?.(chosen.id) ? 'Writing…' : 'Check'}</button>}
         {chosen.needs.length > 0 && <button className={route ? 'is-on' : ''} aria-pressed={!!route} onClick={() => { if (route) { setRoute(undefined); return; } const next = routeTo(course, chosen.id); setRoute(next); frame([...next, chosen.id].filter(id => layout.nodes.has(id)), true, true); }}><Route size={14}/>Route here</button>}
       </div>
@@ -331,6 +338,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()) 
       </section>}
       {chosen.needs.length > 0 && <section><div className="qard-label">Builds on</div>{links(chosen.needs)}</section>}
       {(allDependents.get(chosen.id)?.length ?? 0) > 0 && <section><div className="qard-label">Unlocks</div>{links(allDependents.get(chosen.id)!)}</section>}
+      {actions.openLesson && lessons.some(l => l.objective === chosen.id) && <section><div className="qard-label">Lessons</div>{lessons.filter(l => l.objective === chosen.id).map(l => <button key={l.path} className="qard-map-link" onClick={() => actions.openLesson!(l.path)}><span>{new Date(l.created).toLocaleDateString()}</span><small className="qard-muted">{l.finished ? '✓ done' : 'in progress'}</small></button>)}</section>}
       {chosen.notes.length > 0 && <section><div className="qard-label">Notes</div>{chosen.notes.map(n => <button key={n} className="qard-link qard-map-note" onClick={() => actions.openNote(n)}>{n}</button>)}</section>}
       <section><div className="qard-label">Evidence</div>{chosen.evidence.length ? [...chosen.evidence].reverse().map((e, i) => <p key={i} className="qard-small qard-map-evidence">{e}</p>) : <p className="qard-muted qard-small">None yet.</p>}</section>
     </aside>}

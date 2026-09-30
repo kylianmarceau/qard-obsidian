@@ -381,7 +381,7 @@ export class LearnService {
   async listLessons(): Promise<LessonSummary[]> {
     const result: LessonSummary[] = [];
     for (const path of this.storage.files(`${this.root()}/Lessons`, 'json')) {
-      try { const l = await this.loadLesson(path); result.push({ path, title: l.map?.title ?? l.topic, created: l.createdAt, finished: !!l.finishedAt, objective: l.objective }); } catch { /* skipped */ }
+      try { const l = await this.loadLesson(path); result.push({ path, title: l.map?.title ?? l.topic, created: l.createdAt, finished: !!l.finishedAt, mastery: l.mastery, objective: l.objective, course: l.course }); } catch { /* skipped */ }
     }
     return result.sort((a, b) => b.created - a.created);
   }

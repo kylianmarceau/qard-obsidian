@@ -533,3 +533,9 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 
 .qard-resume.is-static { display: flex; align-items: center; margin-bottom: 8px; padding: 10px 16px; border-radius: 10px; background: var(--qard-soft); }
 .qard-resume.is-static .qard-waiting { margin: 0; font-size: 13.5px; }
+
+.qard-lesson-trail { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; max-width: 720px; margin: 0 auto 14px; font-size: 13px; color: var(--qard-muted); }
+.qard-app .qard-lesson-trail .qard-link { font-size: 13px; }
+.qard-app .qard-lesson-trail-map { margin-left: auto; font-size: 12.5px; }
+.qard-map-lesson circle { fill: var(--qard-blue); }
+.qard-map-lesson path { fill: white; }

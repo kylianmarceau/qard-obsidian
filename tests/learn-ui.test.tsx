@@ -109,3 +109,22 @@ it('the course map opens on topics, drills into one, and routes across topics', 
   await click(buttons('List')[0]);
   expect(host.querySelectorAll('.qard-objective')).toHaveLength(4);
 });
+
+it('a lesson links to its place on the map, and the map continues it rather than starting another', async () => {
+  files.set(MASTERY, `---\nqard-mastery: DS346\n---\n\n| Objective | Label | ID | Group | State | Needs |\n| --- | --- | --- | --- | --- | --- |\n| Bag of words | Bag of words | bow | Text mining | mastered |  |\n| List the LDA generative process | LDA story | lda | Topic models | gap | bow |\n`);
+  const LESSON = 'Qard/Lessons/2026-09-30 LDA.json';
+  files.set(LESSON, JSON.stringify({ version: 1, createdAt: 1, topic: 'LDA', notes: [], mastery: MASTERY, course: 'DS346', objective: 'lda', steps: [], state: [], current: 0,
+    probe: { questions: [], answers: {}, submitted: true, marks: {}, findings: 'F' }, map: { title: 'The LDA story', plan: 'P', mermaid: '', steps: [{ title: 'One', why: 'w' }] } }));
+  await act(async () => { root.render(<LessonView services={services} nav={nav} path={LESSON}/>); }); await tick(); await tick();
+  const trail = host.querySelector('.qard-lesson-trail')!;
+  expect(trail.textContent).toContain('DS346›Topic models›LDA story');
+  await click(buttons('Show on map')[0]);
+  expect(nav.course).toHaveBeenCalledWith(MASTERY, 'lda');
+
+  await act(async () => { root.render(<CourseView services={services} nav={nav} path={MASTERY} objective="lda"/>); }); await tick(); await tick();
+  expect(host.querySelector('.qard-map-crumb')?.textContent).toBe('Topic models');
+  expect(host.querySelector('.qard-map-node[aria-label^="List the LDA"]')?.getAttribute('aria-label')).toBe('List the LDA generative process: Gap, ready to learn, lesson in progress');
+  expect(host.querySelector('.qard-map-panel h3')?.textContent).toBe('List the LDA generative process');
+  await click(buttons('Continue lesson')[0]);
+  expect(nav.lesson).toHaveBeenCalledWith(LESSON);
+});

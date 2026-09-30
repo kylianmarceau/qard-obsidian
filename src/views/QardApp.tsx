@@ -26,7 +26,7 @@ import { scheduler } from '../review/scheduler';
 import type { QardServices, UiRequest } from './services';
 type Screen = { kind: 'library' } | { kind: 'deck'; deck: string } | { kind: 'card'; card: QardCard } | { kind: 'editor'; draft?: Partial<CardDraft> } | { kind: 'builder'; selection: Selection } | { kind: 'study'; cards: QardCard[]; serial: number }
   | { kind: 'tests' } | { kind: 'new-test'; prompt?: string; serial: number } | { kind: 'plan' | 'take' | 'results' | 'test-cards'; folder: string } | { kind: 'review'; folder: string; question?: string }
-  | { kind: 'today' | 'learn' } | { kind: 'map-course'; folder?: string } | { kind: 'course' | 'check' | 'lesson'; path: string };
+  | { kind: 'today' | 'learn' } | { kind: 'map-course'; folder?: string } | { kind: 'check' | 'lesson'; path: string } | { kind: 'course'; path: string; objective?: string; serial: number };
 const LEARN_SCREENS = ['today', 'learn', 'map-course', 'course', 'check', 'lesson'];
 const TEST_LABEL: Record<string, string> = { plan: 'Plan', take: '', results: 'Results', review: 'Review', 'test-cards': 'Suggested cards' };
 export function QardApp({ services, request }: { services: QardServices; request?: UiRequest }) {
@@ -57,7 +57,7 @@ export function QardApp({ services, request }: { services: QardServices; request
   }), []);
   const learnNav = useMemo<LearnNav>(() => ({
     library: () => setScreen({ kind: 'library' }), today: () => setScreen({ kind: 'today' }), learn: () => setScreen({ kind: 'learn' }), mapCourse: folder => setScreen({ kind: 'map-course', folder }),
-    course: path => setScreen({ kind: 'course', path }), check: path => setScreen({ kind: 'check', path }), lesson: path => setScreen({ kind: 'lesson', path }),
+    course: (path, objective) => setScreen({ kind: 'course', path, objective, serial: Date.now() }), check: path => setScreen({ kind: 'check', path }), lesson: path => setScreen({ kind: 'lesson', path }),
     // Today reviews only cards already in rotation, most overdue first.
     studyDue: () => { const { states } = services.reviews.getSnapshot(), now = Date.now(); setScreen({ kind: 'study', serial: now, cards: services.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).sort((a, b) => (states[a.id]?.due ?? 0) - (states[b.id]?.due ?? 0)) }); }
   }), [services]);
@@ -81,7 +81,7 @@ export function QardApp({ services, request }: { services: QardServices; request
         {screen.kind === 'today' && <TodayView services={services} nav={learnNav}/>}
         {screen.kind === 'learn' && <LearnBrowser services={services} nav={learnNav} testNav={nav}/>}
         {screen.kind === 'map-course' && <MapCourse key={screen.folder ?? ''} services={services} nav={learnNav} initialFolder={screen.folder}/>}
-        {screen.kind === 'course' && <CourseView key={screen.path} services={services} nav={learnNav} path={screen.path}/>}
+        {screen.kind === 'course' && <CourseView key={screen.path + screen.serial} services={services} nav={learnNav} path={screen.path} objective={screen.objective}/>}
         {screen.kind === 'check' && <CheckView key={screen.path} services={services} nav={learnNav} path={screen.path}/>}
         {screen.kind === 'lesson' && <LessonView key={screen.path} services={services} nav={learnNav} path={screen.path}/>}
         {screen.kind === 'new-test' && <NewTest key={screen.serial} services={services} nav={nav} initialPrompt={screen.prompt}/>}

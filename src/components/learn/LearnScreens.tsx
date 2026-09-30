@@ -20,8 +20,10 @@ function useToday(services: QardServices) {
 }
 const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 /** Opens a lesson for an objective that needs teaching. */
+/** Opens a lesson for an objective: the unfinished one if there is one, otherwise a new lesson. */
 export async function teach(services: QardServices, nav: LearnNav, item: { mastery: string; objective: string; title: string }) {
-  nav.lesson(await services.learn.startLesson({ topic: item.title, notes: [], mastery: item.mastery, objective: item.objective }));
+  const open = (await services.learn.listLessons()).find(l => !l.finished && l.mastery === item.mastery && l.objective === item.objective);
+  nav.lesson(open?.path ?? await services.learn.startLesson({ topic: item.title, notes: [], mastery: item.mastery, objective: item.objective }));
 }
 
 /** The home-page summary: what is due today, one click to start. */
@@ -67,7 +69,7 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
     {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}/></div>)}
     {pending?.proposals.map(p => <button key={p.folder} className="qard-resume" onClick={() => nav.mapCourse(p.folder)}><span className="qard-muted">Ready to review</span><strong>{p.course} · {plural(p.objectives.length, 'objective')}</strong><ChevronRight size={16}/></button>)}
     {pending?.updates.map(u => <button key={u.mastery} className="qard-resume" onClick={() => nav.course(u.mastery)}><span className="qard-muted">Update ready</span><strong>{u.course}</strong><ChevronRight size={16}/></button>)}
-    {open.map(l => <button key={l.path} className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong>{l.title}</strong><ChevronRight size={16}/></button>)}
+    {open.map(l => <button key={l.path} className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong>{l.title}</strong>{l.course && <span className="qard-muted">{l.course}</span>}<ChevronRight size={16}/></button>)}
     <div className="qard-deck-list">{courses?.map(c => {
       const mastered = c.objectives.filter(o => o.state === 'mastered').length, due = c.objectives.filter(o => o.state !== 'new' && o.due && o.due <= day).length;
       return <button key={c.path} className="qard-deck qard-test-row" onClick={() => nav.course(c.path)}>
@@ -110,11 +112,13 @@ export function MapCourse({ services, nav, initialFolder }: { services: QardServ
   </div>;
 }
 
-export function CourseView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
+export function CourseView({ services, nav, path, objective }: { services: QardServices; nav: LearnNav; path: string; objective?: string }) {
   const { revision, job } = useLearn(services);
   const [course, setCourse] = useState<Mastery>(), [error, setError] = useState(''), [busy, setBusy] = useState<string>();
   const [view, setView] = useState<'map' | 'list'>('map'), [filter, setFilter] = useState<Set<string>>(new Set()), [updating, setUpdating] = useState(false);
+  const [lessons, setLessons] = useState<LessonSummary[]>([]);
   useEffect(() => { let live = true; services.learn.course(path).then(c => { if (live) setCourse(c); }, e => { if (live) setError((e as Error).message); }); return () => { live = false; }; }, [services, path, revision]);
+  useEffect(() => { let live = true; services.learn.listLessons().then(l => { if (live) setLessons(l.filter(x => x.mastery === path)); }, () => {}); return () => { live = false; }; }, [services, path, revision]);
   if (error && !course) return <p className="qard-error" role="alert">{error}</p>;
   if (!course) return <Waiting text="Loading…"/>;
   if (updating || services.learn.update(path) || job(path, 'map-course')) return <UpdateCourse services={services} course={course} done={() => setUpdating(false)}/>;
@@ -132,7 +136,7 @@ export function CourseView({ services, nav, path }: { services: QardServices; na
     </span>;
   };
     const toggle = (key: string) => setFilter(f => { const next = new Set(f); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  const mapActions = { teach: (o: Objective) => void teach(services, nav, { mastery: path, objective: o.id, title: o.title }).catch(e => setError((e as Error).message)), check: (o: Objective) => void check(o.id), openNote: (n: string) => void services.app.workspace.openLinkText(n, path, true), busy: (id: string) => busy === id || (!!job(`${path}#${id}`, 'check-write') && !job(`${path}#${id}`, 'check-write')?.error) };
+  const mapActions = { openLesson: (p: string) => nav.lesson(p), teach: (o: Objective) => void teach(services, nav, { mastery: path, objective: o.id, title: o.title }).catch(e => setError((e as Error).message)), check: (o: Objective) => void check(o.id), openNote: (n: string) => void services.app.workspace.openLinkText(n, path, true), busy: (id: string) => busy === id || (!!job(`${path}#${id}`, 'check-write') && !job(`${path}#${id}`, 'check-write')?.error) };
   return <article className="qard-course">
     <header className="qard-course-head">
       <div><span className="qard-muted">Course</span><h1>{course.course}</h1></div>
@@ -145,7 +149,7 @@ export function CourseView({ services, nav, path }: { services: QardServices; na
     <CourseProgress course={course} filter={filter} toggle={toggle}/>
     {changed.length > 0 && <button className="qard-resume" onClick={() => setUpdating(true)}><span>{plural(changed.length, 'note')} added or changed since {course.mapped!.slice(0, 10)}</span><span className="qard-muted">Update objectives</span><ChevronRight size={16}/></button>}
     {error && <p className="qard-error" role="alert">{error}</p>}
-    {view === 'map' ? <CourseMap course={course} actions={mapActions} filter={filter} today={day}/>
+    {view === 'map' ? <CourseMap course={course} actions={mapActions} filter={filter} today={day} lessons={lessons} initial={objective}/>
       : <section>{course.objectives.filter(o => !filter.size || filter.has(o.state)).map(o => <div key={o.id} className="qard-objective">
       <div className="qard-objective-main"><strong>{o.title}</strong><small className="qard-muted">{o.evidence.at(-1) ?? 'No evidence yet'}</small></div>
       <StateChip state={o.state}/>
