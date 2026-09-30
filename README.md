@@ -280,6 +280,12 @@ Long waits show **While you wait** instead of a spinner, offering one thing at a
 
 While a practice test is written or marked, nothing from that test's own notes is offered, so warming up doesn't inflate your score or show answers you're about to review. Ratings and answers count as usual. Once you start something the screen stays put, and when the job is done a bar offers **Continue**.
 
+## Token usage
+
+Qard records the tokens used by every call it makes to Claude Code, Codex, the Anthropic API or OpenRouter: input, output and cache tokens, the model that ran, and the cost where the provider reports it. **Qard: Show token usage** (also **Usage** on the Learn tab and **View usage** in Settings → Qard → AI roles) shows totals for today, 7 days, 30 days or all time, tokens per day, and breakdowns by feature (writing tests, marking, writing lessons, tutoring, course mapping and so on) and by connection and model.
+
+Cost appears only where the provider reports it: OpenRouter, and Claude Code, which reports an estimate at API prices (a Claude subscription isn't billed per token). Anthropic API and Codex runs show tokens only. Daily totals are kept for 180 days in `data.json` and can be cleared from the usage screen.
+
 ## AI connections and roles
 
 In **Settings → Qard → AI connections**, set up the tools and keys Qard may use:
@@ -305,7 +311,7 @@ Each Claude Code or Codex call starts a new process, which adds a few seconds. F
 
 ## Review data and settings
 
-Review states, the most recent 10,000 rating events, settings and the links between cards and mastery objectives live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+Review states, the most recent 10,000 rating events, settings, the links between cards and mastery objectives, job timings and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
 
 The scheduler is deliberately small and isolated behind an interface; it is **not FSRS**. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease. Disabling scheduling still saves ratings without changing due dates. **All cards never consults the scheduler.**
 

@@ -12,4 +12,4 @@ export interface QardServices {
   host: HTMLElement; setFocus: (enabled: boolean) => void; isActive: () => boolean;
   openSource: (card: QardCard) => Promise<void>;
 }
-export interface UiRequest { serial: number; kind: 'builder' | 'create' | 'library' | 'tests' | 'new-test' | 'today' | 'learn' | 'lesson'; selection?: Selection; draft?: Partial<CardDraft>; path?: string }
+export interface UiRequest { serial: number; kind: 'builder' | 'create' | 'library' | 'tests' | 'new-test' | 'today' | 'learn' | 'lesson' | 'usage'; selection?: Selection; draft?: Partial<CardDraft>; path?: string }

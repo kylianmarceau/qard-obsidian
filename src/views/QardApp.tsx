@@ -24,10 +24,11 @@ import { LessonView } from '../components/learn/LessonView';
 import type { LearnNav } from '../components/learn/common';
 import { scheduler } from '../review/scheduler';
 import { RunningJobs } from '../components/jobs/RunningJobs';
+import { UsageView } from '../components/usage/UsageView';
 import type { QardServices, UiRequest } from './services';
 type Screen = { kind: 'library' } | { kind: 'deck'; deck: string } | { kind: 'card'; card: QardCard } | { kind: 'editor'; draft?: Partial<CardDraft> } | { kind: 'builder'; selection: Selection } | { kind: 'study'; cards: QardCard[]; serial: number }
   | { kind: 'tests' } | { kind: 'new-test'; prompt?: string; serial: number } | { kind: 'plan' | 'take' | 'results' | 'test-cards'; folder: string } | { kind: 'review'; folder: string; question?: string }
-  | { kind: 'today' | 'learn' } | { kind: 'map-course'; folder?: string } | { kind: 'check' | 'lesson'; path: string } | { kind: 'course'; path: string; objective?: string; serial: number };
+  | { kind: 'today' | 'learn' | 'usage' } | { kind: 'map-course'; folder?: string } | { kind: 'check' | 'lesson'; path: string } | { kind: 'course'; path: string; objective?: string; serial: number };
 const LEARN_SCREENS = ['today', 'learn', 'map-course', 'course', 'check', 'lesson'];
 const TEST_LABEL: Record<string, string> = { plan: 'Plan', take: '', results: 'Results', review: 'Review', 'test-cards': 'Suggested cards' };
 export function QardApp({ services, request }: { services: QardServices; request?: UiRequest }) {
@@ -40,7 +41,7 @@ export function QardApp({ services, request }: { services: QardServices; request
     else if (request.kind === 'create') setScreen({ kind: 'editor', draft: request.draft });
     else if (request.kind === 'new-test') setScreen({ kind: 'new-test', serial: request.serial });
     else if (request.kind === 'tests') setScreen({ kind: 'tests' });
-    else if (request.kind === 'today' || request.kind === 'learn') setScreen({ kind: request.kind });
+    else if (request.kind === 'today' || request.kind === 'learn' || request.kind === 'usage') setScreen({ kind: request.kind });
     else if (request.kind === 'lesson' && request.path) setScreen({ kind: 'lesson', path: request.path });
     else setScreen({ kind: 'library' });
   }, [request]);
@@ -57,7 +58,7 @@ export function QardApp({ services, request }: { services: QardServices; request
     review: (folder, question) => setScreen({ kind: 'review', folder, question }), cards: folder => setScreen({ kind: 'test-cards', folder })
   }), []);
   const learnNav = useMemo<LearnNav>(() => ({
-    library: () => setScreen({ kind: 'library' }), today: () => setScreen({ kind: 'today' }), learn: () => setScreen({ kind: 'learn' }), mapCourse: folder => setScreen({ kind: 'map-course', folder }),
+    library: () => setScreen({ kind: 'library' }), today: () => setScreen({ kind: 'today' }), learn: () => setScreen({ kind: 'learn' }), mapCourse: folder => setScreen({ kind: 'map-course', folder }), usage: () => setScreen({ kind: 'usage' }),
     course: (path, objective) => setScreen({ kind: 'course', path, objective, serial: Date.now() }), check: path => setScreen({ kind: 'check', path }), lesson: path => setScreen({ kind: 'lesson', path }),
     // Today reviews only cards already in rotation, most overdue first.
     studyDue: () => { const { states } = services.reviews.getSnapshot(), now = Date.now(); setScreen({ kind: 'study', serial: now, cards: services.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).sort((a, b) => (states[a.id]?.due ?? 0) - (states[b.id]?.due ?? 0)) }); }
@@ -70,7 +71,7 @@ export function QardApp({ services, request }: { services: QardServices; request
   const testTitle = testEntry?.test?.title || testEntry?.plan?.title || '';
   const onTests = ['tests', 'new-test', 'plan', 'take', 'results', 'review', 'test-cards'].includes(screen.kind);
   return <div className={'qard-app ' + (study ? 'qard-is-studying' : '')}>
-    <main className="qard-main">{!study && <header className="qard-topbar"><nav className="qard-breadcrumb" aria-label="Breadcrumb"><button className="qard-wordmark" onClick={library} aria-label="Qard — all decks"><Layers size={19}/>Qard</button>{onLearn ? <><ChevronRight size={14}/><button onClick={learnNav.learn}>Learn</button>{learnLabel && <><ChevronRight size={14}/><span>{learnLabel}</span></>}</> : onTests ? <><ChevronRight size={14}/><button onClick={nav.tests}>Tests</button>{screen.kind === 'new-test' && <><ChevronRight size={14}/><span>New</span></>}{testFolder && <><ChevronRight size={14}/>{screen.kind === 'take' ? <span>{testTitle || 'Test'}</span> : <button onClick={() => testEntry?.test ? nav.results(testFolder) : nav.plan(testFolder)}>{testTitle || 'Test'}</button>}{TEST_LABEL[screen.kind] && <><ChevronRight size={14}/><span>{TEST_LABEL[screen.kind]}</span></>}</>}</> : activeDeck ? <><ChevronRight size={14}/><button onClick={() => setScreen({ kind: 'deck', deck: activeDeck })}>{activeDeck}</button>{screen.kind === 'card' && <><ChevronRight size={14}/><span>{screen.card.topic}</span></>}</> : screen.kind !== 'library' && <><ChevronRight size={14}/><span>{screen.kind === 'builder' ? 'Study' : 'New card'}</span></>}</nav><RunningJobs services={services} nav={nav} learnNav={learnNav}/></header>}
+    <main className="qard-main">{!study && <header className="qard-topbar"><nav className="qard-breadcrumb" aria-label="Breadcrumb"><button className="qard-wordmark" onClick={library} aria-label="Qard — all decks"><Layers size={19}/>Qard</button>{onLearn ? <><ChevronRight size={14}/><button onClick={learnNav.learn}>Learn</button>{learnLabel && <><ChevronRight size={14}/><span>{learnLabel}</span></>}</> : onTests ? <><ChevronRight size={14}/><button onClick={nav.tests}>Tests</button>{screen.kind === 'new-test' && <><ChevronRight size={14}/><span>New</span></>}{testFolder && <><ChevronRight size={14}/>{screen.kind === 'take' ? <span>{testTitle || 'Test'}</span> : <button onClick={() => testEntry?.test ? nav.results(testFolder) : nav.plan(testFolder)}>{testTitle || 'Test'}</button>}{TEST_LABEL[screen.kind] && <><ChevronRight size={14}/><span>{TEST_LABEL[screen.kind]}</span></>}</>}</> : activeDeck ? <><ChevronRight size={14}/><button onClick={() => setScreen({ kind: 'deck', deck: activeDeck })}>{activeDeck}</button>{screen.kind === 'card' && <><ChevronRight size={14}/><span>{screen.card.topic}</span></>}</> : screen.kind !== 'library' && <><ChevronRight size={14}/><span>{screen.kind === 'builder' ? 'Study' : screen.kind === 'usage' ? 'Token usage' : 'New card'}</span></>}</nav><RunningJobs services={services} nav={nav} learnNav={learnNav}/></header>}
       <div className={study ? 'qard-study-container' : screen.kind === 'review' ? 'qard-page qard-page-wide' : 'qard-page'}>
         {!study && !onTests && !onLearn && index.issues.length > 0 && <div className="qard-index-issues"><button onClick={() => setIssues(!issues)} aria-expanded={issues}><AlertCircle size={16}/>{index.issues.length} note {index.issues.length === 1 ? 'issue' : 'issues'} to check</button>{issues && <ul>{index.issues.slice(0, 50).map((issue, i) => <li key={i}><strong>{issue.file}:{issue.line + 1}</strong> — {issue.message}</li>)}</ul>}</div>}
         {screen.kind === 'library' && <DeckBrowser decks={filtered} search={search} onSearch={setSearch} open={name => setScreen({ kind: 'deck', deck: name })} create={() => setScreen({ kind: 'editor' })} study={() => builder()} loading={index.loading} tests={nav.tests} newTest={() => nav.newTest()} learn={learnNav.learn} resume={!search.trim() && <><TodayRow services={services} nav={learnNav}/><ResumeTest services={services} nav={nav}/></>}/>}
@@ -80,6 +81,7 @@ export function QardApp({ services, request }: { services: QardServices; request
         {screen.kind === 'builder' && <StudySessionBuilder key={JSON.stringify(screen.selection)} services={services} cards={index.cards} decks={index.decks} initial={screen.selection} start={start} back={library}/>}
         {screen.kind === 'tests' && <TestsBrowser services={services} nav={nav} learn={learnNav.learn}/>}
         {screen.kind === 'today' && <TodayView services={services} nav={learnNav}/>}
+        {screen.kind === 'usage' && <UsageView services={services}/>}
         {screen.kind === 'learn' && <LearnBrowser services={services} nav={learnNav} testNav={nav}/>}
         {screen.kind === 'map-course' && <MapCourse key={screen.folder ?? ''} services={services} nav={learnNav} initialFolder={screen.folder}/>}
         {screen.kind === 'course' && <CourseView key={screen.path + screen.serial} services={services} nav={learnNav} path={screen.path} objective={screen.objective}/>}

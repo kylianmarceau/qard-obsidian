@@ -65,7 +65,7 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
   const day = isoDay(Date.now());
   const open = lessons.filter(l => !l.finished), recent = lessons.filter(l => l.finished).slice(0, 5);
   return <>
-    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions"><button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
+    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
     {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}/></div>)}
     {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
