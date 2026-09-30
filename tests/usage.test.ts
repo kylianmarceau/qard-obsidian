@@ -28,3 +28,25 @@ it('OpenRouter reports usage once per run, summed over its tool loop, and asks f
   expect(seen[0]!.costUsd).toBeCloseTo(0.003);
   expect(JSON.parse(http.mock.calls[0]![1].body!).usage).toEqual({ include: true });
 });
+
+import { addToLog, purposeOf, tokens, usageKey, usageReport } from '../src/agents/usage-report';
+import { testSchema, marksSchema } from '../src/tests/test-schema';
+import { stepSchema, tutorMarkSchema } from '../src/learn/learn-schema';
+
+it('keeps daily totals by feature, role, connection and model, and reports them for a range', () => {
+  expect([testSchema, marksSchema, stepSchema, tutorMarkSchema].map(purposeOf)).toEqual(['Writing tests', 'Marking', 'Writing lessons', 'Tutoring']);
+  expect(purposeOf({ type: 'string' })).toBe('Other');
+  const u = (input: number, output: number, costUsd?: number) => ({ input, output, cacheRead: 10, cacheWrite: 0, costUsd });
+  let log = addToLog({}, '2026-09-28', usageKey('Writing tests', 'writer', 'claude-code', ''), u(100, 50, 0.01));
+  log = addToLog(log, '2026-09-30', usageKey('Writing tests', 'writer', 'claude-code', ''), u(200, 100, 0.02));
+  log = addToLog(log, '2026-09-30', usageKey('Tutoring', 'tutor', 'anthropic', 'claude-haiku-4-5'), u(40, 20));
+  const all = usageReport(log);
+  expect(all.totals).toMatchObject({ calls: 3, input: 340, output: 170, cacheRead: 30, costCalls: 2 });
+  expect(all.totals.costUsd).toBeCloseTo(0.03);
+  expect(all.byFeature.map(r => [r.label, r.totals.calls])).toEqual([['Writing tests', 2], ['Tutoring', 1]]);
+  expect(all.byModel.map(r => [r.label, r.detail])).toEqual([['Claude Code', 'default model'], ['Anthropic API', 'claude-haiku-4-5']]);
+  expect(all.daily.map(d => [d.day, tokens(d.totals)])).toEqual([['2026-09-28', 160], ['2026-09-30', 380]]);
+  expect(usageReport(log, '2026-09-30').totals.calls).toBe(2);
+  // Old days fall off after the keep window.
+  expect(Object.keys(addToLog(log, '2026-10-01', 'k', u(1, 1), 2))).toEqual(['2026-09-30', '2026-10-01']);
+});

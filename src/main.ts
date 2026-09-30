@@ -12,10 +12,11 @@ import { topicKey } from './decks/deck-index';
 import { parseCards, topicAtLine } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
-import { createRunner } from './agents/create-runner';
+import { createRunner, type UsageEvent } from './agents/create-runner';
+import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
 import { VaultLearnStorage } from './learn/vault-learn-storage';
-import { objectiveLines } from './learn/mastery';
+import { isoDay, objectiveLines } from './learn/mastery';
 import { scheduler } from './review/scheduler';
 import { JobClock } from './jobs/job-clock';
 export default class QardPlugin extends Plugin {
@@ -31,7 +32,10 @@ export default class QardPlugin extends Plugin {
     this.reviews = new ReviewStore(data => this.saveData(data));
     try { this.reviews.load(await this.loadData()); } catch { new Notice('Could not load review data. Reload the plugin before reviewing.'); throw new Error('Unable to load Qard review metadata'); }
     this.index = new VaultIndexer(this.app, this); this.writer = new CardWriter(this.app, this.index);
-    const settings = () => this.reviews.getSnapshot().settings, runner = (role: Parameters<typeof createRunner>[2]) => createRunner(this.app, settings(), role);
+    const settings = () => this.reviews.getSnapshot().settings;
+    // Every run's tokens are added to per-day totals by feature, role, connection and model.
+    const record = (e: UsageEvent) => void this.reviews.recordUsage(isoDay(Date.now()), usageKey(e.purpose, e.role, e.provider, e.model), e.usage).catch(() => {});
+    const runner = (role: Parameters<typeof createRunner>[2]) => createRunner(this.app, settings(), role, record);
     const links = { get: (id: string) => this.reviews.getSnapshot().links[id], set: (id: string, link: { mastery: string; objective: string; lapses: number }) => this.reviews.link(id, link) };
     // Today counts only cards already in review; brand-new cards are studied on purpose, not scheduled.
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };

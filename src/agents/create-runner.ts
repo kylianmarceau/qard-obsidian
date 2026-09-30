@@ -1,6 +1,8 @@
 import { FileSystemAdapter, Platform, TFile, type App } from 'obsidian';
 import type { QardSettings } from '../settings/settings';
 import type { AgentProvider, AgentRole, AgentRunner } from './runner';
+import type { Usage } from './usage';
+import { purposeOf } from './usage-report';
 import { AnthropicRunner, DEFAULT_API_MODEL, FAST_API_MODEL } from './api-runner';
 import { OpenRouterRunner } from './openrouter-runner';
 import { ClaudeCodeRunner, CodexRunner, findBinary, type NodeHost } from './cli-runner';
@@ -36,8 +38,18 @@ export function defaultModel(provider: AgentProvider, role: AgentRole) {
   return provider === 'claude-code' && fast ? 'haiku' : '';
 }
 
-export function createRunner(app: App, settings: QardSettings, role: AgentRole): AgentRunner {
+export interface UsageEvent { purpose: string; role: AgentRole; provider: AgentProvider; model: string; usage: Usage }
+/** Reports every run's token usage with what it was for and which connection and model ran it. */
+function tracked(runner: AgentRunner, role: AgentRole, provider: AgentProvider, model: string, record?: (e: UsageEvent) => void): AgentRunner {
+  if (!record) return runner;
+  return { name: runner.name, run: task => runner.run({ ...task, onUsage: usage => { record({ purpose: purposeOf(task.schema), role, provider, model: usage.model ?? model, usage }); task.onUsage?.(usage); } }) };
+}
+
+export function createRunner(app: App, settings: QardSettings, role: AgentRole, record?: (e: UsageEvent) => void): AgentRunner {
   const { provider } = settings.agents.roles[role], model = settings.agents.roles[role].model.trim() || defaultModel(provider, role);
+  return tracked(buildRunner(app, settings, role, provider, model), role, provider, model, record);
+}
+function buildRunner(app: App, settings: QardSettings, role: AgentRole, provider: AgentProvider, model: string): AgentRunner {
   const reader = { paths: () => app.vault.getMarkdownFiles().map(f => f.path), read: (p: string) => { const f = app.vault.getAbstractFileByPath(p); return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve(''); } };
   // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
   const exclude = [settings.tests.folder.replace(/\/+$/, '')];
