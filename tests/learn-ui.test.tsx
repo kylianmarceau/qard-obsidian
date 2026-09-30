@@ -11,6 +11,7 @@ import { CheckView } from '../src/components/learn/CheckView';
 import { LessonView } from '../src/components/learn/LessonView';
 import { CourseView, TodayRow } from '../src/components/learn/LearnScreens';
 import type { LearnNav } from '../src/components/learn/common';
+import { RunningJobs } from '../src/components/jobs/RunningJobs';
 import type { QardServices } from '../src/views/services';
 import type { AgentTask } from '../src/agents/runner';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -127,4 +128,19 @@ it('a lesson links to its place on the map, and the map continues it rather than
   expect(host.querySelector('.qard-map-panel h3')?.textContent).toBe('List the LDA generative process');
   await click(buttons('Continue lesson')[0]);
   expect(nav.lesson).toHaveBeenCalledWith(LESSON);
+});
+
+it('the header shows background jobs and jumps to them', async () => {
+  const testNav = { library: vi.fn(), tests: vi.fn(), newTest: vi.fn(), plan: vi.fn(), take: vi.fn(), results: vi.fn(), review: vi.fn(), cards: vi.fn() };
+  const idle = { revision: 0, jobs: {} };
+  services.tests = { subscribe: () => () => {}, getSnapshot: () => idle, get: () => undefined } as unknown as QardServices['tests'];
+  await act(async () => { root.render(<RunningJobs services={services} nav={testNav} learnNav={nav}/>); });
+  expect(host.textContent).toBe('');
+  void services.learn.mapCourse('Notes/DS346');
+  await tick();
+  expect(host.querySelector('.qard-jobs-button')?.textContent).toBe('1 running');
+  await click(host.querySelector('.qard-jobs-button'));
+  expect(host.querySelector('.qard-jobs-item')?.textContent).toContain('Mapping courseDS346');
+  await click(host.querySelector('.qard-jobs-item'));
+  expect(nav.mapCourse).toHaveBeenCalledWith('Notes/DS346');
 });

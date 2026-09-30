@@ -45,7 +45,7 @@
 .qard-app textarea { resize: vertical; min-height: 110px; line-height: 1.65; }
 .qard-app fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .qard-main { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
-.qard-topbar { padding: 16px 28px; }
+.qard-topbar { padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .qard-breadcrumb { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--qard-muted); font-size: 12px; }
 .qard-breadcrumb button { border: 0; padding: 3px 0; color: var(--qard-muted); font-size: 12px; text-align: left; }
 .qard-breadcrumb > span, .qard-breadcrumb button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -539,3 +539,13 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-app .qard-lesson-trail-map { margin-left: auto; font-size: 12.5px; }
 .qard-map-lesson circle { fill: var(--qard-blue); }
 .qard-map-lesson path { fill: white; }
+
+/* Background jobs */
+.qard-jobs { position: relative; flex-shrink: 0; }
+.qard-app button.qard-jobs-button { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 3px 12px; border-radius: 999px; font-size: 12px; color: var(--qard-text); background: var(--qard-tint); border-color: color-mix(in srgb, var(--qard-blue) 25%, var(--qard-border)); }
+.qard-jobs-list { left: auto; right: 0; width: min(360px, 90vw); }
+.qard-app button.qard-jobs-item { align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; }
+.qard-jobs-item > span { display: flex; flex-direction: column; min-width: 0; }
+.qard-jobs-item strong { font-size: 13px; font-weight: 600; }
+.qard-jobs-item small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qard-jobs-note { margin: 6px 8px 4px; }
