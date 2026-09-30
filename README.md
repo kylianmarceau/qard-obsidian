@@ -267,6 +267,19 @@ Choose **Teach** on an objective, or run **Qard: Teach me this note**.
 3. **Teach.** The writer prepares each step, starting with the first, while you work. Each step says why it is needed, explains the idea from what you already accept, and ends with a check. When you can work it out yourself, the check comes before the explanation. The tutor marks your answer live and, if you made a mistake the writer expected, shows an explanation aimed at it. You can try again once, and ask questions at any point.
 4. **Close.** The lesson is recorded in the mastery file and saved as a note in `Qard/Lessons/`. The writer suggests cards (linked to the objective) and, when a note was missing something the lesson had to explain, a paragraph to add to it. Nothing is added to your notes unless you accept it. The first check is written for three days later.
 
+## Background work and while you wait
+
+Writing tests, marking, mapping courses and preparing lessons run in the background. Leaving the screen, closing the Qard tab or moving around Obsidian doesn't stop them. When one finishes, Obsidian shows a notice. Course mappings and updates are saved under `Qard/Proposals/` until you review them, and a lesson reopened after a reload picks up where it stopped. The header shows **● N running** while jobs are in progress; it lists each one with its elapsed time and an estimate, and opens it when clicked. Estimates come from how long that kind of job recently took with your chosen connection and model.
+
+Long waits show **While you wait** instead of a spinner, offering one thing at a time:
+
+- a **check** that's due, when there's time for one;
+- **cards**: due flashcards, or before a lesson a warm-up on what it builds on (its prerequisites' cards, even if not due yet);
+- a **missed point** from a recent test to try again;
+- the **notes** the job is based on.
+
+While a practice test is written or marked, nothing from that test's own notes is offered, so warming up doesn't inflate your score or show answers you're about to review. Ratings and answers count as usual. Once you start something the screen stays put, and when the job is done a bar offers **Continue**.
+
 ## AI connections and roles
 
 In **Settings → Qard → AI connections**, set up the tools and keys Qard may use:
