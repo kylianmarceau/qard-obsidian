@@ -50,3 +50,17 @@ it('keeps daily totals by feature, role, connection and model, and reports them 
   // Old days fall off after the keep window.
   expect(Object.keys(addToLog(log, '2026-10-01', 'k', u(1, 1), 2))).toEqual(['2026-09-30', '2026-10-01']);
 });
+
+import { CLAUDE_CODE_MODELS, codexModels, type NodeHost } from '../src/agents/cli-runner';
+it('suggests Codex models from its own cache, in its order, without hidden ones', () => {
+  const cache = JSON.stringify({ models: [
+    { slug: 'gpt-5.6-terra', display_name: 'GPT-5.6-Terra', description: 'Balanced.', visibility: 'list', priority: 1 },
+    { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide', priority: 0 },
+    { slug: 'gpt-5.6-sol', display_name: 'GPT-5.6-Sol', description: 'Reliable agentic workhorse.', visibility: 'list', priority: 0 }
+  ] });
+  const host = { env: {}, home: '/Users/me', exists: (p: string) => p === '/Users/me/.codex/models_cache.json', readFile: () => cache } as unknown as NodeHost;
+  expect(codexModels(host)).toEqual([{ value: 'gpt-5.6-sol', label: 'GPT-5.6-Sol — Reliable agentic workhorse.' }, { value: 'gpt-5.6-terra', label: 'GPT-5.6-Terra — Balanced.' }]);
+  expect(codexModels({ ...host, env: { CODEX_HOME: '/elsewhere' } } as NodeHost)).toEqual([]);
+  expect(codexModels({ ...host, readFile: () => 'not json' } as NodeHost)).toEqual([]);
+  expect(CLAUDE_CODE_MODELS.map(m => m.value)).toContain('haiku');
+});

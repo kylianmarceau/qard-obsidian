@@ -57,6 +57,23 @@ export async function findBinary(host: NodeHost, name: string, override: string)
   return undefined;
 }
 
+export interface ModelChoice { value: string; label: string }
+/** Claude Code takes an alias for the latest model of a family, or a full model name. */
+export const CLAUDE_CODE_MODELS: ModelChoice[] = [
+  { value: 'fable', label: 'Fable (latest)' }, { value: 'opus', label: 'Opus (latest)' }, { value: 'sonnet', label: 'Sonnet (latest)' }, { value: 'haiku', label: 'Haiku (latest, fastest)' },
+  { value: 'claude-fable-5-1', label: 'Claude Fable 5.1' }, { value: 'claude-opus-5-5', label: 'Claude Opus 5.5' }, { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
+];
+/** The models Codex lists for this account, from its own cache (~/.codex/models_cache.json), in its order. */
+export function codexModels(host: NodeHost): ModelChoice[] {
+  const file = `${host.env.CODEX_HOME || `${host.home}/.codex`}/models_cache.json`;
+  try {
+    if (!host.exists(file)) return [];
+    const models = (JSON.parse(host.readFile(file)) as { models?: { slug?: unknown; display_name?: unknown; description?: unknown; visibility?: unknown; priority?: unknown }[] }).models ?? [];
+    return models.filter(m => typeof m.slug === 'string' && m.visibility !== 'hide').sort((a, b) => Number(a.priority ?? 99) - Number(b.priority ?? 99))
+      .map(m => ({ value: m.slug as string, label: [m.display_name, m.description].filter(x => typeof x === 'string' && x).join(' — ') || (m.slug as string) }));
+  } catch { return []; }
+}
+
 abstract class CliRunner implements AgentRunner {
   abstract readonly name: string;
   protected abstract readonly binary: string;

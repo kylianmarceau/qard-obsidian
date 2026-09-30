@@ -4,13 +4,21 @@ import type { QardSettings, RoleSetting, TestSettings } from './settings';
 import type { AgentProvider, AgentRole } from '../agents/runner';
 import { API_MODELS } from '../agents/api-runner';
 import { openRouterModels } from '../agents/openrouter-runner';
-import { API_KEY_SECRET, OPENROUTER_KEY_SECRET, defaultModel, detectAgent, secrets as secretStore } from '../agents/create-runner';
+import { API_KEY_SECRET, OPENROUTER_KEY_SECRET, defaultModel, detectAgent, nodeHost, secrets as secretStore } from '../agents/create-runner';
+import { CLAUDE_CODE_MODELS, codexModels, type ModelChoice } from '../agents/cli-runner';
 import { safeFolder } from '../cards/card-writer';
 interface SettingRow { name: string; desc?: string; render: (setting: Setting) => void }
 const PROVIDER_LABELS: Record<AgentProvider, string> = { 'claude-code': 'Claude Code', codex: 'Codex', anthropic: 'Anthropic API', openrouter: 'OpenRouter' };
 
 export class QardSettingsTab extends PluginSettingTab {
   private models?: Promise<string[]>;
+  /** Suggestions for a connection's model field. OpenRouter's list is fetched once per settings visit. */
+  private async modelChoices(provider: AgentProvider): Promise<ModelChoice[]> {
+    if (provider === 'claude-code') return CLAUDE_CODE_MODELS;
+    if (provider === 'codex') { const host = nodeHost(); return host ? codexModels(host) : []; }
+    if (provider === 'openrouter') return (await (this.models ??= openRouterModels().catch(() => []))).map(m => ({ value: m, label: m }));
+    return [];
+  }
   constructor(private qard: QardPlugin) { super(qard.app, qard); }
   // Obsidian 1.13+ discovers these definitions for rendering and settings search.
   // Earlier supported versions call display(), which uses the same rows.
@@ -83,11 +91,9 @@ export class QardSettingsTab extends PluginSettingTab {
       else row.addText(x => {
         x.setValue(current.model).setPlaceholder(defaultModel(current.provider, id) || 'Default model');
         x.inputEl.addEventListener('change', () => void save({ ...current, model: x.getValue().trim() }));
-        if (current.provider === 'openrouter') {
-          // A native suggestion list of models that can use tools, fetched once per settings visit.
-          const list = (x.inputEl.parentElement ?? row.controlEl).createEl('datalist', { attr: { id: `qard-models-${id}` } }); x.inputEl.setAttribute('list', list.id);
-          void (this.models ??= openRouterModels().catch(() => [])).then(models => { for (const m of models) list.createEl('option', { attr: { value: m } }); });
-        }
+        // A native suggestion list under the field: type to filter, or pick. Any other model name can still be typed.
+        const list = (x.inputEl.parentElement ?? row.controlEl).createEl('datalist', { attr: { id: `qard-models-${id}` } }); x.inputEl.setAttribute('list', list.id);
+        void this.modelChoices(current.provider).then(choices => { for (const c of choices) list.createEl('option', { attr: { value: c.value, label: c.label } }); });
       });
     } });
     return [
