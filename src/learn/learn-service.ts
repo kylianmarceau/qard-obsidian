@@ -1,4 +1,5 @@
 import type { QardSettings } from '../settings/settings';
+import { tidyMermaid } from './mermaid';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
@@ -630,7 +631,7 @@ export class LearnService {
       return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map(x => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
     }).filter(Boolean).join('\n\n');
     const mastery = lesson.mastery ? ` · [[${lesson.mastery.replace(/\.md$/, '')}|${lesson.course ?? 'Mastery'}]]${lesson.objective ? ` · \`${lesson.objective}\`` : ''}` : '';
-    const body = `---\nqard-lesson: true\n${lesson.objective ? `qard-objective: ${lesson.objective}\n` : ''}---\n\n# ${lesson.map?.title ?? lesson.topic}\n\n${day}${mastery}\n\n## Summary\n\n${summary.trim()}\n\n## Plan\n\n${lesson.map?.plan ?? ''}\n\n\`\`\`mermaid\n${lesson.map?.mermaid ?? ''}\n\`\`\`\n\n## Steps\n\n${steps}\n`;
+    const body = `---\nqard-lesson: true\n${lesson.objective ? `qard-objective: ${lesson.objective}\n` : ''}---\n\n# ${lesson.map?.title ?? lesson.topic}\n\n${day}${mastery}\n\n## Summary\n\n${summary.trim()}\n\n## Plan\n\n${lesson.map?.plan ?? ''}\n\n\`\`\`mermaid\n${tidyMermaid(lesson.map?.mermaid ?? '')}\n\`\`\`\n\n## Steps\n\n${steps}\n`;
     await this.storage.write(notePath, body);
     return notePath;
   }

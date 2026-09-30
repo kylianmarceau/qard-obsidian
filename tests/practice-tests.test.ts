@@ -6,7 +6,7 @@ import { runVaultTool } from '../src/agents/vault-tools';
 import { ClaudeCodeRunner, type NodeHost } from '../src/agents/cli-runner';
 import { TestService, type TestStorage } from '../src/tests/test-service';
 import { DEFAULT_TEST_SETTINGS, readSettings, type TestSettings } from '../src/settings/settings';
-import { markPrompt } from '../src/tests/test-prompts';
+import { markPrompt, questionBlock } from '../src/tests/test-prompts';
 
 beforeAll(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 
@@ -251,4 +251,12 @@ it('after a reload, writes again a test that was being written, and marks sectio
   await new Promise(r => setTimeout(r, 0));
   expect(roles.sort()).toEqual(['marker:marks', 'writer:test']);
   expect(JSON.parse(files['Qard/Tests/a/request.json']!).writing).toBeGreaterThan(now - 1000);
+});
+
+it('shows agents the option a student picked in multiple choice, not a blank answer', () => {
+  const mcq = TEST.sections[0]!.questions[1]! as Parameters<typeof questionBlock>[0];
+  const block = questionBlock(mcq, { choice: 0, confidence: 'unsure' });
+  expect(block).toContain('A. Forward\nB. Viterbi (correct)');
+  expect(block).toContain('<student_answer confidence="unsure">Picked A. Forward (wrong)</student_answer>');
+  expect(questionBlock(mcq, undefined)).toContain('(blank)');
 });

@@ -62,6 +62,12 @@ Rules:
 ${input.plan ? 'Follow the plan\'s sections, focus and mix.' : `Use two to four sections and about ${d.questions} questions.`}`;
 }
 
+/** What the student answered: their text, or for multiple choice the option they picked. */
+function studentAnswer(q: Question, a: AnswerState | undefined) {
+  if (a?.unknown) return '(the student said they did not know)';
+  if (q.type === 'mcq' && a?.choice !== undefined) return `Picked ${String.fromCharCode(65 + a.choice)}. ${q.options?.[a.choice] ?? ''} (${a.choice === q.answer ? 'correct' : 'wrong'})`;
+  return a?.text?.trim() || '(blank)';
+}
 export function questionBlock(q: Question, a: AnswerState | undefined) {
   return `<question id="${q.id}" type="${q.type}" marks="${q.marks}">
 <prompt>${q.prompt}</prompt>
@@ -69,7 +75,7 @@ export function questionBlock(q: Question, a: AnswerState | undefined) {
 ${q.rubric.map((r, i) => `${i + 1}. (${r.marks}) ${r.point}`).join('\n')}
 </rubric>
 <model_answer>${q.model}</model_answer>
-${q.source ? `<source>${q.source.path}${q.source.heading ? ` › ${q.source.heading}` : ''}</source>\n` : ''}<student_answer confidence="${a?.confidence ?? 'unstated'}">${a?.unknown ? '(the student said they did not know)' : a?.text?.trim() || '(blank)'}</student_answer>
+${q.options?.length ? `<options>\n${q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}${i === q.answer ? ' (correct)' : ''}`).join('\n')}\n</options>\n` : ''}${q.source ? `<source>${q.source.path}${q.source.heading ? ` › ${q.source.heading}` : ''}</source>\n` : ''}<student_answer confidence="${a?.confidence ?? 'unstated'}">${studentAnswer(q, a)}</student_answer>
 </question>`;
 }
 export const MARKING = `Mark strictly against each rubric. awarded[i] is true only when the answer clearly makes point i; score is the sum of the awarded points' marks. A blank answer scores 0.

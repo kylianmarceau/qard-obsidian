@@ -20,7 +20,7 @@ export const courseUpdateSchema = obj({
 });
 export const questionsSchema = obj({ questions: arr(questionSchema) });
 export const probeSchema = obj({ questions: arr(questionSchema), note: str('One sentence on what the probe checks, or why none is needed.') });
-const mapProps = { title: str('At most eight words.'), plan: str('Two to four sentences, addressed to the student.'), mermaid: str('A small Mermaid flowchart (graph TD) from starting facts at the top to the goal at the bottom. No code fences.'), objective: str('Mastery objective id this lesson teaches, if one fits.'), steps: arr(obj({ title: str(), why: str('One sentence: why this step is needed now.') })) };
+const mapProps = { title: str('At most eight words.'), plan: str('Two to four sentences, addressed to the student.'), mermaid: str('A small Mermaid flowchart (graph TD) from starting facts at the top to the goal at the bottom. Put every node label in double quotes, e.g. A["x[[1]] picks one"]. No code fences.'), objective: str('Mastery objective id this lesson teaches, if one fits.'), steps: arr(obj({ title: str(), why: str('One sentence: why this step is needed now.') })) };
 export const mapSchema = obj(mapProps, ['objective']);
 export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps })), findings: str('One or two sentences on what the answers show, addressed to the student.'), map: mapSchema });
 export const stepSchema = obj({
