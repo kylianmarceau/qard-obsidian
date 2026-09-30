@@ -636,3 +636,5 @@ div.qard-ask-q { cursor: default; }
 .qard-inline-md .qard-md-pending { position: absolute; visibility: hidden; }
 .qard-inline-md :is(p, .markdown-rendered) { display: inline; margin: 0; padding: 0; }
 .qard-inline-md .math { font-size: 0.92em; }
+
+.qard-lesson-connect .qard-markdown { color: var(--qard-muted); font-size: 15px; line-height: 1.6; }

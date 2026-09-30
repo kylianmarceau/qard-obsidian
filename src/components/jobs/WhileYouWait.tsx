@@ -133,7 +133,7 @@ function RetryPoint({ services, folder, question, onEngage }: { services: QardSe
   const mark = attempt.marks[q.id], retry = attempt.review[q.id]?.retry, running = job('retry', q.id);
   const path = q.source?.path || folder;
   return <div className="qard-wait-card">
-    <div className="qard-muted qard-small">{test.title} · you scored {mark?.score ?? 0}/{q.marks}</div>
+    <div className="qard-muted qard-small"><InlineMarkdown text={test.title} path={folder} services={services}/> · you scored {mark?.score ?? 0}/{q.marks}</div>
     <div className="qard-wait-front"><Markdown text={q.prompt} path={path} services={services}/></div>
     <div className="qard-small"><span className="qard-label">Missed</span><ul className="qard-wait-missed">{q.rubric.filter((_, i) => !mark?.awarded[i]).map((r, i) => <li key={i}><InlineMarkdown text={r.point} path={path} services={services}/></li>)}</ul></div>
     {retry ? <div className="qard-panel"><Markdown text={`${retry.feedback} (${retry.score}/${q.marks} together.)`} path={path} services={services}/></div>

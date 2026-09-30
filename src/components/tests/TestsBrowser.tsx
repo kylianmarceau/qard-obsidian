@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ChevronRight, Plus } from 'lucide-react';
 import type { QardServices } from '../../views/services';
+import { InlineMarkdown } from '../Markdown';
 import type { TestSummary } from '../../tests/test-service';
 import type { TestNav } from './common';
 
@@ -16,7 +17,7 @@ export function ResumeTest({ services, nav }: { services: QardServices; nav: Tes
   useEffect(() => { let live = true; services.tests.list().then(all => { if (live) setTest(all.find(t => ['in-progress', 'ready', 'plan', 'planning', 'writing'].includes(t.status))); }, () => {}); return () => { live = false; }; }, [services, snapshot.revision]);
   if (!test) return null;
   const open = () => test.status === 'ready' || test.status === 'in-progress' ? nav.take(test.folder) : nav.plan(test.folder);
-  return <button className="qard-resume" onClick={open}><span className="qard-muted">{test.status === 'ready' ? 'Start' : 'Continue'}</span><strong>{test.title}</strong><span className="qard-muted">{STATUS[test.status]}</span><ChevronRight size={16}/></button>;
+  return <button className="qard-resume" onClick={open}><span className="qard-muted">{test.status === 'ready' ? 'Start' : 'Continue'}</span><strong><InlineMarkdown text={test.title} path={test.folder} services={services}/></strong><span className="qard-muted">{STATUS[test.status]}</span><ChevronRight size={16}/></button>;
 }
 
 export function TestsBrowser({ services, nav, learn }: { services: QardServices; nav: TestNav; learn?: () => void }) {
@@ -29,7 +30,7 @@ export function TestsBrowser({ services, nav, learn }: { services: QardServices;
     {error && <p className="qard-error" role="alert">{error}</p>}
     {!tests && !error && <p className="qard-muted" role="status">Loading tests…</p>}
     <div className="qard-deck-list">{tests?.map(t => <button key={t.folder} className="qard-deck qard-test-row" onClick={() => open(t)}>
-      <span className="qard-deck-name"><strong>{t.title}</strong><small>{t.created ? new Date(t.created).toLocaleDateString() : t.folder.split('/').pop()}</small></span>
+      <span className="qard-deck-name"><strong><InlineMarkdown text={t.title} path={t.folder} services={services}/></strong><small>{t.created ? new Date(t.created).toLocaleDateString() : t.folder.split('/').pop()}</small></span>
       <span className="qard-test-status">{t.status === 'marked' ? `${t.score} / ${t.marks}` : STATUS[t.status]}</span><ChevronRight size={17}/>
     </button>)}</div>
     {tests && !tests.length && <div className="qard-empty"><p>No tests yet.</p><button onClick={() => nav.newTest()}>Create a test</button></div>}

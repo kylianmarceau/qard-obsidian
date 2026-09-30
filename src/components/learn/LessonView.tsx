@@ -107,7 +107,7 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
     {plan && <div className="qard-lesson-why"><Markdown text={plan.why} path={where} services={services}/></div>}
     {!step && writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/>
       : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}/> : <>
-      {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/><p className="qard-muted">{step.connect}</p></section>}
+      {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/><div className="qard-lesson-connect"><Markdown text={step.connect} path={where} services={services}/></div></section>}
       {!st?.mark ? <>
         {step.checkFirst && <p className="qard-label">Try this first. Work it out from what you know.</p>}
         <AnswerInput services={services} question={step.check} answer={st?.answer} locked={running(tutor)} path={where} label={step.checkFirst ? 'Before the explanation' : 'Check'} onChange={patch => services.learn.answerStep(path, patch)}/>
