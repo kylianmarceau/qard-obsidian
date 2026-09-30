@@ -407,7 +407,8 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-marked-head .qard-review-score { font-size: 24px; }
 .qard-review-answer.is-compact { grid-template-columns: minmax(0, 1fr) 240px; gap: 24px; }
 .qard-app button.qard-dont-know.is-on { color: var(--qard-vague); background: var(--qard-vague-bg); }
-.qard-lesson-why { color: var(--qard-muted); font-style: italic; margin: 0 0 12px; }
+.qard-lesson-why { margin: 0 0 12px; }
+.qard-lesson-why .qard-markdown { color: var(--qard-muted); font-style: italic; font-size: 15px; }
 .qard-lesson-explain { font-size: 15.5px; line-height: 1.7; padding: 6px 0 14px; }
 .qard-lesson-feedback { display: flex; flex-direction: column; gap: 16px; padding: 20px 0; border-top: 1px solid var(--qard-border); }
 .qard-tutor { padding: 14px 16px; border-radius: 12px; background: var(--qard-tint); font-size: 15px; }
@@ -597,3 +598,9 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 /* Who is working: a quiet tag after progress text */
 .qard-agent { display: inline-block; margin-left: 10px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.6; color: var(--qard-muted); background: var(--qard-soft); border: 1px solid var(--qard-border); white-space: nowrap; vertical-align: middle; }
 .qard-jobs-item .qard-agent { margin: 3px 0 0; align-self: flex-start; }
+
+/* Lesson captions render Markdown and LaTeX, in the muted caption style. */
+.qard-lesson-findings .qard-markdown { color: var(--qard-muted); font-size: 15px; line-height: 1.6; }
+.qard-probe-prompt { flex: 1; min-width: 0; }
+.qard-probe-prompt .qard-markdown { font-size: 13.5px; line-height: 1.5; }
+.qard-doc-why .qard-markdown { color: var(--qard-muted); font-size: 13.5px; line-height: 1.55; margin: 2px 0; }
