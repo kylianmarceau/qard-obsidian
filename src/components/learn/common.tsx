@@ -8,7 +8,7 @@ import { Markdown } from '../Markdown';
 import { scoreTone } from '../tests/common';
 
 export type LearnNav = {
-  library: () => void; today: () => void; learn: () => void; mapCourse: () => void;
+  library: () => void; today: () => void; learn: () => void; mapCourse: (folder?: string) => void;
   course: (path: string) => void; check: (path: string) => void; lesson: (path: string) => void;
   studyDue: () => void;
 };

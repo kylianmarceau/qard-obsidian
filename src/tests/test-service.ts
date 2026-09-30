@@ -33,7 +33,8 @@ export class TestService {
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
   private disposed = false;
-  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning) {}
+  /** notify tells the student when background work finishes, wherever they are in Obsidian. */
+  constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning, private notify: (message: string) => void = () => {}) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -160,6 +161,7 @@ export class TestService {
       const attempt = emptyAttempt(test, this.now());
       await this.save(folder, 'test', test); await this.save(folder, 'attempt', attempt);
       this.update(folder, { test, attempt });
+      this.notify(`Practice test ready: ${test.title}`);
     });
     return folder;
   }
@@ -220,6 +222,8 @@ export class TestService {
       const latest = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...latest, wrapup: { fixes: result.fixes.filter(f => ids.has(f.questionId)).slice(0, 3), cards: result.cards.filter(c => ids.has(c.questionId)).slice(0, 6) } });
       if (this.settings().useProfile && result.profile.trim()) await this.storage.write(this.profilePath(), result.profile.trim() + '\n');
+      const { score, marks } = scoreOf(test, this.attemptOf(folder).attempt);
+      this.notify(`${test.title} is marked: ${score} / ${marks}`);
     });
   }
   retry(folder: string, id: string, text: string) {

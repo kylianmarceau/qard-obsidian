@@ -33,11 +33,11 @@ export default class QardPlugin extends Plugin {
     const links = { get: (id: string) => this.reviews.getSnapshot().links[id], set: (id: string, link: { mastery: string; objective: string; lapses: number }) => this.reviews.link(id, link) };
     // Today counts only cards already in review; brand-new cards are studied on purpose, not scheduled.
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };
-    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards);
+    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000));
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
       record: (test, attempt) => this.learn.recordTest(test, attempt)
-    });
+    }, message => new Notice(message, 8000));
     addIcon('qard', '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>');
     this.registerView(VIEW_TYPE, leaf => new QardView(leaf, this));
     this.addRibbonIcon('qard', 'Open study workspace', () => { void this.open().catch(e => new Notice(String(e))); });

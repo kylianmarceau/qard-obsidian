@@ -3,7 +3,7 @@ import { addDays, applyEvidence, breakCycles, parseMastery, readyToLearn, setFro
 import { layoutGraph, layoutTopic, OBJECTIVE, routeTo, topicsOf } from '../src/components/learn/CourseMap';
 import { courseUpdateSchema } from '../src/learn/learn-schema';
 import { LearnService, insertUnderHeading, summarise, type LearnStorage } from '../src/learn/learn-service';
-import { objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema, closeSchema } from '../src/learn/learn-schema';
+import { mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema, closeSchema } from '../src/learn/learn-schema';
 import { marksSchema } from '../src/tests/test-schema';
 import { readSettings } from '../src/settings/settings';
 import type { AgentRole, AgentTask } from '../src/agents/runner';
@@ -189,6 +189,7 @@ function setup() {
     read: async p => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); }, exists: p => files.has(p),
     process: async (p, fn) => { const t = files.get(p); if (t === undefined) throw new Error('missing'); files.set(p, fn(t)); },
     files: (folder, ext) => [...files.keys()].filter(p => p.startsWith(folder + '/') && p.endsWith('.' + ext)).sort(),
+    remove: async p => { files.delete(p); },
     masteryFiles: () => [...files.entries()].filter(([p, t]) => p.endsWith('.md') && /^---\n[\s\S]*?qard-mastery:/.test(t)).map(([p]) => p),
     modified: p => modified.get(p), resolve: link => [...files.keys()].find(p => p === link || p.endsWith('/' + link + '.md'))
   };
@@ -204,8 +205,11 @@ function setup() {
   const links = new Map<string, CardLink>();
   let now = new Date(2026, 8, 29, 10).getTime();
   const settings = readSettings({ learn: { folder: 'Qard' } });
-  const learn = new LearnService(storage, () => settings, runner, { get: id => links.get(id), set: async (id, l) => { links.set(id, l); } }, () => 4, () => now);
-  return { files, modified, learn, calls, reply, links, advance: (days: number) => { now += days * 86_400_000; } };
+  const notices: string[] = [];
+  const make = () => new LearnService(storage, () => settings, runner, { get: id => links.get(id), set: async (id, l) => { links.set(id, l); } }, () => 4, () => now, m => notices.push(m));
+  const learn = make();
+  // restart: a fresh service over the same files, as after a reload of Obsidian or the plugin.
+  return { files, modified, learn, calls, reply, replies, links, notices, restart: make, advance: (days: number) => { now += days * 86_400_000; } };
 }
 const settle = () => new Promise(r => setTimeout(r, 0));
 async function mapped() {
@@ -291,6 +295,59 @@ describe('learning service', () => {
     await t.learn.setState(path, 'side', 'taught', '2026-10-02');
     await t.learn.setState(path, 'top', 'gap', '2026-09-20');
     expect((await t.learn.todayList()).lessons.map(l => l.objective)).toEqual(['base', 'top']);
+  });
+
+  it('keeps a finished mapping for review across a restart, and says so', async () => {
+    const t = setup();
+    t.reply(objectivesSchema, () => ({ course: 'DS346', objectives: [{ id: 'a', title: 'A', label: 'A', notes: [], needs: [], group: 'G', state: 'new', evidence: '' }] }));
+    await t.learn.mapCourse('Notes/DS346');
+    expect(t.notices).toEqual(['DS346: 1 objectives ready to review in Qard → Learn.']);
+    const later = t.restart();
+    const pending = await later.pending();
+    expect(pending.proposals.map(p => [p.folder, p.course, p.objectives.length])).toEqual([['Notes/DS346', 'DS346', 1]]);
+    await later.acceptCourse('Notes/DS346', ['a']);
+    expect([...t.files.keys()].filter(f => f.includes('Proposals'))).toEqual([]);
+    expect((await later.pending()).proposals).toEqual([]);
+  });
+
+  it('writes lesson steps in parallel as soon as the plan exists, and redoes them when the plan changes', async () => {
+    const t = await mapped();
+    t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));
+    const plan = (title: string) => ({ title, plan: 'P', mermaid: 'graph TD; A-->B', steps: [{ title: `${title} 1`, why: 'w' }, { title: `${title} 2`, why: 'w' }, { title: `${title} 3`, why: 'w' }] });
+    t.reply(probeMapSchema, () => ({ marks: [], findings: 'F', map: plan('First') }));
+    let running = 0, peak = 0;
+    const release: (() => void)[] = [];
+    t.reply(stepSchema, task => new Promise(done => { running++; peak = Math.max(peak, running); release.push(() => { running--; done({ title: /"([^"]+)"/.exec(task.prompt)![1], explain: 'E', connect: 'C', checkFirst: false, check: q('x'), misconceptions: [] }); }); }));
+    const lesson = await t.learn.startLesson({ topic: 'LDA', notes: [], mastery: t.path, objective: 'lda-generative' });
+    await vi.waitFor(() => expect(running).toBe(3));
+    // Writing started before the plan was accepted, three steps at once.
+    expect(t.learn.lessonAt(lesson)!.accepted).toBeUndefined();
+    expect(peak).toBe(3);
+    // Revising the plan while steps are being written: the old steps are dropped and the new plan's are written.
+    t.reply(mapSchema, () => plan('Second'));
+    await t.learn.reviseMap(lesson, 'change it');
+    release.splice(0).forEach(r => r());
+    await vi.waitFor(() => expect(running).toBe(3));
+    release.splice(0).forEach(r => r());
+    await vi.waitFor(() => expect(t.learn.lessonAt(lesson)!.steps.every(Boolean)).toBe(true));
+    expect(t.learn.lessonAt(lesson)!.steps.map(s => s!.title)).toEqual(['Second 1', 'Second 2', 'Second 3']);
+    await t.learn.acceptMap(lesson);
+    expect(t.learn.lessonAt(lesson)!.steps.map(s => s!.title)).toEqual(['Second 1', 'Second 2', 'Second 3']);
+  });
+
+  it('picks up unwritten lesson steps when a lesson is reopened after a restart', async () => {
+    const t = await mapped();
+    t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));
+    t.reply(probeMapSchema, () => ({ marks: [], findings: 'F', map: { title: 'T', plan: 'P', mermaid: '', steps: [{ title: 'One', why: 'w' }, { title: 'Two', why: 'w' }] } }));
+    t.reply(stepSchema, () => new Promise(() => {}));
+    const lesson = await t.learn.startLesson({ topic: 'LDA', notes: [], mastery: t.path, objective: 'lda-generative' });
+    await vi.waitFor(() => expect(t.learn.lessonAt(lesson)!.stepsFor).toBeDefined());
+    await t.learn.flush();
+    t.replies.splice(t.replies.findIndex(r => r.schema === stepSchema), 1);
+    t.reply(stepSchema, task => ({ title: /"([^"]+)"/.exec(task.prompt)![1], explain: 'E', connect: 'C', checkFirst: false, check: q('x'), misconceptions: [] }));
+    const later = t.restart();
+    await later.openLesson(lesson);
+    await vi.waitFor(() => expect(later.lessonAt(lesson)!.steps.map(s => s?.title)).toEqual(['One', 'Two']));
   });
 
   it('suggests at most three lessons a day, misconceptions first', async () => {

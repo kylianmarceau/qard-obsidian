@@ -43,6 +43,8 @@ export interface Lesson {
   mastery?: string; course?: string; objective?: string;
   probe?: { questions: Question[]; answers: Record<string, AnswerState>; submitted?: boolean; marks?: Record<string, QuestionMark>; findings?: string };
   map?: LessonMap; accepted?: boolean;
+  /** The plan the steps were written for. */
+  stepsFor?: string;
   steps: (LessonStep | null)[];
   state: StepState[];
   current: number;

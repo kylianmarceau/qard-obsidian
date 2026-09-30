@@ -57,12 +57,16 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
 export function LearnBrowser({ services, nav, testNav }: { services: QardServices; nav: LearnNav; testNav: TestNav }) {
   const { revision } = useLearn(services);
   const [courses, setCourses] = useState<Mastery[]>(), [lessons, setLessons] = useState<LessonSummary[]>([]);
-  useEffect(() => { let live = true; void Promise.all([services.learn.courses(), services.learn.listLessons()]).then(([c, l]) => { if (live) { setCourses(c); setLessons(l); } }, () => { if (live) setCourses([]); }); return () => { live = false; }; }, [services, revision]);
+  const [pending, setPending] = useState<Awaited<ReturnType<typeof services.learn.pending>>>();
+  useEffect(() => { let live = true; void Promise.all([services.learn.courses(), services.learn.listLessons(), services.learn.pending()]).then(([c, l, p]) => { if (live) { setCourses(c); setLessons(l); setPending(p); } }, () => { if (live) setCourses([]); }); return () => { live = false; }; }, [services, revision]);
   const day = isoDay(Date.now());
   const open = lessons.filter(l => !l.finished), recent = lessons.filter(l => l.finished).slice(0, 5);
   return <>
-    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions"><button onClick={nav.today}>Today</button><button className="qard-primary" onClick={nav.mapCourse}><Plus size={16}/>Map a course</button></div></div>
+    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions"><button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
+    {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}/></div>)}
+    {pending?.proposals.map(p => <button key={p.folder} className="qard-resume" onClick={() => nav.mapCourse(p.folder)}><span className="qard-muted">Ready to review</span><strong>{p.course} · {plural(p.objectives.length, 'objective')}</strong><ChevronRight size={16}/></button>)}
+    {pending?.updates.map(u => <button key={u.mastery} className="qard-resume" onClick={() => nav.course(u.mastery)}><span className="qard-muted">Update ready</span><strong>{u.course}</strong><ChevronRight size={16}/></button>)}
     {open.map(l => <button key={l.path} className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong>{l.title}</strong><ChevronRight size={16}/></button>)}
     <div className="qard-deck-list">{courses?.map(c => {
       const mastered = c.objectives.filter(o => o.state === 'mastered').length, due = c.objectives.filter(o => o.state !== 'new' && o.due && o.due <= day).length;
@@ -71,14 +75,14 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
         <span className="qard-test-status">{due ? `${due} due` : ''}</span><ChevronRight size={17}/>
       </button>;
     })}</div>
-    {courses && !courses.length && <div className="qard-empty"><p>No courses yet.</p><p className="qard-muted">Map a course folder into objectives. Qard keeps one mastery file per course and uses it to choose what to teach, check and test.</p><button onClick={nav.mapCourse}>Map a course</button></div>}
+    {courses && !courses.length && <div className="qard-empty"><p>No courses yet.</p><p className="qard-muted">Map a course folder into objectives. Qard keeps one mastery file per course and uses it to choose what to teach, check and test.</p><button onClick={() => nav.mapCourse()}>Map a course</button></div>}
     {recent.length > 0 && <section className="qard-learn-recent"><div className="qard-label">Recent lessons</div>{recent.map(l => <button key={l.path} className="qard-doc-row qard-row-button" onClick={() => nav.lesson(l.path)}><FileText size={14}/><span>{l.title}</span><span className="qard-muted">{new Date(l.created).toLocaleDateString()}</span></button>)}</section>}
   </>;
 }
 
-export function MapCourse({ services, nav }: { services: QardServices; nav: LearnNav }) {
+export function MapCourse({ services, nav, initialFolder }: { services: QardServices; nav: LearnNav; initialFolder?: string }) {
   const { job } = useLearn(services);
-  const [folder, setFolder] = useState<string>(), [query, setQuery] = useState(''), [request, setRequest] = useState('');
+  const [folder, setFolder] = useState<string | undefined>(initialFolder), [query, setQuery] = useState(''), [request, setRequest] = useState('');
   const [keep, setKeep] = useState<string[]>(), [error, setError] = useState('');
   const folders = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -86,12 +90,12 @@ export function MapCourse({ services, nav }: { services: QardServices; nav: Lear
   }, [services, query]);
   const mapping = folder ? job(folder, 'map-course') : undefined, proposal = folder ? services.learn.proposal(folder) : undefined;
   useEffect(() => { if (proposal && !keep) setKeep(proposal.objectives.map(o => o.id)); }, [proposal, keep]);
-  if (folder && mapping && !mapping.error) return <div className="qard-doc"><Waiting text={`Mapping ${folder.split('/').pop()}…`}/><p className="qard-muted">The writer is reading the course notes. This usually takes a minute or two.</p></div>;
+  if (folder && mapping && !mapping.error) return <div className="qard-doc"><Waiting text={`Mapping ${folder.split('/').pop()}…`}/><p className="qard-muted">The writer is reading the course notes. This usually takes a minute or two. You can leave this screen: it keeps going, and the objectives wait under Learn for you to review.</p></div>;
   if (folder && proposal && keep) return <article className="qard-doc">
     <header><span className="qard-muted">Proposed objectives</span><h1>{proposal.course}</h1><p className="qard-muted">{proposal.objectives.length} objectives from {folder}. Untick any you don't need; you can edit the file later.</p></header>
     <section>{proposal.objectives.map(o => <button key={o.id} className="qard-doc-row qard-row-button" aria-pressed={keep.includes(o.id)} onClick={() => setKeep(keep.includes(o.id) ? keep.filter(x => x !== o.id) : [...keep, o.id])}><Check on={keep.includes(o.id)}/><span>{o.title}</span><span className="qard-muted">{o.notes.slice(0, 2).join(', ')}</span><StateChip state={o.state}/></button>)}</section>
     {error && <p className="qard-error" role="alert">{error}</p>}
-    <div className="qard-doc-footer is-end"><button className="qard-text-button" onClick={() => { services.learn.discardProposal(folder); setKeep(undefined); }}>Start over</button><button className="qard-primary" disabled={!keep.length} onClick={() => void services.learn.acceptCourse(folder, keep).then(nav.course, e => setError((e as Error).message))}>Create mastery file<ArrowRight size={15}/></button></div>
+    <div className="qard-doc-footer is-end"><button className="qard-text-button" onClick={() => { void services.learn.discardProposal(folder); setKeep(undefined); }}>Start over</button><button className="qard-primary" disabled={!keep.length} onClick={() => void services.learn.acceptCourse(folder, keep).then(nav.course, e => setError((e as Error).message))}>Create mastery file<ArrowRight size={15}/></button></div>
   </article>;
   return <div className="qard-new-test">
     <h1>Which folder holds the course?</h1>
@@ -161,7 +165,7 @@ function UpdateCourse({ services, course, done }: { services: QardServices; cour
   useEffect(() => { if (update && !added) { setAdded(update.added.map(o => o.id)); setExtended(update.extended.map(e => e.id)); } }, [update, added]);
   const changed = services.learn.changedNotes(course);
   const toggle = (list: string[], set: (v: string[]) => void, id: string) => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
-  if (running && !running.error) return <div className="qard-doc"><Waiting text={`Reading ${course.course}'s notes…`}/><p className="qard-muted">The writer is looking for new objectives. Existing ones and your progress stay as they are.</p></div>;
+  if (running && !running.error) return <div className="qard-doc"><Waiting text={`Reading ${course.course}'s notes…`}/><p className="qard-muted">The writer is looking for new objectives. Existing ones and your progress stay as they are. You can leave this screen; the update waits here for you to review.</p></div>;
   if (update && added && extended) {
     const nothing = !update.added.length && !update.extended.length && !update.outdated.length;
     return <article className="qard-doc">
@@ -171,7 +175,7 @@ function UpdateCourse({ services, course, done }: { services: QardServices; cour
       {update.extended.length > 0 && <section><h2>More material for existing objectives</h2>{update.extended.map(e => <button key={e.id} className="qard-doc-row qard-row-button" aria-pressed={extended.includes(e.id)} onClick={() => toggle(extended, setExtended, e.id)}><Check on={extended.includes(e.id)}/><span>{e.title}</span><span className="qard-muted">{[...e.notes.map(n => `+ ${n}`), ...e.needs.map(n => `builds on ${n}`), ...(e.group ? [`group: ${e.group}`] : []), ...(e.label ? [`label: ${e.label}`] : [])].join(' · ')}</span></button>)}</section>}
       {update.outdated.length > 0 && <section><h2>Possibly outdated</h2><p className="qard-muted qard-small">Tick to remove. Unticked objectives are kept.</p>{update.outdated.map(o => <button key={o.id} className="qard-doc-row qard-row-button" aria-pressed={remove.includes(o.id)} onClick={() => toggle(remove, setRemove, o.id)}><Check on={remove.includes(o.id)}/><span>{o.title}</span><span className="qard-muted">{o.reason}</span></button>)}</section>}
       {error && <p className="qard-error" role="alert">{error}</p>}
-      <div className="qard-doc-footer is-end"><button className="qard-text-button" onClick={() => { services.learn.discardUpdate(path); setAdded(undefined); done(); }}>Cancel</button>
+      <div className="qard-doc-footer is-end"><button className="qard-text-button" onClick={() => { void services.learn.discardUpdate(path); setAdded(undefined); done(); }}>Cancel</button>
         <button className="qard-primary" onClick={() => void services.learn.acceptUpdate(path, { added, extended, remove }).then(() => { setAdded(undefined); done(); }, e => setError((e as Error).message))}>{nothing ? 'Mark as up to date' : 'Update mastery file'}<ArrowRight size={15}/></button></div>
     </article>;
   }

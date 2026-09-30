@@ -28,7 +28,7 @@ beforeEach(() => {
     read: async p => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); }, exists: p => files.has(p),
     process: async (p, fn) => { files.set(p, fn(files.get(p)!)); },
     files: (folder, ext) => [...files.keys()].filter(p => p.startsWith(folder + '/') && p.endsWith('.' + ext)),
-    masteryFiles: () => [MASTERY], modified: () => undefined, resolve: () => undefined
+    remove: async p => { files.delete(p); }, masteryFiles: () => [MASTERY], modified: () => undefined, resolve: () => undefined
   };
   const run = vi.fn(async (task: AgentTask): Promise<unknown> => task.schema === marksSchema ? { questions: [{ id: 'c2', score: 2, awarded: [true, false], annotations: [{ quote: 'grows', kind: 'correct', note: 'Yes.' }], mistake: 'incomplete', feedback: 'Half there.' }] } : new Promise(() => {}));
   const learn = new LearnService(storage, () => readSettings({}), () => ({ name: 'x', run }), { get: () => undefined, set: async () => {} }, () => 3);

@@ -11,7 +11,7 @@ import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay,
 export function LessonView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {
   useLearn(services);
   const [error, setError] = useState('');
-  useEffect(() => { services.learn.loadLesson(path).catch(e => setError((e as Error).message)); }, [services, path]);
+  useEffect(() => { services.learn.openLesson(path).catch(e => setError((e as Error).message)); }, [services, path]);
   const lesson = services.learn.lessonAt(path);
   if (error) return <p className="qard-error" role="alert">{error}</p>;
   if (!lesson) return <Waiting text="Loading…"/>;

@@ -530,3 +530,6 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-map-crumb { font-size: 13px; font-weight: 650; color: var(--qard-text); white-space: nowrap; }
 .qard-map-divider { width: 1px; height: 18px; background: var(--qard-border); margin: 0 2px; }
 .qard-map-link small { margin-left: auto; padding-left: 8px; white-space: nowrap; }
+
+.qard-resume.is-static { display: flex; align-items: center; margin-bottom: 8px; padding: 10px 16px; border-radius: 10px; background: var(--qard-soft); }
+.qard-resume.is-static .qard-waiting { margin: 0; font-size: 13.5px; }

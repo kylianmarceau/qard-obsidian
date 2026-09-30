@@ -28,6 +28,7 @@ export class VaultLearnStorage implements LearnStorage {
     return found.sort();
   }
   masteryFiles() { return this.app.vault.getMarkdownFiles().filter(f => this.app.metadataCache.getFileCache(f)?.frontmatter?.['qard-mastery'] !== undefined).map(f => f.path); }
+  async remove(path: string) { const f = this.file(path); if (f) await this.app.fileManager.trashFile(f); }
   modified(path: string) { return this.file(path)?.stat.mtime; }
   resolve(link: string, from: string) {
     if (this.file(link)) return link;
