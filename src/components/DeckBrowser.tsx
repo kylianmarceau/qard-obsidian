@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import { ChevronRight, ClipboardCheck, Layers, Plus, Search } from 'lucide-react';
 import type { Deck } from '../cards/card-types';
 import { LibraryTabs } from './tests/TestsBrowser';
-export function DeckBrowser({ decks, search, onSearch, open, create, study, loading, tests, newTest, resume }: { decks: Deck[]; search: string; onSearch: (v: string) => void; open: (deck: string) => void; create: () => void; study: () => void; loading: boolean; tests?: () => void; newTest?: () => void; resume?: ReactNode }) {
+export function DeckBrowser({ decks, search, onSearch, open, create, study, loading, tests, newTest, resume, learn }: { decks: Deck[]; search: string; onSearch: (v: string) => void; open: (deck: string) => void; create: () => void; study: () => void; loading: boolean; tests?: () => void; newTest?: () => void; resume?: ReactNode; learn?: () => void }) {
   return <>
-    <div className="qard-heading">{tests ? <LibraryTabs active="decks" decks={() => {}} tests={tests}/> : <h1>Decks</h1>}<div className="qard-actions"><button onClick={create}><Plus size={16}/>New card</button>{newTest && <button onClick={newTest}><ClipboardCheck size={16}/>Practice test</button>}<button className="qard-primary" onClick={study}>Study</button></div></div>
+    <div className="qard-heading">{tests ? <LibraryTabs active="decks" decks={() => {}} tests={tests} learn={learn}/> : <h1>Decks</h1>}<div className="qard-actions"><button onClick={create}><Plus size={16}/>New card</button>{newTest && <button onClick={newTest}><ClipboardCheck size={16}/>Practice test</button>}<button className="qard-primary" onClick={study}>Study</button></div></div>
     {resume}
     <label className="qard-search"><Search size={17}/><input type="search" aria-label="Search decks, topics, questions, or tags" placeholder="Search…" value={search} onChange={e => onSearch(e.target.value)}/></label>
     {loading && <p className="qard-muted" role="status">Loading cards…</p>}

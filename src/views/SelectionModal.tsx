@@ -11,7 +11,7 @@ export class SelectionModal extends Modal {
   onOpen() {
     this.setTitle('Create card from selection'); this.modalEl.addClass('qard-selection-modal');
     const host = this.contentEl.createDiv({ cls: 'qard-root' });
-    const services: QardServices = { app: this.app, owner: this.plugin, host, index: this.plugin.index, writer: this.plugin.writer, reviews: this.plugin.reviews, tests: this.plugin.tests, setFocus: () => {}, isActive: () => false, openSource: card => this.plugin.openSource(card) };
+    const services: QardServices = { app: this.app, owner: this.plugin, host, index: this.plugin.index, writer: this.plugin.writer, reviews: this.plugin.reviews, tests: this.plugin.tests, learn: this.plugin.learn, setFocus: () => {}, isActive: () => false, openSource: card => this.plugin.openSource(card) };
     this.root = createRoot(host);
     this.root.render(<div className="qard-app"><CardEditor compact services={services} initial={this.draft} cancel={() => this.close()} saved={() => this.close()}/></div>);
   }
