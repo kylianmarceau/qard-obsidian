@@ -63,7 +63,9 @@ export class QardSettingsTab extends PluginSettingTab {
     const a = this.qard.reviews.getSnapshot().settings.agents;
     const cli = (provider: 'claude-code' | 'codex', label: string, key: 'claudePath' | 'codexPath'): SettingRow => ({ name: label, desc: 'Checking…', render: row => {
       row.addText(x => { x.setValue(a[key]).setPlaceholder('Found automatically'); x.inputEl.addEventListener('change', () => void this.patch(s => ({ ...s, agents: { ...s.agents, [key]: x.getValue().trim() } }), true)); });
-      void detectAgent(this.qard.reviews.getSnapshot().settings, provider).then(found => row.setDesc(found ? `Found at ${found}. Uses your existing login and can only read your vault.` : 'Not found. Install it, or enter its path. Needs the desktop app.'));
+      // Obsidian's Setting has a then() method, so returning it from a promise callback makes the promise adopt it
+      // forever and freezes the app. Keep this callback returning nothing.
+      void detectAgent(this.qard.reviews.getSnapshot().settings, provider).then(found => { row.setDesc(found ? `Found at ${found}. Uses your existing login and can only read your vault.` : 'Not found. Install it, or enter its path. Needs the desktop app.'); });
     } });
     return [
       cli('claude-code', 'Claude Code', 'claudePath'), cli('codex', 'Codex', 'codexPath'),
