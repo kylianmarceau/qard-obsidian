@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { QardServices } from '../../views/services';
 import type { Question, TestFolder } from '../../tests/test-types';
 import type { Job, JobKind } from '../../tests/test-service';
@@ -24,8 +24,9 @@ export function cardTarget(services: QardServices, q: Question, testTitle: strin
   return cards.length ? { deck: cards[0]!.deck, topic, sourceFile: q.source!.path } : { deck: testTitle, topic: sectionTitle, sourceFile: undefined };
 }
 
-export function Waiting({ text }: { text: string }) {
-  return <p className="qard-waiting" role="status"><span className="qard-dot" aria-hidden="true"/>{text}</p>;
+/** children: an optional quiet tag after the text, e.g. who is working on it. */
+export function Waiting({ text, children }: { text: string; children?: ReactNode }) {
+  return <p className="qard-waiting" role="status"><span className="qard-dot" aria-hidden="true"/>{text}{children}</p>;
 }
 export function JobError({ job, retry, dismiss }: { job?: { error?: string }; retry?: () => void; dismiss?: () => void }) {
   if (!job?.error) return null;

@@ -36,3 +36,17 @@ it('shows totals, a daily chart and breakdowns, and can clear the history', asyn
   expect(resetUsage).toHaveBeenCalled();
   expect(compact(999)).toBe('999'); expect(compact(1234)).toBe('1.2k'); expect(compact(3_400_000)).toBe('3.4M');
 });
+
+import { AgentLabel } from '../src/components/jobs/AgentLabel';
+import { readSettings } from '../src/settings/settings';
+it('labels who is working, and can be turned off', async () => {
+  let snapshot = { settings: readSettings({ agents: { roles: { tutor: { provider: 'claude-code', model: '' }, writer: { provider: 'openrouter', model: 'anthropic/claude-opus-5.5' }, marker: { provider: 'codex', model: '' } } } }) };
+  const listeners = new Set<() => void>();
+  const services = { reviews: { subscribe: (l: () => void) => { listeners.add(l); return () => listeners.delete(l); }, getSnapshot: () => snapshot } } as unknown as QardServices;
+  await act(async () => { root.render(<><AgentLabel services={services} role="tutor"/><AgentLabel services={services} role="writer"/><AgentLabel services={services} role="marker"/></>); });
+  expect([...host.querySelectorAll('.qard-agent')].map(e => e.textContent)).toEqual(['Tutor · Claude Code · haiku', 'Writer · OpenRouter · anthropic/claude-opus-5.5', 'Marker · Codex · default model']);
+  expect(readSettings({}).showAgent).toBe(true);
+  snapshot = { settings: { ...snapshot.settings, showAgent: false } };
+  await act(async () => { listeners.forEach(l => l()); });
+  expect(host.querySelectorAll('.qard-agent')).toHaveLength(0);
+});

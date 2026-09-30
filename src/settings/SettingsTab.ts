@@ -97,6 +97,7 @@ export class QardSettingsTab extends PluginSettingTab {
       });
     } });
     return [
+      { name: 'Show which agent is working', desc: 'A small label such as "Tutor · Claude Code · haiku" next to anything in progress.', render: row => { row.addToggle(t => t.setValue(this.qard.reviews.getSnapshot().settings.showAgent).onChange(v => void this.patch(s => ({ ...s, showAgent: v })))); } },
       { name: 'Token usage', desc: 'See how many tokens Qard has used, by feature and by connection and model.', render: row => { row.addButton(b => b.setButtonText('View usage').onClick(() => { (this.app as unknown as { setting?: { close?: () => void } }).setting?.close?.(); void this.qard.show('usage'); })); } },
       role('tutor', 'Tutor', 'Replies live in lessons and marks checks. Choose a fast model. API keys respond fastest.'),
       role('writer', 'Writer', 'Maps courses and writes lessons, checks and tests. Choose your best model.'),

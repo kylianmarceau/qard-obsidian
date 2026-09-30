@@ -5,6 +5,7 @@ import type { Lesson } from '../../learn/learn-types';
 import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
 import { Markdown } from '../Markdown';
+import { AgentLabel } from '../jobs/AgentLabel';
 import { JobError, Waiting } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
@@ -52,8 +53,8 @@ export function LessonView({ services, nav, path }: { services: QardServices; na
 function LessonProbe({ services, path, lesson }: { services: QardServices; path: string; lesson: Lesson }) {
   const { job } = useLearn(services);
   const probing = job(path, 'probe'), mapping = job(path, 'map'), probe = lesson.probe;
-  if (!probe) return <div className="qard-doc">{probing?.error ? <JobError job={probing} retry={() => void services.learn.probe(path)}/> : <><Waiting text="Finding where to start…"/><p className="qard-muted">The tutor is checking your notes and what you already know about {lesson.topic}.</p><TutorHint services={services}/></>}</div>;
-  if (probe.submitted) return <div className="qard-doc">{mapping?.error ? <JobError job={mapping} retry={() => void services.learn.submitProbe(path)}/> : <><Waiting text="Planning the lesson…"/><p className="qard-muted">Reading your answers to decide where to start.</p><TutorHint services={services}/></>}</div>;
+  if (!probe) return <div className="qard-doc">{probing?.error ? <JobError job={probing} retry={() => void services.learn.probe(path)}/> : <><Waiting text="Finding where to start…"><AgentLabel services={services} role="tutor"/></Waiting><p className="qard-muted">The tutor is checking your notes and what you already know about {lesson.topic}.</p><TutorHint services={services}/></>}</div>;
+  if (probe.submitted) return <div className="qard-doc">{mapping?.error ? <JobError job={mapping} retry={() => void services.learn.submitProbe(path)}/> : <><Waiting text="Planning the lesson…"><AgentLabel services={services} role="tutor"/></Waiting><p className="qard-muted">Reading your answers to decide where to start.</p><TutorHint services={services}/></>}</div>;
   return <div className="qard-test">
     <div className="qard-test-heading"><div><span className="qard-muted">Lesson · {lesson.course ?? 'Before we start'}</span><h1>{lesson.topic}</h1></div></div>
     <p className="qard-muted">A few quick questions first, so the lesson starts from what you already know. Say "I don't know" rather than guessing.</p>
@@ -104,7 +105,7 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
         <AnswerInput services={services} question={step.check} answer={st?.answer} locked={running(tutor)} path={where} label={step.checkFirst ? 'Before the explanation' : 'Check'} onChange={patch => services.learn.answerStep(path, patch)}/>
         <JobError job={tutor} retry={() => void services.learn.checkStep(path)}/>
         {running(tutor) && <TutorHint services={services}/>}
-        <div className="qard-panel-actions">{running(tutor) ? <Waiting text="Checking…"/> : <button className="qard-primary" disabled={!answered(step.check, st?.answer)} onClick={() => void services.learn.checkStep(path)}>Check</button>}</div>
+        <div className="qard-panel-actions">{running(tutor) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button className="qard-primary" disabled={!answered(step.check, st?.answer)} onClick={() => void services.learn.checkStep(path)}>Check</button>}</div>
       </> : <section className="qard-lesson-feedback">
         {st.reply && <div className="qard-tutor"><Markdown text={st.reply} path={where} services={services}/></div>}
         <MarkedAnswer services={services} question={step.check} answer={st.answer} mark={st.mark} path={where}/>
@@ -113,7 +114,7 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
           : <form className="qard-panel" onSubmit={e => { e.preventDefault(); if (retry.trim()) void services.learn.retryStep(path, retry); }}>
             <textarea aria-label="Second try" rows={2} placeholder="Try again with what you've just seen…" value={retry} disabled={running(retrying)} onChange={e => setRetry(e.target.value)}/>
             <JobError job={retrying} dismiss={() => services.learn.dismiss(path, 'tutor', `${index}-retry`)}/>
-            <div className="qard-panel-actions">{running(retrying) ? <Waiting text="Checking…"/> : <button type="submit" disabled={!retry.trim()}>Try again</button>}</div>
+            <div className="qard-panel-actions">{running(retrying) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button type="submit" disabled={!retry.trim()}>Try again</button>}</div>
           </form>)}
       </section>}
       <section className="qard-ask">
@@ -143,7 +144,7 @@ function LessonClose({ services, nav, path, lesson }: { services: QardServices; 
     return () => { live = false; };
   }, [services, lesson.mastery, lesson.objective, revision]);
   const closing = job(path, 'close'), close = lesson.close, where = lesson.notes[0] ?? path;
-  if (!close) return <div className="qard-doc">{closing?.error ? <JobError job={closing} retry={() => void services.learn.close(path)}/> : <><Waiting text="Wrapping up…"/><p className="qard-muted">Saving the lesson, suggesting cards and writing your next check.</p></>}</div>;
+  if (!close) return <div className="qard-doc">{closing?.error ? <JobError job={closing} retry={() => void services.learn.close(path)}/> : <><Waiting text="Wrapping up…"><AgentLabel services={services} role="writer"/></Waiting><p className="qard-muted">Saving the lesson, suggesting cards and writing your next check.</p></>}</div>;
   // Cards go into the deck of the lesson's first note when it has cards, else a deck named after the course.
   const noteCards = services.index.getSnapshot().cards.filter(c => lesson.notes.includes(c.sourceFile));
   const target = noteCards.length ? { deck: noteCards[0]!.deck, topic: lesson.map?.title ?? lesson.topic, sourceFile: noteCards[0]!.sourceFile } : { deck: lesson.course ?? lesson.topic, topic: lesson.map?.title ?? lesson.topic, sourceFile: undefined };

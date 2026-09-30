@@ -5,6 +5,7 @@ import { questions, sectionOf } from '../../tests/test-types';
 import { placeAnnotations } from '../../tests/annotate';
 import { ignoresStudyKey } from '../../review/keyboard';
 import { Markdown } from '../Markdown';
+import { AgentLabel } from '../jobs/AgentLabel';
 import { Check, JobError, Waiting, cardTarget, scoreTone, useTestFolder, type TestNav } from './common';
 
 const KIND: Record<AnnotationKind, string> = { correct: 'Correct', wrong: 'Incorrect', vague: 'Too vague', missing: 'Missing', insight: 'Good insight' };
@@ -103,7 +104,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
       {review?.retry ? <><p className="qard-muted">Your second attempt: {review.retry.text}</p><div className="qard-feedback"><Markdown text={`${review.retry.feedback} (${review.retry.score}/${q.marks} together.)`} path={path} services={services}/></div></>
         : <form onSubmit={e => { e.preventDefault(); if (retryText.trim()) void services.tests.retry(folder, q.id, retryText); }}>
           <textarea aria-label="Second attempt" rows={3} autoFocus placeholder="Try the points you missed again…" value={retryText} disabled={running(retryJob)} onChange={e => setRetryText(e.target.value)}/>
-          <div className="qard-panel-actions">{running(retryJob) ? <Waiting text="Checking…"/> : <button type="submit" className="qard-primary" disabled={!retryText.trim()}>Check</button>}</div>
+          <div className="qard-panel-actions">{running(retryJob) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button type="submit" className="qard-primary" disabled={!retryText.trim()}>Check</button>}</div>
         </form>}
       <JobError job={retryJob} dismiss={() => services.tests.dismiss(folder, 'retry', q.id)}/>
     </section>}
@@ -128,7 +129,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
         <div className="qard-panel-actions"><button onClick={() => setOverride(undefined)}>Cancel</button><button className="qard-primary" onClick={() => { void services.tests.override(folder, q.id, override); setOverride(undefined); setPanel(null); }}>Save mark</button></div></>
         : <form onSubmit={e => { e.preventDefault(); if (disputeText.trim()) { void services.tests.dispute(folder, q.id, disputeText); setDisputeText(''); } }}>
           <textarea aria-label="Why should this get more marks?" rows={2} placeholder="Why should this get more marks?" value={disputeText} disabled={running(disputeJob)} onChange={e => setDisputeText(e.target.value)}/>
-          <div className="qard-panel-actions"><button type="button" onClick={() => setOverride([...mark.awarded])}>Set mark myself</button>{running(disputeJob) ? <Waiting text="Re-marking…"/> : <button type="submit" className="qard-primary" disabled={!disputeText.trim()}>Send</button>}</div>
+          <div className="qard-panel-actions"><button type="button" onClick={() => setOverride([...mark.awarded])}>Set mark myself</button>{running(disputeJob) ? <Waiting text="Re-marking…"><AgentLabel services={services} role="marker"/></Waiting> : <button type="submit" className="qard-primary" disabled={!disputeText.trim()}>Send</button>}</div>
         </form>}
       <JobError job={disputeJob} dismiss={() => services.tests.dismiss(folder, 'dispute', q.id)}/>
     </section>}

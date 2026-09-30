@@ -2,11 +2,13 @@ import type { AgentRole } from '../agents/runner';
 import type { RoleSetting } from '../settings/settings';
 
 /** Which role each kind of job runs as, so timings are kept per connection and model. */
-const ROLE: Record<string, AgentRole> = {
+export const ROLE: Record<string, AgentRole> = {
   plan: 'writer', generate: 'writer', wrapup: 'writer', mark: 'marker', dispute: 'marker', retry: 'tutor', ask: 'tutor',
   'map-course': 'writer', 'check-write': 'writer', steps: 'writer', close: 'writer', 'check-mark': 'tutor', probe: 'tutor', map: 'tutor', revise: 'tutor', tutor: 'tutor'
 };
 
+/** The role a kind of job runs as. */
+export const roleOf = (kind: string): AgentRole => ROLE[kind] ?? 'writer';
 /** Learns how long each kind of job takes (median of recent runs) so waiting screens can say how long is left. */
 export class JobClock {
   constructor(private timings: () => Record<string, number[]>, private save: (key: string, ms: number) => Promise<void>, private roles: () => Record<AgentRole, RoleSetting>) {}

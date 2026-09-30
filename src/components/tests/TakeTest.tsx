@@ -6,6 +6,7 @@ import { scoreOf } from '../../tests/test-types';
 import { Markdown } from '../Markdown';
 import { JobError, Waiting, useTestFolder, type TestNav } from './common';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
+import { AgentLabel } from '../jobs/AgentLabel';
 
 const CONFIDENCE: { id: Confidence; label: string }[] = [{ id: 'sure', label: 'Sure' }, { id: 'unsure', label: 'Unsure' }, { id: 'guess', label: 'Guess' }];
 
@@ -36,7 +37,7 @@ export function TakeTest({ services, nav, folder }: { services: QardServices; na
   return <div className="qard-test" ref={top}>
     <div className="qard-test-steps" aria-label="Sections">{test.sections.map((s, i) => { const st = attempt?.sections[s.id]?.status ?? 'open'; return <button key={s.id} className={i === index ? 'is-current' : st === 'marked' && marking === 'section' ? 'is-done' : ''} onClick={() => setIndex(i)} aria-current={i === index ? 'step' : undefined}>{s.title}{marking === 'section' && st === 'marked' ? ' ✓' : st === 'marking' ? ' · marking' : ''}</button>; })}</div>
     {failed ? <div className="qard-toast is-error" role="alert"><span>Couldn't mark {failed.title}: {attempt?.sections[failed.id]?.error}</span><button className="qard-text-button" onClick={() => void services.tests.mark(folder, [failed.id])}>Try again</button></div>
-      : busy ? <div className="qard-toast" role="status"><span className="qard-dot" aria-hidden="true"/>Marking {busy.title}…</div>
+      : busy ? <div className="qard-toast" role="status"><span className="qard-dot" aria-hidden="true"/>Marking {busy.title}…<AgentLabel services={services} role="marker"/></div>
       : marking === 'section' && done && doneScore ? <div className="qard-toast" role="status"><span className="qard-dot is-done" aria-hidden="true"/>{done.title} marked · {doneScore.score} / {doneScore.marks}<button className="qard-text-button" onClick={() => nav.review(folder, done.questions[0]?.id)}>Review</button></div> : null}
     <div className="qard-test-heading"><h1>{section.title}</h1><span className="qard-muted">{section.questions.length} {section.questions.length === 1 ? 'question' : 'questions'} · {section.questions.reduce((n, q) => n + q.marks, 0)} marks</span></div>
     {section.questions.map((q, i) => <QuestionBlock key={q.id} services={services} folder={folder} question={q} number={test.sections.slice(0, index).reduce((n, s) => n + s.questions.length, 0) + i + 1} locked={submitted}/>)}

@@ -11,6 +11,7 @@ import { LibraryTabs } from '../tests/TestsBrowser';
 import type { TestNav } from '../tests/common';
 import { StateChip, relativeDay, useLearn, type LearnNav } from './common';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
+import { AgentLabel } from '../jobs/AgentLabel';
 
 /** Loads Today and reloads it whenever the learn service changes. */
 function useToday(services: QardServices) {
@@ -67,7 +68,7 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
   return <>
     <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
-    {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}/></div>)}
+    {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}><AgentLabel services={services} role="writer"/></Waiting></div>)}
     {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
       <button className="qard-text-button" onClick={() => void (f.kind === 'map' ? services.learn.mapCourse(f.target, f.request) : services.learn.updateCourse(f.target, f.request))}>Try again</button>
       <button className="qard-text-button" onClick={() => void services.learn.dismissFailure(f.kind, f.target)}>Dismiss</button></div>)}

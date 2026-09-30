@@ -9,11 +9,13 @@ export interface QardSettings {
   defaultMode: StudyMode; defaultOrder: CardOrder; keyboardHints: boolean;
   autoFocus: boolean; audioEnabled: boolean; cardFolder: string; scheduling: boolean;
   tests: TestSettings; agents: AgentSettings; learn: LearnSettings;
+  /** Show which agent (role, connection, model) is working, next to anything in progress. */
+  showAgent: boolean;
 }
 export const DEFAULT_TEST_SETTINGS: TestSettings = { planFirst: true, marking: 'section', questions: 10, useProfile: true, folder: 'Qard/Tests' };
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = { claudePath: '', codexPath: '', roles: { tutor: { provider: 'claude-code', model: 'haiku' }, writer: { provider: 'claude-code', model: '' }, marker: { provider: 'claude-code', model: '' } } };
 export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard' };
-export const DEFAULT_SETTINGS: QardSettings = { defaultMode: 'all', defaultOrder: 'note', keyboardHints: true, autoFocus: false, audioEnabled: false, cardFolder: 'Qard', scheduling: true, tests: DEFAULT_TEST_SETTINGS, agents: DEFAULT_AGENT_SETTINGS, learn: DEFAULT_LEARN_SETTINGS };
+export const DEFAULT_SETTINGS: QardSettings = { defaultMode: 'all', defaultOrder: 'note', keyboardHints: true, autoFocus: false, audioEnabled: false, cardFolder: 'Qard', scheduling: true, tests: DEFAULT_TEST_SETTINGS, agents: DEFAULT_AGENT_SETTINGS, learn: DEFAULT_LEARN_SETTINGS, showAgent: true };
 const PROVIDERS: AgentProvider[] = ['claude-code', 'codex', 'anthropic', 'openrouter'];
 const text = (value: unknown, fallback: string) => typeof value === 'string' ? value : fallback;
 function readTestSettings(raw: unknown): TestSettings {
@@ -47,5 +49,5 @@ function readLearnSettings(raw: unknown): LearnSettings {
 }
 export function readSettings(raw: unknown): QardSettings {
   const s = raw && typeof raw === 'object' ? raw as Partial<QardSettings> : {};
-  return { defaultMode: ['all','due','new','difficult'].includes(s.defaultMode || '') ? s.defaultMode! : 'all', defaultOrder: s.defaultOrder === 'shuffle' ? 'shuffle' : 'note', keyboardHints: s.keyboardHints !== false, autoFocus: s.autoFocus === true, audioEnabled: s.audioEnabled === true, cardFolder: typeof s.cardFolder === 'string' ? s.cardFolder : 'Qard', scheduling: s.scheduling !== false, tests: readTestSettings(s.tests), agents: readAgentSettings(s.agents, s.tests), learn: readLearnSettings(s.learn) };
+  return { defaultMode: ['all','due','new','difficult'].includes(s.defaultMode || '') ? s.defaultMode! : 'all', defaultOrder: s.defaultOrder === 'shuffle' ? 'shuffle' : 'note', keyboardHints: s.keyboardHints !== false, autoFocus: s.autoFocus === true, audioEnabled: s.audioEnabled === true, cardFolder: typeof s.cardFolder === 'string' ? s.cardFolder : 'Qard', scheduling: s.scheduling !== false, tests: readTestSettings(s.tests), agents: readAgentSettings(s.agents, s.tests), learn: readLearnSettings(s.learn), showAgent: s.showAgent !== false };
 }

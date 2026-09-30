@@ -593,3 +593,7 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-usage-table td { text-align: right; padding: 8px; border-bottom: 1px solid var(--qard-border); }
 .qard-usage-table td:first-child, .qard-usage-table th:first-child { text-align: left; }
 .qard-usage-table td:first-child small { display: block; font-size: 11.5px; }
+
+/* Who is working: a quiet tag after progress text */
+.qard-agent { display: inline-block; margin-left: 10px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.6; color: var(--qard-muted); background: var(--qard-soft); border: 1px solid var(--qard-border); white-space: nowrap; vertical-align: middle; }
+.qard-jobs-item .qard-agent { margin: 3px 0 0; align-self: flex-start; }

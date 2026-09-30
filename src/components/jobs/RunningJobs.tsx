@@ -2,7 +2,8 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { QardServices } from '../../views/services';
 import type { TestNav } from '../tests/common';
 import type { LearnNav } from '../learn/common';
-import { timeLeft } from '../../jobs/job-clock';
+import { roleOf, timeLeft } from '../../jobs/job-clock';
+import { AgentLabel } from './AgentLabel';
 
 export interface RunningJob { key: string; kind: string; label: string; detail: string; startedAt?: number; open: () => void }
 const TEST_LABELS: Record<string, string> = { plan: 'Planning test', generate: 'Writing test', mark: 'Marking test', wrapup: 'Wrapping up test' };
@@ -55,7 +56,7 @@ export function RunningJobs({ services, nav, learnNav }: { services: QardService
     {open && <div className="qard-popover qard-jobs-list" role="list">{jobs.map(j => {
       const left = timeLeft(services.jobs?.estimate(j.kind), j.startedAt, now);
       return <button key={j.key} role="listitem" className="qard-popover-item qard-jobs-item" onClick={() => { setOpen(false); j.open(); }}>
-        <span><strong>{j.label}</strong><small className="qard-muted">{j.detail}</small></span>
+        <span><strong>{j.label}</strong><small className="qard-muted">{j.detail}</small><AgentLabel services={services} role={roleOf(j.kind)}/></span>
         <small className="qard-muted">{j.startedAt ? clock(now - j.startedAt) : ''}{left ? ` · ${left}` : ''}</small>
       </button>;
     })}<p className="qard-muted qard-small qard-jobs-note">These keep going if you leave. Qard lets you know when each is done.</p></div>}

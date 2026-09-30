@@ -2,6 +2,7 @@ import { ArrowRight } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import { questions, scoreOf } from '../../tests/test-types';
 import { Markdown } from '../Markdown';
+import { AgentLabel } from '../jobs/AgentLabel';
 import { JobError, Waiting, scoreTone, useTestFolder, type TestNav } from './common';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
@@ -34,7 +35,7 @@ export function TestResults({ services, nav, folder }: { services: QardServices;
       {wrapup ? wrapup.fixes.length ? wrapup.fixes.map(f => { const q = all.find(x => x.id === f.questionId); return <button key={f.questionId + f.title} className="qard-fix" onClick={() => nav.review(folder, f.questionId)}>
         <span className="qard-muted">Q{all.indexOf(q!) + 1}</span><span><strong>{f.title}</strong><Markdown text={f.body} path={q?.source?.path || folder} services={services}/></span>{sure.has(f.questionId) ? <span className="qard-sure">You were sure</span> : <span/>}
       </button>; }) : <p className="qard-muted">Nothing major. Well done.</p>
-        : summary?.error ? <JobError job={summary} retry={() => void services.tests.wrapup(folder)}/> : <Waiting text="Writing your summary…"/>}
+        : summary?.error ? <JobError job={summary} retry={() => void services.tests.wrapup(folder)}/> : <Waiting text="Writing your summary…"><AgentLabel services={services} role="writer"/></Waiting>}
     </section>
     {wrapup && <section className="qard-results-links">
       {wrapup.cards.length > 0 && <button className="qard-link" onClick={() => nav.cards(folder)}>{suggestions ? `${suggestions} suggested ${suggestions === 1 ? 'card' : 'cards'}` : 'Suggested cards'} →</button>}
