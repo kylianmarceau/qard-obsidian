@@ -1,6 +1,6 @@
 import { requestUrl } from 'obsidian';
 import { PREAMBLE } from '../tests/test-prompts';
-import { SCHEMA_INSTRUCTION, extractJson, type AgentRunner, type AgentTask } from './runner';
+import { CANCELLED, REQUEST_TIMEOUT, SCHEMA_INSTRUCTION, deadline, extractJson, type AgentRunner, type AgentTask } from './runner';
 import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
 import { addUsage, emptyUsage, fromOpenRouter } from './usage';
 
@@ -43,7 +43,7 @@ export class OpenRouterRunner implements AgentRunner {
     const report = () => { if (usage.input || usage.output) task.onUsage?.(usage); };
     try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      if (task.signal?.aborted) throw new Error('Cancelled.');
+      if (task.signal?.aborted) throw new Error(CANCELLED);
       const body = {
         model: this.model, messages, max_tokens: 16000,
         ...(tools ? { tools: TOOLS } : {}),
@@ -52,7 +52,7 @@ export class OpenRouterRunner implements AgentRunner {
         // Ask OpenRouter to include token counts and cost in each response.
         usage: { include: true }
       };
-      const response = await this.http(`${BASE}/chat/completions`, { method: 'POST', headers: headers(key), body: JSON.stringify(body) });
+      const response = await deadline(this.http(`${BASE}/chat/completions`, { method: 'POST', headers: headers(key), body: JSON.stringify(body) }), task.signal, REQUEST_TIMEOUT, 'OpenRouter');
       // Some providers reject response_format next to tools; the prompt still carries the schema.
       if (response.status === 400 && structured) { structured = false; turn--; continue; }
       if (response.status !== 200) throw failure(response.status, response.json);

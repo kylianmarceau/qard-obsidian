@@ -20,7 +20,8 @@ export function PlanView({ services, nav, folder }: { services: QardServices; na
     const forTest = waitingTest || !!entry?.test;
     return <WhileYouWait services={services} title={forTest ? 'Writing your test…' : 'Planning your test…'} job={forTest ? writing : planning} ready={forTest ? !!entry?.test : !!plan}
       readyLabel={forTest ? 'Your test is ready' : 'Your test plan is ready'} onEngage={hold.engage} onContinue={() => { hold.release(); if (entry?.test) nav.take(folder); }}
-      context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(plan?.sources.map(x => x.path) ?? [])] } }}/>;
+      context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(plan?.sources.map(x => x.path) ?? [])] } }}
+      cancel={() => services.tests.cancel(folder, forTest ? 'generate' : 'plan')}/>;
   }
   if (!plan) return <div className="qard-doc"><JobError job={planning} dismiss={() => services.tests.dismiss(folder, 'plan')}/></div>;
   const revising = !!planning && !planning.error;

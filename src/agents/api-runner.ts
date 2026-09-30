@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requestUrl } from 'obsidian';
 import { PREAMBLE } from '../tests/test-prompts';
-import { extractJson, type AgentRunner, type AgentTask } from './runner';
+import { REQUEST_TIMEOUT, deadline, extractJson, type AgentRunner, type AgentTask } from './runner';
 import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
 import { addUsage, emptyUsage, fromAnthropic } from './usage';
 
@@ -15,7 +15,8 @@ export async function obsidianFetch(input: string | URL | Request, init?: Reques
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const headers: Record<string, string> = {};
   new Headers(init?.headers).forEach((value, key) => { if (key !== 'content-length') headers[key] = value; });
-  const response = await requestUrl({ url, method: init?.method ?? 'GET', headers, body: typeof init?.body === 'string' ? init.body : undefined, throw: false });
+  // The SDK aborts through the signal on its own timeout or a cancel; requestUrl ignores signals, so stop waiting instead.
+  const response = await deadline(requestUrl({ url, method: init?.method ?? 'GET', headers, body: typeof init?.body === 'string' ? init.body : undefined, throw: false }), init?.signal ?? undefined, REQUEST_TIMEOUT + 30_000, 'The Anthropic API');
   return new Response(response.arrayBuffer, { status: response.status, headers: response.headers });
 }
 
@@ -26,7 +27,7 @@ export class AnthropicRunner implements AgentRunner {
   async run(task: AgentTask): Promise<unknown> {
     const apiKey = this.apiKey();
     if (!apiKey) throw new Error('Add an Anthropic API key in Settings → Qard.');
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, fetch: obsidianFetch });
+    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, fetch: obsidianFetch, timeout: REQUEST_TIMEOUT, maxRetries: 1 });
     const model = this.model || DEFAULT_API_MODEL;
     // Server-side fallback reroutes a declined request instead of failing it (Opus 5.5 / Sonnet 5.5).
     const fallback = model === 'claude-opus-5-5' || model === 'claude-sonnet-5-5';

@@ -1,5 +1,5 @@
 import type { TestSettings } from '../settings/settings';
-import { runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
+import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { askPrompt, disputePrompt, generatePrompt, markPrompt, planPrompt, retryPrompt, revisePrompt, wrapupPrompt, type TestDefaults } from './test-prompts';
 import { askSchema, disputeSchema, marksSchema, planSchema, readAsk, readDispute, readMarks, readPlan, readRetry, readTest, readWrapup, retrySchema, testSchema, wrapupSchema } from './test-schema';
 import { emptyAttempt, markChoice, markUnknown, questions, scoreOf, type AnswerState, type Attempt, type PracticeTest, type TestFolder, type TestPlan, type TestRequest } from './test-types';
@@ -33,6 +33,7 @@ export class TestService {
   private snapshot: ServiceSnapshot = { revision: 0, jobs: {} };
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
+  private controllers = new Map<string, AbortController>();
   private disposed = false;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
   constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning, private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
@@ -46,20 +47,26 @@ export class TestService {
   dismiss(folder: string, kind: JobKind, id = '') { const jobs = { ...this.snapshot.jobs }; delete jobs[key(folder, kind, id)]; this.publish(jobs); }
 
   /** Runs one agent job; errors stay on the job until dismissed or retried. */
-  private async track<T>(folder: string, kind: JobKind, id: string, work: () => Promise<T>): Promise<T | undefined> {
+  /** Stops a running job; it shows as cancelled, with the usual Try again. */
+  cancel(folder: string, kind: JobKind, id = '') { this.controllers.get(key(folder, kind, id))?.abort(); }
+  private async track<T>(folder: string, kind: JobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
     const k = key(folder, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    const startedAt = this.now();
+    const startedAt = this.now(), controller = new AbortController();
+    this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
+    // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
+    const cancelled = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error(CANCELLED)))), running = work(controller.signal);
+    cancelled.catch(() => {}); running.catch(() => {});
     try {
-      const result = await work();
+      const result = await Promise.race([running, cancelled]);
       const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed) this.publish(jobs);
       this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
       return undefined;
-    }
+    } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
   }
   private defaults(profile?: string, objectives?: string): TestDefaults { const s = this.settings(); return { questions: s.questions, marking: s.marking, profile, objectives }; }
   private async course(paths: string[]) { return paths.length ? await this.learning?.objectives(paths).catch(() => undefined) : undefined; }
@@ -133,17 +140,17 @@ export class TestService {
   /** Default path: draft a plan for the user to check. Returns the folder at once; the plan arrives later. */
   async plan(request: TestRequest): Promise<string> {
     const folder = await this.newFolder(request);
-    void this.track(folder, 'plan', '', async () => {
+    void this.track(folder, 'plan', '', async signal => {
       const profile = await this.profile(), course = await this.course(request.sources);
-      const plan = await runValidated(this.runner('writer'), { prompt: planPrompt(request, this.defaults(profile, course?.lines)), schema: planSchema }, readPlan);
+      const plan = await runValidated(this.runner('writer'), { signal, prompt: planPrompt(request, this.defaults(profile, course?.lines)), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
     return folder;
   }
   revise(folder: string, change: string) {
-    return this.track(folder, 'plan', '', async () => {
+    return this.track(folder, 'plan', '', async signal => {
       const current = this.cache.get(folder)?.plan; if (!current) throw new Error('There is no plan to revise.');
-      const plan = await runValidated(this.runner('writer'), { prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
+      const plan = await runValidated(this.runner('writer'), { signal, prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
   }
@@ -157,10 +164,10 @@ export class TestService {
     const folder = 'folder' in input ? input.folder : await this.newFolder(input.request);
     const entry = this.cache.get(folder);
     const request = entry?.request ?? { prompt: '', decks: [], notes: [], sources: [] };
-    void this.track(folder, 'generate', '', async () => {
+    void this.track(folder, 'generate', '', async signal => {
       await this.save(folder, 'request', { ...request, writing: this.now() });
       const course = await this.course([...new Set([...request.sources, ...(entry?.plan?.sources.map(s => s.path) ?? [])])]);
-      const written = await runValidated(this.runner('writer'), { prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
+      const written = await runValidated(this.runner('writer'), { signal, prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
       const test: PracticeTest = { version: 1, createdAt: this.now(), ...written, ...(course ? { mastery: course.mastery } : {}) };
       const attempt = emptyAttempt(test, this.now());
       await this.save(folder, 'test', test); await this.save(folder, 'attempt', attempt);
@@ -195,7 +202,7 @@ export class TestService {
     if (pending.length) await this.mark(folder, pending); else void this.wrapup(folder);
   }
   mark(folder: string, sectionIds: string[]) {
-    return this.track(folder, 'mark', sectionIds.join(','), async () => {
+    return this.track(folder, 'mark', sectionIds.join(','), async signal => {
       const { test } = this.attemptOf(folder);
       const setStatus = (status: 'marking' | 'marked' | 'error', error?: string) => {
         const a = this.attemptOf(folder).attempt;
@@ -206,7 +213,7 @@ export class TestService {
       const answers = this.attemptOf(folder).attempt.answers;
       const targets = test.sections.filter(s => sectionIds.includes(s.id)).flatMap(s => s.questions).filter(q => q.type !== 'mcq' && !answers[q.id]?.unknown);
       try {
-        const marks = targets.length ? await runValidated(this.runner('marker'), { prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length })))) : {};
+        const marks = targets.length ? await runValidated(this.runner('marker'), { signal, prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length })))) : {};
         for (const q of targets) { const m = marks[q.id]!; m.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0)); }
         const a = this.attemptOf(folder).attempt;
         await this.setAttempt(folder, { ...a, marks: { ...a.marks, ...marks }, sections: { ...a.sections, ...Object.fromEntries(sectionIds.map(id => [id, { status: 'marked' as const }])) } });
@@ -216,14 +223,14 @@ export class TestService {
     });
   }
   wrapup(folder: string) {
-    return this.track(folder, 'wrapup', '', async () => {
+    return this.track(folder, 'wrapup', '', async signal => {
       const { test, attempt } = this.attemptOf(folder);
       const profile = await this.profile();
       if (test.mastery && !test.recorded && this.learning) {
         await this.learning.record(test, attempt);
         const recorded = { ...test, recorded: true }; await this.save(folder, 'test', recorded); this.update(folder, { test: recorded });
       }
-      const result = await runValidated(this.runner('writer'), { prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
+      const result = await runValidated(this.runner('writer'), { signal, prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
       const ids = new Set(questions(test).map(q => q.id));
       const latest = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...latest, wrapup: { fixes: result.fixes.filter(f => ids.has(f.questionId)).slice(0, 3), cards: result.cards.filter(c => ids.has(c.questionId)).slice(0, 6) } });
@@ -233,25 +240,25 @@ export class TestService {
     });
   }
   retry(folder: string, id: string, text: string) {
-    return this.track(folder, 'retry', id, async () => {
+    return this.track(folder, 'retry', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner('tutor'), { prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], retry: { text, feedback: result.feedback, score: Math.min(q.marks, result.score) } } } });
     });
   }
   ask(folder: string, id: string, question: string) {
-    return this.track(folder, 'ask', id, async () => {
+    return this.track(folder, 'ask', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner('tutor'), { prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
       const a = this.attemptOf(folder).attempt, prior = a.review[id]?.followups ?? [];
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], followups: [...prior, { q: question, a: result.answer }] } } });
     });
   }
   dispute(folder: string, id: string, argument: string) {
-    return this.track(folder, 'dispute', id, async () => {
+    return this.track(folder, 'dispute', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const { reply, ...mark } = await runValidated(this.runner('marker'), { prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
+      const { reply, ...mark } = await runValidated(this.runner('marker'), { signal, prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
       mark.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (mark.awarded[i] ? r.marks : 0), 0));
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, marks: { ...a.marks, [id]: mark }, review: { ...a.review, [id]: { ...a.review[id], dispute: { text: argument, reply } } } });

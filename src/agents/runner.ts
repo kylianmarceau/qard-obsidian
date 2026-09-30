@@ -32,7 +32,23 @@ export async function runValidated<T>(runner: AgentRunner, task: AgentTask, read
   const first = await runner.run(task);
   try { return read(first); }
   catch (error) {
+    if (task.signal?.aborted) throw new Error(CANCELLED);
     const again = await runner.run({ ...task, prompt: `${task.prompt}\n\nYour previous reply was rejected: ${(error as Error).message}\nPrevious reply:\n${JSON.stringify(first).slice(0, 20000)}\nReturn a corrected reply.` });
     return read(again);
   }
+}
+
+export const CANCELLED = 'Cancelled.';
+/** One API request (one turn of a tool loop). Replies usually take seconds; a stalled connection otherwise waits forever. */
+export const REQUEST_TIMEOUT = 5 * 60_000;
+/** Settles when work does, or rejects on timeout or cancel. Obsidian's requestUrl can't be aborted, so this stops waiting for it. */
+export function deadline<T>(work: Promise<T>, signal?: AbortSignal, ms = REQUEST_TIMEOUT, what = 'The provider'): Promise<T> {
+  if (signal?.aborted) return Promise.reject(new Error(CANCELLED));
+  return new Promise<T>((resolve, reject) => {
+    const done = () => { window.clearTimeout(timer); signal?.removeEventListener('abort', abort); };
+    const abort = () => { done(); reject(new Error(CANCELLED)); };
+    const timer = window.setTimeout(() => { done(); reject(new Error(`${what} didn't reply within ${Math.round(ms / 60_000)} minutes, so Qard stopped waiting.`)); }, ms);
+    signal?.addEventListener('abort', abort);
+    work.then(value => { done(); resolve(value); }, (error: unknown) => { done(); reject(error instanceof Error ? error : new Error(String(error))); });
+  });
 }

@@ -356,6 +356,23 @@ describe('learning service', () => {
     expect(t.learn.lessonAt(lesson)!.steps.map(s => s!.title)).toEqual(['Second 1', 'Second 2', 'Second 3']);
   });
 
+  it('cancels a stuck job, which can then be tried again', async () => {
+    const t = await mapped();
+    let signal: AbortSignal | undefined;
+    t.reply(probeSchema, task => { signal = task.signal; return new Promise(() => {}); });
+    const lesson = await t.learn.startLesson({ topic: 'LDA', notes: [], mastery: t.path, objective: 'lda-generative' });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    expect(t.learn.job(lesson, 'probe')).toMatchObject({ kind: 'probe' });
+    t.learn.cancel(lesson, 'probe');
+    await vi.waitFor(() => expect(t.learn.job(lesson, 'probe')?.error).toBe('Cancelled.'));
+    expect(signal!.aborted).toBe(true);
+    t.replies.splice(t.replies.findIndex(r => r.schema === probeSchema), 1);
+    t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));
+    t.reply(probeMapSchema, () => ({ marks: [], findings: 'F', map: { title: 'T', plan: 'P', mermaid: '', steps: [] } }));
+    await t.learn.probe(lesson);
+    expect(t.learn.lessonAt(lesson)!.probe).toBeDefined();
+  });
+
   it('picks up unwritten lesson steps when a lesson is reopened after a restart', async () => {
     const t = await mapped();
     t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));
@@ -507,6 +524,22 @@ describe('OpenRouter', () => {
     expect(second.response_format).toBeDefined();
     expect(http.mock.calls[0]![1].headers.Authorization).toBe('Bearer key');
   });
+  it('stops waiting for a request that never replies, or once cancelled', async () => {
+    vi.useFakeTimers();
+    try {
+      const hung = vi.fn<Http>().mockReturnValue(new Promise(() => {}));
+      const run = new OpenRouterRunner(vault, () => 'key', 'm', [], hung).run({ prompt: 'x', schema: { type: 'string' } });
+      const failed = expect(run).rejects.toThrow(/OpenRouter didn't reply within 5 minutes/);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      await failed;
+      const controller = new AbortController();
+      const cancelled = expect(new OpenRouterRunner(vault, () => 'key', 'm', [], hung).run({ prompt: 'x', schema: { type: 'string' }, signal: controller.signal })).rejects.toThrow('Cancelled.');
+      await vi.advanceTimersByTimeAsync(10);
+      controller.abort();
+      await cancelled;
+    } finally { vi.useRealTimers(); }
+  });
+
   it('drops structured output when a provider rejects it, and explains auth failures', async () => {
     const http = vi.fn<Http>().mockResolvedValueOnce({ status: 400, json: {} }).mockResolvedValueOnce(ok({ content: '{"a":1}' }));
     const runner = new OpenRouterRunner(vault, () => 'key', 'm', [], http);

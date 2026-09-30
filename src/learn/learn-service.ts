@@ -1,5 +1,5 @@
 import type { QardSettings } from '../settings/settings';
-import { runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
+import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
 import { NEEDS_LESSON, PASS, addDays, applyEvidence, breakCycles, goalFor, isDue, isoDay, newMasteryNote, parseMastery, readyToLearn, setFrontmatter, slugId, stamp, writeObjectives, type Evidence, type Mastery, type MasteryState, type Objective } from './mastery';
@@ -71,6 +71,7 @@ export class LearnService {
   private failures = new Map<string, CourseJobRecord>();
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
+  private controllers = new Map<string, AbortController>();
   private disposed = false;
   private proposalsLoaded?: Promise<void>;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
@@ -81,20 +82,26 @@ export class LearnService {
   private publish(jobs = this.snapshot.jobs) { this.snapshot = { revision: this.snapshot.revision + 1, jobs }; this.listeners.forEach(l => l()); }
   job(target: string, kind: LearnJobKind, id = '') { return this.snapshot.jobs[key(target, kind, id)]; }
   dismiss(target: string, kind: LearnJobKind, id = '') { const jobs = { ...this.snapshot.jobs }; delete jobs[key(target, kind, id)]; this.publish(jobs); }
-  private async track<T>(target: string, kind: LearnJobKind, id: string, work: () => Promise<T>): Promise<T | undefined> {
+  /** Stops a running job; it shows as cancelled, with the usual Try again. */
+  cancel(target: string, kind: LearnJobKind, id = '') { this.controllers.get(key(target, kind, id))?.abort(); }
+  private async track<T>(target: string, kind: LearnJobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
     const k = key(target, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    const startedAt = this.now();
+    const startedAt = this.now(), controller = new AbortController();
+    this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
+    // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
+    const cancelled = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error(CANCELLED)))), running = work(controller.signal);
+    cancelled.catch(() => {}); running.catch(() => {});
     try {
-      const result = await work();
+      const result = await Promise.race([running, cancelled]);
       const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed) this.publish(jobs);
       this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
       return undefined;
-    }
+    } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
   }
   private today() { return isoDay(this.now()); }
   private root() { return this.settings().learn.folder.replace(/\/+$/, ''); }
@@ -202,9 +209,9 @@ export class LearnService {
   /** The writer proposes objectives for a course folder; nothing is written until the student accepts. */
   mapCourse(folder: string, request = '') {
     const clean = folder.replace(/\/+$/, '');
-    return this.track(clean, 'map-course', '', () => this.courseJob('map', clean, request, async () => {
+    return this.track(clean, 'map-course', '', signal => this.courseJob('map', clean, request, async () => {
       const notes = this.storage.files(clean, 'md');
-      const result = await runValidated(this.runner('writer'), { prompt: mapCoursePrompt(clean, notes, request, await this.profile()), schema: objectivesSchema, effort: 'high' }, readObjectives);
+      const result = await runValidated(this.runner('writer'), { signal, prompt: mapCoursePrompt(clean, notes, request, await this.profile()), schema: objectivesSchema, effort: 'high' }, readObjectives);
       const objectives = breakCycles(this.toObjectives(result.objectives, new Set()));
       const proposal = { folder: clean, course: result.course.trim() || clean.split('/').pop()!, objectives };
       this.proposals.set(clean, proposal); this.publish();
@@ -239,10 +246,10 @@ export class LearnService {
   update(mastery: string) { return this.updates.get(mastery); }
   /** The writer proposes additions from new or changed notes. Existing rows are never renamed or rewritten. */
   updateCourse(mastery: string, request = '') {
-    return this.track(mastery, 'map-course', '', () => this.courseJob('update', mastery, request, async () => {
+    return this.track(mastery, 'map-course', '', signal => this.courseJob('update', mastery, request, async () => {
       const m = await this.course(mastery), changed = this.changedNotes(m);
       const notes = changed.length ? changed : this.storage.files(this.folderOf(mastery), 'md').filter(p => p !== mastery);
-      const result = await runValidated(this.runner('writer'), { prompt: updateCoursePrompt(m, notes, request), schema: courseUpdateSchema, effort: 'high' }, readCourseUpdate);
+      const result = await runValidated(this.runner('writer'), { signal, prompt: updateCoursePrompt(m, notes, request), schema: courseUpdateSchema, effort: 'high' }, readCourseUpdate);
       const existing = new Map(m.objectives.map(o => [o.id, o])), taken = new Set(existing.keys());
       const added = this.toObjectives(result.added, taken);
       const valid = new Set([...existing.keys(), ...added.map(o => o.id)]);
@@ -340,13 +347,13 @@ export class LearnService {
   }
   /** Writes the next check for an objective ahead of time, unless one is already waiting. */
   ensureCheck(mastery: string, objective: string): Promise<string | undefined> {
-    return this.track(`${mastery}#${objective}`, 'check-write', '', async () => {
+    return this.track(`${mastery}#${objective}`, 'check-write', '', async signal => {
       const m = await this.course(mastery), o = m.objectives.find(x => x.id === objective);
       if (!o) throw new Error(`No objective "${objective}" in ${m.course}.`);
       const existing = await this.pendingCheck(mastery, objective);
       if (existing && !this.stale(this.checks.get(existing)!, o)) return existing;
       const goal = goalFor(o.state), previous = (await this.loadChecks()).filter(c => c.mastery === mastery && c.objective === objective && c.finishedAt);
-      const written = await runValidated(this.runner('writer'), { prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema }, readQuestions);
+      const written = await runValidated(this.runner('writer'), { signal, prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema }, readQuestions);
       const record: CheckRecord = { version: 1, createdAt: this.now(), mastery, course: m.course, objective, title: o.title, goal, questions: written.slice(0, 3).map(q => ({ ...q, objective, goal: q.goal ?? goal })), answers: {}, marks: {}, status: 'ready' };
       const path = existing ?? `${this.root()}/Checks/${safeName(m.course)}/${this.today()} ${objective}.json`;
       this.checks.set(path, record); await this.save(path, record); this.publish();
@@ -360,7 +367,7 @@ export class LearnService {
   }
   /** Multiple choice and "I don't know" are marked locally; the tutor marks typed answers. */
   submitCheck(path: string) {
-    return this.track(path, 'check-mark', '', async () => {
+    return this.track(path, 'check-mark', '', async signal => {
       window.clearTimeout(this.timers.get(path));
       let record = this.checks.get(path); if (!record || record.finishedAt) return;
       const marks: Record<string, QuestionMark> = {};
@@ -369,7 +376,7 @@ export class LearnService {
       record = { ...record, marks, status: typed.length ? 'marking' : 'marked' }; this.checks.set(path, record); this.publish();
       try {
         if (typed.length) {
-          const result = await runValidated(this.runner('tutor'), { prompt: markCheckPrompt(record, typed.map(q => q.id)), schema: marksSchema, vault: false, effort: 'low' }, v => readMarks(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
+          const result = await runValidated(this.runner('tutor'), { signal, prompt: markCheckPrompt(record, typed.map(q => q.id)), schema: marksSchema, vault: false, effort: 'low' }, v => readMarks(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
           for (const q of typed) marks[q.id] = scoreQuestion(q, result[q.id]!);
         }
       } catch (error) { record = { ...record, status: 'error', error: (error as Error).message }; this.checks.set(path, record); await this.save(path, record); throw error; }
@@ -464,9 +471,9 @@ export class LearnService {
     return path;
   }
   probe(path: string) {
-    return this.track(path, 'probe', '', async () => {
+    return this.track(path, 'probe', '', async signal => {
       const lesson = this.lesson(path), { m, o, sources } = await this.context(lesson);
-      const result = await runValidated(this.runner('tutor'), { prompt: probePrompt(lesson, m, o, sources), schema: probeSchema, effort: 'low', vault: !sources }, readProbe);
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: probePrompt(lesson, m, o, sources), schema: probeSchema, effort: 'low', vault: !sources }, readProbe);
       const questions = result.questions.slice(0, 4).map(q => ({ ...q, objective: m?.objectives.some(x => x.id === q.objective) ? q.objective : undefined }));
       await this.setLesson(path, { ...this.lesson(path), probe: { questions, answers: {} } });
       if (!questions.length) void this.submitProbe(path);
@@ -478,7 +485,7 @@ export class LearnService {
   }
   /** One tutor call marks the probe and plans the lesson, to keep the wait short. */
   submitProbe(path: string) {
-    return this.track(path, 'map', '', async () => {
+    return this.track(path, 'map', '', async signal => {
       let lesson = this.lesson(path);
       const probe = lesson.probe ?? { questions: [], answers: {} };
       const marks: Record<string, QuestionMark> = {};
@@ -486,7 +493,7 @@ export class LearnService {
       lesson = { ...lesson, probe: { ...probe, submitted: true, marks } }; await this.setLesson(path, lesson);
       const { m, o, sources } = await this.context(lesson);
       const typed = probe.questions.filter(q => !marks[q.id]);
-      const result = await runValidated(this.runner('tutor'), { prompt: probeMapPrompt(lesson, m, o, sources), schema: probeMapSchema, effort: 'low', vault: !sources }, v => readProbeMap(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: probeMapPrompt(lesson, m, o, sources), schema: probeMapSchema, effort: 'low', vault: !sources }, v => readProbeMap(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
       for (const q of typed) { const found = result.marks.find(x => x.id === q.id)!; marks[q.id] = scoreQuestion(q, found); }
       const objective = lesson.objective ?? (m?.objectives.some(x => x.id === result.map.objective) ? result.map.objective : undefined);
       await this.setLesson(path, { ...this.lesson(path), objective, probe: { ...probe, submitted: true, marks, findings: result.findings }, map: result.map });
@@ -500,8 +507,8 @@ export class LearnService {
     });
   }
   reviseMap(path: string, change: string) {
-    return this.track(path, 'revise', '', async () => {
-      const map = await runValidated(this.runner('tutor'), { prompt: reviseMapPrompt(this.lesson(path), change), schema: mapSchema, vault: false, effort: 'low' }, readMap);
+    return this.track(path, 'revise', '', async signal => {
+      const map = await runValidated(this.runner('tutor'), { signal, prompt: reviseMapPrompt(this.lesson(path), change), schema: mapSchema, vault: false, effort: 'low' }, readMap);
       await this.setLesson(path, { ...this.lesson(path), map });
       await this.prepareSteps(path);
     });
@@ -529,7 +536,7 @@ export class LearnService {
    * next unwritten step of the current plan; a step written for a plan that has since been revised is dropped.
    */
   writeSteps(path: string) {
-    return this.track(path, 'steps', '', async () => {
+    return this.track(path, 'steps', '', async signal => {
       const busy = new Set<string>();
       const worker = async () => {
         for (;;) {
@@ -538,7 +545,7 @@ export class LearnService {
           const index = lesson.steps.findIndex((s, i) => !s && !busy.has(`${plan}#${i}`));
           if (index < 0) return;
           busy.add(`${plan}#${index}`);
-          const step = await runValidated(this.runner('writer'), { prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema }, readStep);
+          const step = await runValidated(this.runner('writer'), { signal, prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema }, readStep);
           const latest = this.lesson(path);
           if (latest.stepsFor !== plan) continue;
           await this.setLesson(path, { ...latest, steps: latest.steps.map((s, i) => i === index ? { ...step, check: { ...step.check, id: `k${index + 1}`, objective: latest.objective } } : s) });
@@ -560,27 +567,27 @@ export class LearnService {
   checkStep(path: string) {
     const lesson = this.lesson(path), index = lesson.current, step = lesson.steps[index], st = lesson.state[index];
     if (!step || !st) return Promise.resolve(undefined);
-    return this.track(path, 'tutor', String(index), async () => {
+    return this.track(path, 'tutor', String(index), async signal => {
       const q = step.check, a = st.answer;
       if (a?.unknown) return this.patchStep(path, index, { mark: markUnknown(q), reply: 'No problem. Read the explanation, then look at the model answer.' });
       if (q.type === 'mcq' && a?.choice === q.answer) return this.patchStep(path, index, { mark: markChoice(q, a), reply: 'Right.' });
-      const result = await runValidated(this.runner('tutor'), { prompt: tutorMarkPrompt(lesson, step, a), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, q.rubric.length));
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: tutorMarkPrompt(lesson, step, a), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, q.rubric.length));
       await this.patchStep(path, index, { mark: scoreQuestion(q, result), reply: result.reply, reteach: step.misconceptions[result.misconception]?.reteach });
     });
   }
   retryStep(path: string, text: string) {
     const lesson = this.lesson(path), index = lesson.current, step = lesson.steps[index], st = lesson.state[index];
     if (!step || !st?.mark || st.retry) return Promise.resolve(undefined);
-    return this.track(path, 'tutor', `${index}-retry`, async () => {
-      const result = await runValidated(this.runner('tutor'), { prompt: tutorMarkPrompt(lesson, step, { ...st.answer, text, unknown: false }, st), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, step.check.rubric.length));
+    return this.track(path, 'tutor', `${index}-retry`, async signal => {
+      const result = await runValidated(this.runner('tutor'), { signal, prompt: tutorMarkPrompt(lesson, step, { ...st.answer, text, unknown: false }, st), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, step.check.rubric.length));
       await this.patchStep(path, index, { retry: { text, mark: scoreQuestion(step.check, result), reply: result.reply } });
     });
   }
   ask(path: string, question: string) {
     const lesson = this.lesson(path), index = lesson.current;
-    return this.track(path, 'ask', String(index), async () => {
+    return this.track(path, 'ask', String(index), async signal => {
       const st = lesson.state[index], sources = await this.sources(lesson.notes);
-      const { answer } = await runValidated(this.runner('tutor'), { prompt: askPrompt(lesson, lesson.steps[index] ?? undefined, st?.asks ?? [], question, sources), schema: answerSchema, effort: 'low', vault: !sources }, readAnswer);
+      const { answer } = await runValidated(this.runner('tutor'), { signal, prompt: askPrompt(lesson, lesson.steps[index] ?? undefined, st?.asks ?? [], question, sources), schema: answerSchema, effort: 'low', vault: !sources }, readAnswer);
       const latest = this.lesson(path).state[index];
       if (latest) await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
     });
@@ -602,9 +609,9 @@ export class LearnService {
     return this.close(path);
   }
   close(path: string) {
-    return this.track(path, 'close', '', async () => {
+    return this.track(path, 'close', '', async signal => {
       const lesson = this.lesson(path);
-      const result = await runValidated(this.runner('writer'), { prompt: closePrompt(lesson), schema: closeSchema }, readClose);
+      const result = await runValidated(this.runner('writer'), { signal, prompt: closePrompt(lesson), schema: closeSchema }, readClose);
       const note = await this.writeLessonNote(path, lesson, result.summary);
       let nextCheck: string | undefined;
       if (lesson.mastery && lesson.objective) {

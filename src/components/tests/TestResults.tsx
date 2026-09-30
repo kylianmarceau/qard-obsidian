@@ -16,8 +16,10 @@ export function TestResults({ services, nav, folder }: { services: QardServices;
   const failed = test.sections.filter(s => attempt?.sections[s.id]?.status === 'error');
   if (failed.length && !total.marked) return <div className="qard-results">{failed.map(s => <div key={s.id} className="qard-error" role="alert"><span>Couldn't mark {s.title}: {attempt?.sections[s.id]?.error}</span><button className="qard-text-button" onClick={() => void services.tests.mark(folder, [s.id])}>Try again</button></div>)}</div>;
   // While marking, review anything except this test's own material.
-  if (!total.marked || hold.held) return <WhileYouWait services={services} title="Marking your answers…" job={services.tests.jobsFor(folder).find(j => j.kind === 'mark')} ready={total.marked} readyLabel="Your results are ready"
-    onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'marking', avoid: { files: questions(test).map(q => q.source?.path ?? '').filter(Boolean) } }}/>;
+  const marking = services.tests.jobsFor(folder).find(j => j.kind === 'mark' && !j.error);
+  if (!total.marked || hold.held) return <WhileYouWait services={services} title="Marking your answers…" job={marking} ready={total.marked} readyLabel="Your results are ready"
+    onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'marking', avoid: { files: questions(test).map(q => q.source?.path ?? '').filter(Boolean) } }}
+    cancel={() => marking && services.tests.cancel(folder, 'mark', marking.id)}/>;
   const wrapup = attempt?.wrapup, summary = job('wrapup'), all = questions(test);
   const sure = new Set(all.filter(q => attempt?.answers[q.id]?.confidence === 'sure' && (attempt.marks[q.id]?.score ?? 0) < q.marks).map(q => q.id));
   const suggestions = wrapup?.cards.filter((_, i) => !attempt?.cards?.[i]).length ?? 0;

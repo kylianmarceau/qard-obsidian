@@ -5,6 +5,7 @@ import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
+import { JobControls } from '../jobs/JobControls';
 import { JobError, Waiting, scoreTone } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
 
@@ -41,7 +42,7 @@ export function CheckView({ services, nav, path, onFinish }: { services: QardSer
     {busy && <TutorHint services={services}/>}
     <div className="qard-test-footer">
       <span className="qard-spacer"/>
-      {busy ? <Waiting text="Marking…"><AgentLabel services={services} role="tutor"/></Waiting> : done ? <button className="qard-primary" onClick={() => void next()}>Next<ArrowRight size={15}/></button>
+      {busy ? <><Waiting text="Marking…"><AgentLabel services={services} role="tutor"/></Waiting><JobControls services={services} job={marking} cancel={() => services.learn.cancel(path, 'check-mark')}/></> : done ? <button className="qard-primary" onClick={() => void next()}>Next<ArrowRight size={15}/></button>
         : <button className="qard-primary" disabled={!record.questions.every(q => answered(q, record.answers[q.id]))} onClick={() => void services.learn.submitCheck(path)}>Submit</button>}
     </div>
   </div>;

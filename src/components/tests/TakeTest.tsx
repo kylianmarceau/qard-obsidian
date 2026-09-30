@@ -24,7 +24,7 @@ export function TakeTest({ services, nav, folder }: { services: QardServices; na
   if (!entry) return <Waiting text="Loading…"/>;
   if (!test && writing?.error) return <div className="qard-doc"><JobError job={writing} retry={() => void services.tests.generate({ folder })}/></div>;
   if (!test || hold.held) return <WhileYouWait services={services} title="Writing your test…" job={writing} ready={!!test} readyLabel="Your test is ready" onEngage={hold.engage} onContinue={hold.release}
-    context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(entry?.plan?.sources.map(x => x.path) ?? [])] } }}/>;
+    context={{ kind: 'test', avoid: { files: [...(entry?.request?.sources ?? []), ...(entry?.plan?.sources.map(x => x.path) ?? [])] } }} cancel={() => services.tests.cancel(folder, 'generate')}/>;
   if (index === undefined) return null;
   const section = test.sections[index]!, status: SectionStatus = attempt?.sections[section.id]?.status ?? 'open';
   // Exam mode keeps every answer editable until Finish; section mode locks a section once submitted.

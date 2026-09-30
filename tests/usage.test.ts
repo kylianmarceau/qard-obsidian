@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { expect, it, vi } from 'vitest';
 import { fromClaudeCode, fromCodexEvents, fromOpenRouter, addUsage } from '../src/agents/usage';
 import { OpenRouterRunner, type Http } from '../src/agents/openrouter-runner';

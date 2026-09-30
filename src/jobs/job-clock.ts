@@ -24,6 +24,13 @@ export class JobClock {
 export function timeLeft(estimate: number | undefined, startedAt: number | undefined, now = Date.now()): string | undefined {
   if (estimate === undefined || startedAt === undefined) return undefined;
   const left = estimate - (now - startedAt);
+  if (overdue(estimate, startedAt, now)) return 'taking longer than usual';
   if (left < 10_000) return 'almost ready';
   return left < 60_000 ? `about ${Math.round(left / 10_000) * 10} s left` : `about ${Math.round(left / 60_000)} min left`;
+}
+/** When a job should count as stuck: well past its usual time, or 5 minutes before Qard has timed one. */
+export function overdue(estimate: number | undefined, startedAt: number | undefined, now = Date.now()): boolean {
+  if (startedAt === undefined) return false;
+  const limit = estimate === undefined ? 5 * 60_000 : Math.max(2 * estimate, estimate + 90_000);
+  return now - startedAt > limit;
 }

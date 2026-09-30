@@ -16,9 +16,9 @@ const preview = (text: string) => text.replace(/```[\s\S]*?```/g, ' ').replace(/
  * answer runs full width with an accent bar. Only the latest exchange is open; older ones fold to one line and open
  * on click. A question shows the moment it is sent, with "Thinking…" and who is answering; failures stay on its row.
  */
-export function AskThread({ services, path, items, busy, error, role, placeholder, ask, dismiss, card, onCard, title = 'Questions' }: {
+export function AskThread({ services, path, items, busy, error, role, placeholder, ask, dismiss, cancel, card, onCard, title = 'Questions' }: {
   services: QardServices; path: string; items: AskItem[]; busy: boolean; error?: string; role: AgentRole; placeholder: string;
-  ask: (question: string) => void; dismiss: () => void;
+  ask: (question: string) => void; dismiss: () => void; cancel?: () => void;
   /** Where "Make card" puts a card; onCard receives the new card's id (to link it to an objective). */
   card?: CardTarget; onCard?: (cardId: string) => void; title?: string;
 }) {
@@ -53,7 +53,7 @@ export function AskThread({ services, path, items, busy, error, role, placeholde
         <div className="qard-ask-q">{pending}</div>
         <div className="qard-ask-a">{error
           ? <div className="qard-error" role="alert"><span>{error}</span><button className="qard-text-button" onClick={() => { dismiss(); send(pending); }}>Try again</button><button className="qard-text-button" onClick={() => { dismiss(); setPending(undefined); }}>Dismiss</button></div>
-          : <Waiting text="Thinking…"><AgentLabel services={services} role={role}/></Waiting>}</div>
+          : <div className="qard-ask-thinking"><Waiting text="Thinking…"><AgentLabel services={services} role={role}/></Waiting>{cancel && <button className="qard-text-button" onClick={cancel}>Cancel</button>}</div>}</div>
       </div>}
     </div>
     <form className="qard-ask-input" onSubmit={e => { e.preventDefault(); send(text); }}>

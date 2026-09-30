@@ -117,7 +117,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
 
     {panel === 'ask' && <section className="qard-panel qard-panel-ask">
       <AskThread services={services} path={path} items={review?.followups ?? []} busy={running(askJob)} error={askJob?.error} role="tutor" title="Questions" placeholder="Ask about this question…"
-        ask={text => void services.tests.ask(folder, q.id, text)} dismiss={() => services.tests.dismiss(folder, 'ask', q.id)}
+        ask={text => void services.tests.ask(folder, q.id, text)} dismiss={() => services.tests.dismiss(folder, 'ask', q.id)} cancel={() => services.tests.cancel(folder, 'ask', q.id)}
         card={target} onCard={() => void services.tests.cardState(folder, { question: q.id }, 'added')}/>
     </section>}
 

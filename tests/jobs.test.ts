@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { JobClock, timeLeft } from '../src/jobs/job-clock';
+import { JobClock, overdue, timeLeft } from '../src/jobs/job-clock';
 import { DEFAULT_AGENT_SETTINGS } from '../src/settings/settings';
 
 it('learns typical job durations per connection and model, and says how long is left', async () => {
@@ -18,4 +18,15 @@ it('learns typical job durations per connection and model, and says how long is 
   expect(timeLeft(90_000, 0, 55_000)).toBe('about 40 s left');
   expect(timeLeft(90_000, 0, 85_000)).toBe('almost ready');
   expect(timeLeft(undefined, 0)).toBeUndefined();
+});
+
+it('flags a job as stuck once it is well past its usual time', () => {
+  expect(overdue(60_000, 0, 140_000)).toBe(false);
+  expect(overdue(60_000, 0, 151_000)).toBe(true);
+  expect(overdue(300_000, 0, 599_000)).toBe(false);
+  expect(overdue(300_000, 0, 601_000)).toBe(true);
+  // Before Qard has timed a kind of job, five minutes.
+  expect(overdue(undefined, 0, 299_000)).toBe(false);
+  expect(overdue(undefined, 0, 301_000)).toBe(true);
+  expect(timeLeft(60_000, 0, 200_000)).toBe('taking longer than usual');
 });

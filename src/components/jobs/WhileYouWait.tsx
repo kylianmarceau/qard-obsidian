@@ -11,6 +11,7 @@ import { Waiting, useTestFolder } from '../tests/common';
 import { CheckView } from '../learn/CheckView';
 import { useTick } from './RunningJobs';
 import { AgentLabel } from './AgentLabel';
+import { JobControls } from './JobControls';
 import { roleOf } from '../../jobs/job-clock';
 
 /**
@@ -55,9 +56,11 @@ async function findRetry(services: QardServices, context: WaitContext): Promise<
   return undefined;
 }
 
-export function WhileYouWait({ services, title, detail, job, context, ready = false, readyLabel = 'Ready', onContinue, onEngage }: {
+export function WhileYouWait({ services, title, detail, job, context, ready = false, readyLabel = 'Ready', onContinue, onEngage, cancel, start }: {
   services: QardServices; title: string; detail?: string; job?: { kind: string; startedAt?: number }; context: WaitContext;
   ready?: boolean; readyLabel?: string; onContinue?: () => void; onEngage?: () => void;
+  /** cancel stops the job; start restarts it when nothing is running. */
+  cancel?: () => void; start?: () => void;
 }) {
   const now = useTick(!ready);
   const [options, setOptions] = useState<Options>(), [activity, setActivity] = useState<Activity>(), [engaged, setEngaged] = useState(false);
@@ -91,6 +94,7 @@ export function WhileYouWait({ services, title, detail, job, context, ready = fa
   return <div className="qard-wait">
     {ready && engaged ? <div className="qard-wait-ready" role="status"><CheckIcon size={16}/><strong>{readyLabel}</strong><span className="qard-spacer"/><button className="qard-primary" onClick={onContinue}>Continue<ArrowRight size={15}/></button></div>
       : <div className="qard-wait-head"><Waiting text={title}>{job && <AgentLabel services={services} role={roleOf(job.kind)}/>}</Waiting>{left && <span className="qard-muted qard-small">{left}</span>}</div>}
+    {!ready && <JobControls services={services} job={job} cancel={cancel} start={start}/>}
     {!engaged && <p className="qard-muted qard-small">{detail ? `${detail} ` : ''}You can leave this screen; it keeps going, and Qard tells you when it's done.</p>}
     {options && (available.length ? <section className="qard-wait-body">
       <div className="qard-wait-tabs"><span className="qard-label">While you wait</span>{available.length > 1 && available.map(a => <button key={a.id} className={'qard-chip' + (current === a.id ? ' is-on' : '')} aria-pressed={current === a.id} onClick={() => setActivity(a.id)}>{a.label}</button>)}</div>

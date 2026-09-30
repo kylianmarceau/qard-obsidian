@@ -10,6 +10,7 @@ import { AskThread, type CardTarget } from '../common/AskThread';
 import { JobError, Waiting } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
+import { JobControls } from '../jobs/JobControls';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: LearnNav; lesson: Lesson }) {
@@ -53,7 +54,8 @@ export function LessonView({ services, nav, path }: { services: QardServices; na
   const probing = job(path, 'probe'), planning = job(path, 'map');
   const waitingProbe = !lesson.probe && !probing?.error, waitingPlan = !!lesson.probe?.submitted && !lesson.map && !planning?.error;
   if (waitingProbe || waitingPlan || hold.held) return <>{trail}<WhileYouWait services={services} title={lesson.map || waitingPlan ? 'Planning the lesson…' : 'Finding where to start…'} job={waitingProbe ? probing : planning}
-    ready={!waitingProbe && !waitingPlan} readyLabel={lesson.map ? 'Your lesson plan is ready' : 'A few quick questions are ready'} onEngage={hold.engage} onContinue={hold.release} context={context}/><TutorHint services={services}/></>;
+    ready={!waitingProbe && !waitingPlan} readyLabel={lesson.map ? 'Your lesson plan is ready' : 'A few quick questions are ready'} onEngage={hold.engage} onContinue={hold.release} context={context}
+    cancel={() => services.learn.cancel(path, waitingProbe ? 'probe' : 'map')} start={() => void (waitingProbe ? services.learn.probe(path) : services.learn.submitProbe(path))}/><TutorHint services={services}/></>;
   if (lesson.map) return <>{trail}<LessonMapView services={services} path={path} lesson={lesson}/></>;
   return <>{trail}<LessonProbe services={services} path={path} lesson={lesson}/></>;
 }
@@ -106,14 +108,15 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
     <div className="qard-test-heading"><div><span className="qard-muted">Step {index + 1} of {lesson.steps.length}</span><h1><InlineMarkdown text={step?.title ?? plan?.title ?? ''} path={where} services={services}/></h1></div></div>
     {plan && <div className="qard-lesson-why"><Markdown text={plan.why} path={where} services={services}/></div>}
     {!step && writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/>
-      : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}/> : <>
+      : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}
+        cancel={() => services.learn.cancel(path, 'steps')} start={() => void services.learn.writeSteps(path)}/> : <>
       {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/><div className="qard-lesson-connect"><Markdown text={step.connect} path={where} services={services}/></div></section>}
       {!st?.mark ? <>
         {step.checkFirst && <p className="qard-label">Try this first. Work it out from what you know.</p>}
         <AnswerInput services={services} question={step.check} answer={st?.answer} locked={running(tutor)} path={where} label={step.checkFirst ? 'Before the explanation' : 'Check'} onChange={patch => services.learn.answerStep(path, patch)}/>
         <JobError job={tutor} retry={() => void services.learn.checkStep(path)}/>
         {running(tutor) && <TutorHint services={services}/>}
-        <div className="qard-panel-actions">{running(tutor) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button className="qard-primary" disabled={!answered(step.check, st?.answer)} onClick={() => void services.learn.checkStep(path)}>Check</button>}</div>
+        <div className="qard-panel-actions">{running(tutor) ? <><Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting><JobControls services={services} job={tutor} cancel={() => services.learn.cancel(path, 'tutor', String(index))}/></> : <button className="qard-primary" disabled={!answered(step.check, st?.answer)} onClick={() => void services.learn.checkStep(path)}>Check</button>}</div>
       </> : <section className="qard-lesson-feedback">
         {st.reply && <div className="qard-tutor"><Markdown text={st.reply} path={where} services={services}/></div>}
         <MarkedAnswer services={services} question={step.check} answer={st.answer} mark={st.mark} path={where}/>
@@ -122,11 +125,11 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
           : <form className="qard-panel" onSubmit={e => { e.preventDefault(); if (retry.trim()) void services.learn.retryStep(path, retry); }}>
             <textarea aria-label="Second try" rows={2} placeholder="Try again with what you've just seen…" value={retry} disabled={running(retrying)} onChange={e => setRetry(e.target.value)}/>
             <JobError job={retrying} dismiss={() => services.learn.dismiss(path, 'tutor', `${index}-retry`)}/>
-            <div className="qard-panel-actions">{running(retrying) ? <Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting> : <button type="submit" disabled={!retry.trim()}>Try again</button>}</div>
+            <div className="qard-panel-actions">{running(retrying) ? <><Waiting text="Checking…"><AgentLabel services={services} role="tutor"/></Waiting><JobControls services={services} job={retrying} cancel={() => services.learn.cancel(path, 'tutor', `${index}-retry`)}/></> : <button type="submit" disabled={!retry.trim()}>Try again</button>}</div>
           </form>)}
       </section>}
       <AskThread key={index} services={services} path={where} items={st?.asks ?? []} busy={running(asking)} error={asking?.error} role="tutor" title="Questions about this step" placeholder="Ask anything about this step…"
-        ask={q => void services.learn.ask(path, q)} dismiss={() => services.learn.dismiss(path, 'ask', String(index))}
+        ask={q => void services.learn.ask(path, q)} dismiss={() => services.learn.dismiss(path, 'ask', String(index))} cancel={() => services.learn.cancel(path, 'ask', String(index))}
         card={lessonCardTarget(services, lesson)} onCard={id => { if (lesson.mastery && lesson.objective) void services.learn.linkCard(id, lesson.mastery, lesson.objective); }}/>
     </>}
     <div className="qard-test-footer">
@@ -147,7 +150,7 @@ function LessonClose({ services, nav, path, lesson }: { services: QardServices; 
     return () => { live = false; };
   }, [services, lesson.mastery, lesson.objective, revision]);
   const closing = job(path, 'close'), close = lesson.close, where = lesson.notes[0] ?? path;
-  if (!close) return <div className="qard-doc">{closing?.error ? <JobError job={closing} retry={() => void services.learn.close(path)}/> : <><Waiting text="Wrapping up…"><AgentLabel services={services} role="writer"/></Waiting><p className="qard-muted">Saving the lesson, suggesting cards and writing your next check.</p></>}</div>;
+  if (!close) return <div className="qard-doc">{closing?.error ? <JobError job={closing} retry={() => void services.learn.close(path)}/> : <><Waiting text="Wrapping up…"><AgentLabel services={services} role="writer"/></Waiting><JobControls services={services} job={closing} cancel={() => services.learn.cancel(path, 'close')} start={() => void services.learn.close(path)}/><p className="qard-muted">Saving the lesson, suggesting cards and writing your next check.</p></>}</div>;
   const target = lessonCardTarget(services, lesson);
   async function add(i: number) {
     setBusy(i); setError('');

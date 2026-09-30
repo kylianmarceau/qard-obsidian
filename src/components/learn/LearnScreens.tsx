@@ -100,7 +100,7 @@ export function MapCourse({ services, nav, initialFolder }: { services: QardServ
   const mapping = folder ? job(folder, 'map-course') : undefined, proposal = folder ? services.learn.proposal(folder) : undefined;
   useEffect(() => { if (proposal && !keep) setKeep(proposal.objectives.map(o => o.id)); }, [proposal, keep]);
   if (folder && ((mapping && !mapping.error) || hold.held)) return <WhileYouWait services={services} title={`Mapping ${folder.split('/').pop()}…`} detail="The writer is reading the course notes; the objectives wait under Learn for you to review." job={mapping}
-    ready={!!proposal} readyLabel="The objectives are ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }}/>;
+    ready={!!proposal} readyLabel="The objectives are ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }} cancel={() => services.learn.cancel(folder, 'map-course')}/>;
   if (folder && proposal && keep) return <article className="qard-doc">
     <header><span className="qard-muted">Proposed objectives</span><h1>{proposal.course}</h1><p className="qard-muted">{proposal.objectives.length} objectives from {folder}. Untick any you don't need; you can edit the file later.</p></header>
     <section>{proposal.objectives.map(o => <button key={o.id} className="qard-doc-row qard-row-button" aria-pressed={keep.includes(o.id)} onClick={() => setKeep(keep.includes(o.id) ? keep.filter(x => x !== o.id) : [...keep, o.id])}><Check on={keep.includes(o.id)}/><span><InlineMarkdown text={o.title} path={folder} services={services}/></span><span className="qard-muted">{o.notes.slice(0, 2).join(', ')}</span><StateChip state={o.state}/></button>)}</section>
@@ -179,7 +179,7 @@ function UpdateCourse({ services, course, done }: { services: QardServices; cour
   const changed = services.learn.changedNotes(course);
   const toggle = (list: string[], set: (v: string[]) => void, id: string) => set(list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   if ((running && !running.error) || hold.held) return <WhileYouWait services={services} title={`Reading ${course.course}'s notes…`} detail="The writer is looking for new objectives; existing ones and your progress stay as they are." job={running}
-    ready={!!update} readyLabel="The update is ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }}/>;
+    ready={!!update} readyLabel="The update is ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }} cancel={() => services.learn.cancel(course.path, 'map-course')}/>;
   if (update && added && extended) {
     const nothing = !update.added.length && !update.extended.length && !update.outdated.length;
     return <article className="qard-doc">
