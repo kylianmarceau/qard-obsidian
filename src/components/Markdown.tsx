@@ -48,5 +48,6 @@ export function InlineMarkdown({ text, path, services }: { text: string; path: s
     }).catch(() => { if (!disposed) target.remove(); });
     return () => { disposed = true; services.owner.removeChild(child); };
   }, [text, path, services, plain]);
-  return <span ref={ref} className="qard-inline-md">{plain ? text : <span className="qard-inline-fallback">{text}</span>}</span>;
+  // Keyed by text: rendered nodes are added outside React, so a reused span would keep the previous title's.
+  return <span key={text} ref={ref} className="qard-inline-md">{plain ? text : <span className="qard-inline-fallback">{text}</span>}</span>;
 }
