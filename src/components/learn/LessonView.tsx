@@ -4,7 +4,7 @@ import type { QardServices } from '../../views/services';
 import type { Lesson } from '../../learn/learn-types';
 import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
-import { Markdown } from '../Markdown';
+import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { AskThread, type CardTarget } from '../common/AskThread';
 import { JobError, Waiting } from '../tests/common';
@@ -64,7 +64,7 @@ function LessonProbe({ services, path, lesson }: { services: QardServices; path:
   if (!probe) return <div className="qard-doc">{probing?.error ? <JobError job={probing} retry={() => void services.learn.probe(path)}/> : <><Waiting text="Finding where to start…"><AgentLabel services={services} role="tutor"/></Waiting><p className="qard-muted">The tutor is checking your notes and what you already know about {lesson.topic}.</p><TutorHint services={services}/></>}</div>;
   if (probe.submitted) return <div className="qard-doc">{mapping?.error ? <JobError job={mapping} retry={() => void services.learn.submitProbe(path)}/> : <><Waiting text="Planning the lesson…"><AgentLabel services={services} role="tutor"/></Waiting><p className="qard-muted">Reading your answers to decide where to start.</p><TutorHint services={services}/></>}</div>;
   return <div className="qard-test">
-    <div className="qard-test-heading"><div><span className="qard-muted">Lesson · {lesson.course ?? 'Before we start'}</span><h1>{lesson.topic}</h1></div></div>
+    <div className="qard-test-heading"><div><span className="qard-muted">Lesson · {lesson.course ?? 'Before we start'}</span><h1><InlineMarkdown text={lesson.topic} path={lesson.notes[0] ?? path} services={services}/></h1></div></div>
     <p className="qard-muted">A few quick questions first, so the lesson starts from what you already know. Say "I don't know" rather than guessing.</p>
     {probe.questions.map((q, i) => <AnswerInput key={q.id} services={services} question={q} answer={probe.answers[q.id]} locked={false} path={lesson.notes[0] ?? path} label={`Question ${i + 1}`} onChange={patch => services.learn.answerProbe(path, q.id, patch)}/>)}
     <div className="qard-test-footer"><span className="qard-spacer"/><button className="qard-primary" disabled={!probe.questions.every(q => answered(q, probe.answers[q.id]))} onClick={() => void services.learn.submitProbe(path)}>Continue<ArrowRight size={15}/></button></div>
@@ -77,11 +77,11 @@ function LessonMapView({ services, path, lesson }: { services: QardServices; pat
   const map = lesson.map!, revising = job(path, 'revise'), busy = !!revising && !revising.error, probe = lesson.probe;
   const where = lesson.notes[0] ?? path;
   return <article className="qard-doc">
-    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1>{map.title}</h1>{probe?.findings && <div className="qard-lesson-findings"><Markdown text={probe.findings} path={where} services={services}/></div>}</header>
+    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1><InlineMarkdown text={map.title} path={where} services={services}/></h1>{probe?.findings && <div className="qard-lesson-findings"><Markdown text={probe.findings} path={where} services={services}/></div>}</header>
     {probe && probe.questions.length > 0 && <section className="qard-probe-results">{probe.questions.map(q => { const m = probe.marks?.[q.id]; const ok = !!m && m.score >= q.marks; return <div key={q.id} className="qard-doc-row"><span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span><div className="qard-probe-prompt"><Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services}/></div></div>; })}</section>}
     <section><h2>Plan</h2><div className="qard-doc-body"><Markdown text={map.plan} path={where} services={services}/></div></section>
     {map.mermaid.trim() && <section className="qard-lesson-map"><Markdown text={'```mermaid\n' + map.mermaid.replace(/^```(?:mermaid)?\s*|```\s*$/g, '').trim() + '\n```'} path={where} services={services}/></section>}
-    <section><h2>Steps</h2>{map.steps.map((s, i) => <div key={i} className="qard-doc-section"><span className="qard-muted">{i + 1}</span><div><strong>{s.title}</strong><div className="qard-doc-why"><Markdown text={s.why} path={where} services={services}/></div></div><span/></div>)}</section>
+    <section><h2>Steps</h2>{map.steps.map((s, i) => <div key={i} className="qard-doc-section"><span className="qard-muted">{i + 1}</span><div><strong><InlineMarkdown text={s.title} path={where} services={services}/></strong><div className="qard-doc-why"><Markdown text={s.why} path={where} services={services}/></div></div><span/></div>)}</section>
     <JobError job={revising} dismiss={() => services.learn.dismiss(path, 'revise')}/>
     <form className="qard-doc-footer" onSubmit={e => { e.preventDefault(); if (change.trim()) { void services.learn.reviseMap(path, change); setChange(''); } }}>
       <input aria-label="Ask for changes to the plan" placeholder={busy ? 'Revising…' : 'Ask for changes, e.g. skip the proof'} value={change} disabled={busy} onChange={e => setChange(e.target.value)}/>
@@ -102,8 +102,8 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
   useEffect(() => { setRetry(''); }, [index]);
   const explain = step && (!step.checkFirst || !!st?.mark);
   return <div className="qard-test qard-lesson">
-    <div className="qard-test-steps" aria-label="Steps">{lesson.map!.steps.map((s, i) => <button key={i} className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''} disabled={!lesson.steps[i]} aria-current={i === index ? 'step' : undefined} onClick={() => void services.learn.go(path, i)}>{i + 1}. {s.title}{lesson.state[i]?.mark ? ' ✓' : ''}</button>)}</div>
-    <div className="qard-test-heading"><div><span className="qard-muted">Step {index + 1} of {lesson.steps.length}</span><h1>{step?.title ?? plan?.title}</h1></div></div>
+    <div className="qard-test-steps" aria-label="Steps">{lesson.map!.steps.map((s, i) => <button key={i} className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''} disabled={!lesson.steps[i]} aria-current={i === index ? 'step' : undefined} onClick={() => void services.learn.go(path, i)}>{i + 1}. <InlineMarkdown text={s.title} path={where} services={services}/>{lesson.state[i]?.mark ? ' ✓' : ''}</button>)}</div>
+    <div className="qard-test-heading"><div><span className="qard-muted">Step {index + 1} of {lesson.steps.length}</span><h1><InlineMarkdown text={step?.title ?? plan?.title ?? ''} path={where} services={services}/></h1></div></div>
     {plan && <div className="qard-lesson-why"><Markdown text={plan.why} path={where} services={services}/></div>}
     {!step && writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/>
       : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}/> : <>
@@ -156,7 +156,7 @@ function LessonClose({ services, nav, path, lesson }: { services: QardServices; 
   }
   const edit = close.noteEdit;
   return <article className="qard-doc">
-    <header><span className="qard-muted">Lesson complete</span><h1>{lesson.map?.title ?? lesson.topic}</h1>
+    <header><span className="qard-muted">Lesson complete</span><h1><InlineMarkdown text={lesson.map?.title ?? lesson.topic} path={where} services={services}/></h1>
       {objective && <p className="qard-check-outcome"><StateChip state={objective.state}/><span className="qard-muted">{objective.due ? `First check ${relativeDay(objective.due, isoDay(Date.now()))}. Getting it right straight after a lesson doesn't count yet.` : ''}</span></p>}</header>
     <section><h2>Summary</h2><div className="qard-doc-body"><Markdown text={close.summary} path={where} services={services}/></div></section>
     {close.cards.length > 0 && <section><h2>Suggested cards</h2>{close.cards.map((c, i) => { const state = close.cardState[i]; return <article key={i} className={'qard-suggestion' + (state === 'skipped' ? ' is-skipped' : '')}>

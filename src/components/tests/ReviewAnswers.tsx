@@ -4,7 +4,7 @@ import type { AnnotationKind, Question } from '../../tests/test-types';
 import { questions, sectionOf } from '../../tests/test-types';
 import { placeAnnotations } from '../../tests/annotate';
 import { ignoresStudyKey } from '../../review/keyboard';
-import { Markdown } from '../Markdown';
+import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { AskThread } from '../common/AskThread';
 import { Check, JobError, Waiting, cardTarget, scoreTone, useTestFolder, type TestNav } from './common';
@@ -39,7 +39,7 @@ export function ReviewAnswers({ services, nav, folder, initial }: { services: Qa
   return <div className="qard-review">
     <aside className="qard-review-rail" aria-label="Questions">
       <button className="qard-rail-toggle" aria-pressed={onlyLost} onClick={() => setOnlyLost(!onlyLost)}><Check on={onlyLost}/>Lost marks only</button>
-      {test.sections.map(s => { const items = s.questions.filter(x => visible.includes(x)); return items.length ? <div key={s.id}><div className="qard-rail-section">{s.title}</div>{items.map(x => { const m = attempt.marks[x.id]; return <button key={x.id} className={'qard-rail-item' + (x.id === q.id ? ' is-current' : '')} aria-current={x.id === q.id} onClick={() => go(x.id)}><span className="qard-muted">{all.indexOf(x) + 1}</span><span className="qard-rail-title">{firstLine(x.prompt)}</span><span className={'qard-rail-score ' + scoreTone(m?.score ?? 0, x.marks)}>{m ? `${m.score}/${x.marks}` : '–'}</span></button>; })}</div> : null; })}
+      {test.sections.map(s => { const items = s.questions.filter(x => visible.includes(x)); return items.length ? <div key={s.id}><div className="qard-rail-section"><InlineMarkdown text={s.title} path={folder} services={services}/></div>{items.map(x => { const m = attempt.marks[x.id]; return <button key={x.id} className={'qard-rail-item' + (x.id === q.id ? ' is-current' : '')} aria-current={x.id === q.id} onClick={() => go(x.id)}><span className="qard-muted">{all.indexOf(x) + 1}</span><span className="qard-rail-title">{firstLine(x.prompt)}</span><span className={'qard-rail-score ' + scoreTone(m?.score ?? 0, x.marks)}>{m ? `${m.score}/${x.marks}` : '–'}</span></button>; })}</div> : null; })}
     </aside>
     <QuestionReview key={q.id} services={services} nav={nav} folder={folder} question={q} number={all.indexOf(q) + 1}
       prev={visible[position - 1] ? () => go(visible[position - 1]!.id) : undefined} next={visible[position + 1] ? () => go(visible[position + 1]!.id) : undefined}/>
@@ -74,7 +74,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
   return <main className="qard-review-main">
     <section className="qard-review-head">
       <div>
-        <span className="qard-muted">Question {number} · {section.title}</span>
+        <span className="qard-muted">Question {number} · <InlineMarkdown text={section.title} path={path} services={services}/></span>
         <div className="qard-review-prompt"><Markdown text={q.prompt} path={path} services={services}/></div>
         {(mark.mistake !== 'none' || sure) && <span className={'qard-review-tag' + (sure ? ' is-sure' : '')}>{[MISTAKE[mark.mistake], sure ? 'you were sure' : ''].filter(Boolean).join(' · ')}</span>}
       </div>

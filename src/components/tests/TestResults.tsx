@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import { questions, scoreOf } from '../../tests/test-types';
-import { Markdown } from '../Markdown';
+import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { JobError, Waiting, scoreTone, useTestFolder, type TestNav } from './common';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
@@ -24,9 +24,9 @@ export function TestResults({ services, nav, folder }: { services: QardServices;
   return <div className="qard-results">
     <section className="qard-results-top">
       <div>
-        <span className="qard-muted">{test.title}</span>
+        <span className="qard-muted"><InlineMarkdown text={test.title} path={folder} services={services}/></span>
         <div className="qard-score-big">{total.score}<span>/{total.marks}</span><small>{Math.round(total.score / Math.max(1, total.marks) * 100)}%</small></div>
-        <div className="qard-section-scores">{test.sections.map(s => { const r = scoreOf(test, attempt, s); return <span key={s.id}>{s.title} <strong className={scoreTone(r.score, r.marks)}>{r.score}/{r.marks}</strong></span>; })}</div>
+        <div className="qard-section-scores">{test.sections.map(s => { const r = scoreOf(test, attempt, s); return <span key={s.id}><InlineMarkdown text={s.title} path={folder} services={services}/> <strong className={scoreTone(r.score, r.marks)}>{r.score}/{r.marks}</strong></span>; })}</div>
       </div>
       <button className="qard-primary" onClick={() => nav.review(folder)}>Review answers<ArrowRight size={15}/></button>
     </section>

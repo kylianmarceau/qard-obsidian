@@ -68,3 +68,17 @@ it('folds older answers, shows a question as soon as it is sent, and handles fai
   expect(onCard).toHaveBeenCalledWith('card-1');
   expect(host.textContent).toContain('Card added');
 });
+
+import { InlineMarkdown } from '../src/components/Markdown';
+import { MarkdownRenderer } from 'obsidian';
+it('renders titles inline: plain ones as text, ones with maths through the renderer without a wrapping paragraph', async () => {
+  const render = vi.spyOn(MarkdownRenderer, 'render').mockImplementation(async (_app, text, el) => { const p = document.createElement('p'); p.textContent = `rendered:${text}`; el.appendChild(p); });
+  await act(async () => { root.render(<h1><InlineMarkdown text="Tokens and stop words" path="x.md" services={services}/></h1>); }); await tick();
+  expect(host.querySelector('h1')?.textContent).toBe('Tokens and stop words');
+  expect(render).not.toHaveBeenCalled();
+  await act(async () => { root.render(<h1><InlineMarkdown text="What rank can $\mathbf{R}\mathbf{C}$ have?" path="x.md" services={services}/></h1>); }); await tick();
+  expect(host.querySelector('h1')?.textContent).toBe('rendered:What rank can $\\mathbf{R}\\mathbf{C}$ have?');
+  expect(host.querySelector('h1 p')).toBeNull();
+  expect(host.querySelector('.qard-md-pending')).toBeNull();
+  render.mockRestore();
+});

@@ -630,3 +630,9 @@ div.qard-ask-q { cursor: default; }
 .qard-ask-input { display: flex; align-items: flex-end; gap: 8px; margin-top: 4px; }
 .qard-app .qard-ask-input textarea { flex: 1; min-height: 38px; max-height: 180px; field-sizing: content; resize: none; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.45; }
 .qard-panel-ask { background: transparent; padding: 0; }
+
+/* Inline Markdown in titles keeps the heading's font; maths sits on the text line. */
+.qard-inline-md { font: inherit; }
+.qard-inline-md .qard-md-pending { position: absolute; visibility: hidden; }
+.qard-inline-md :is(p, .markdown-rendered) { display: inline; margin: 0; padding: 0; }
+.qard-inline-md .math { font-size: 0.92em; }

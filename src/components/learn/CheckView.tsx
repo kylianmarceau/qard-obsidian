@@ -3,7 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
-import { Markdown } from '../Markdown';
+import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { JobError, Waiting, scoreTone } from '../tests/common';
 import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay, useLearn, type LearnNav } from './common';
@@ -31,7 +31,7 @@ export function CheckView({ services, nav, path, onFinish }: { services: QardSer
     if (following) nav.check(following.check!); else if (today.cards) nav.studyDue(); else nav.today();
   }
   return <div className="qard-test">
-    <div className="qard-test-heading"><div><span className="qard-muted">Check · {record.course} · {GOAL[record.goal] ?? record.goal}</span><h1>{record.title}</h1></div>
+    <div className="qard-test-heading"><div><span className="qard-muted">Check · {record.course} · {GOAL[record.goal] ?? record.goal}</span><h1><InlineMarkdown text={record.title} path={record.mastery} services={services}/></h1></div>
       {done && <span className={'qard-review-score ' + scoreTone(score, marks)}>{score}/{marks}</span>}</div>
     {done && objective && <p className="qard-check-outcome"><StateChip state={objective.state}/><span className="qard-muted">{objective.state === 'mastered' ? 'Mastered. Cards keep it fresh from here.' : objective.due ? `Next ${['gap', 'misconception'].includes(objective.state) ? 'lesson' : 'check'} ${relativeDay(objective.due, isoDay(Date.now()))}.` : ''}</span></p>}
     {record.questions.map((q, i) => done && record.marks[q.id]
