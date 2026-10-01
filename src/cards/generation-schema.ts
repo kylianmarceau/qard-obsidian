@@ -11,7 +11,7 @@ export const flashcardsSchema: Schema = {
     } } }
   }
 };
-export const MAX_FLASHCARDS = 40;
+export const MAX_FLASHCARDS = 100;
 export function readFlashcards(value: unknown, count: number, paths: string[]): GeneratedContent[] {
   const result = check<{ cards: GeneratedContent[] }>(flashcardsSchema, value);
   if (result.cards.length !== count) throw new Error(`Return exactly ${count} cards; received ${result.cards.length}.`);

@@ -14,6 +14,11 @@ export class VaultTestStorage implements TestStorage {
     return file instanceof TFile ? this.app.vault.read(file) : null;
   }
   exists(path: string) { return !!this.app.vault.getAbstractFileByPath(normalizePath(path)); }
+  async trash(path: string) {
+    const folder = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    if (!(folder instanceof TFolder) || !folder.children.some(f => f instanceof TFile && ['test.json', 'plan.json', 'request.json'].includes(f.name))) throw new Error('The test folder no longer exists or contains no test files.');
+    await this.app.fileManager.trashFile(folder);
+  }
   async write(path: string, text: string) {
     const target = normalizePath(path), parts = target.split('/');
     let built = '';

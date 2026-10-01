@@ -39,7 +39,7 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 
 ## AI flashcards
 
-Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Choose a deck and topic, a count from 1–40, and describe the material to cover. Attach notes with **+ Note**, or let the writer find relevant vault notes. Generation uses the existing Writer connection and model in Qard settings.
+Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Choose a deck and topic, a count from 1–100, and describe the material to cover. Attach notes with **+ Note**, or let the writer find relevant vault notes. Generation uses the existing Writer connection and model in Qard settings.
 
 Review the questions and answers, edit them or preview their Markdown, deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Later selections from the same batch go into the same generated note; retrying a save does not duplicate cards.
 
@@ -195,7 +195,7 @@ The Spaced Repetition plugin no longer sees converted cards, and its note tags a
 
 ## Practice tests
 
-Practice tests are a second mode next to flashcards. An AI agent writes an exam-style test from your notes, you answer in text, and the agent marks each answer against a mark scheme. Open **Tests** in the Qard library, or run **Qard: New practice test**.
+Practice tests are a second mode next to flashcards. An AI agent writes an exam-style test from your notes, you answer in text, and the agent marks each answer against a mark scheme. Open **Tests** in the Qard library, or run **Qard: New practice test**. When a specific test is open, click the trash icon in the top bar to move its plan, questions and saved answers to Obsidian’s configured trash and return to the test list. Any running jobs for that test are stopped.
 
 1. **Describe the test.** Type what it should cover. Optionally tick **Flashcards** and choose decks, or add specific notes. With no sources, the agent finds the relevant notes itself.
 2. **Check the plan** (optional, on by default). The agent drafts a short plan: a goal, the sources it will use and why, and sections with their question mix and marks. You can remove sources or ask for changes, then choose **Generate test**. Untick **Plan first** to skip straight to the test.

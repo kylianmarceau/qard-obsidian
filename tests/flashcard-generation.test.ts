@@ -59,7 +59,7 @@ it('restores an interrupted job as an explicit retry, without silently spending 
 });
 it('validates counts, notes, names and empty requests before calling the agent', async () => {
   const { service, run, files } = setup(); await service.load();
-  for (const patch of [{ count: 0 }, { count: 41 }, { count: 1.5 }, { deck: '' }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
+  for (const patch of [{ count: 0 }, { count: 101 }, { count: 1.5 }, { deck: '' }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
   expect(run).not.toHaveBeenCalled(); expect(files).toEqual({});
   expect(flashcardPrompt({ ...request, notes: [] })).toContain('Search the vault'); expect(flashcardPrompt(request)).toContain('Notes/TCP.md');
 });
@@ -82,4 +82,11 @@ it('does not contact the provider until the request can be saved', async () => {
   await expect(service.start(request)).rejects.toThrow('Read only'); expect(run).not.toHaveBeenCalled();
   expect(service.getSnapshot().job?.error).toContain('Could not save the request');
   await service.generate(); expect(service.getSnapshot().batch?.cards).toHaveLength(2);
+});
+
+it('accepts the new maximum of 100 cards and validates the entire generated batch', async () => {
+  const reply = { cards: Array.from({ length: 100 }, (_, i) => ({ front: `Question ${i + 1}?`, back: `Answer ${i + 1}.`, source: 'Notes/TCP.md' })) };
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue(reply), { service } = setup(run);
+  await service.load(); await service.start({ ...request, count: 100 }); await settled(service);
+  expect(service.getSnapshot().batch?.cards).toHaveLength(100); expect(run.mock.calls[0]![0].prompt).toContain('exactly 100');
 });

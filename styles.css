@@ -46,6 +46,8 @@
 .qard-app fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .qard-main { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 .qard-topbar { padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qard-topbar-actions, .qard-test-delete { display: flex; align-items: center; gap: 12px; }
+.qard-test-delete .qard-error { font-size: 12px; max-width: 280px; }
 .qard-breadcrumb { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--qard-muted); font-size: 12px; }
 .qard-breadcrumb button { border: 0; padding: 3px 0; color: var(--qard-muted); font-size: 12px; text-align: left; }
 .qard-breadcrumb > span, .qard-breadcrumb button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
