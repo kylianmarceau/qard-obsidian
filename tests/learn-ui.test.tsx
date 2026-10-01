@@ -14,6 +14,8 @@ import type { LearnNav } from '../src/components/learn/common';
 import { RunningJobs } from '../src/components/jobs/RunningJobs';
 import type { QardServices } from '../src/views/services';
 import type { AgentTask } from '../src/agents/runner';
+// A constant snapshot: useSyncExternalStore re-renders forever if each call returns a new object.
+const reviewSnapshot = { settings: readSettings({}), study: {} };
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MASTERY = 'Notes/DS346/DS346 Mastery.md';
@@ -33,7 +35,7 @@ beforeEach(() => {
   };
   const run = vi.fn(async (task: AgentTask): Promise<unknown> => task.schema === marksSchema ? { questions: [{ id: 'c2', score: 2, awarded: [true, false], annotations: [{ quote: 'grows', kind: 'correct', note: 'Yes.' }], mistake: 'incomplete', feedback: 'Half there.' }] } : new Promise(() => {}));
   const learn = new LearnService(storage, () => readSettings({}), () => ({ name: 'x', run }), { get: () => undefined, set: async () => {} }, () => 3);
-  services = { host, owner: new Component(), learn, index: { getSnapshot: () => ({ cards: [] }) }, reviews: { getSnapshot: () => ({ settings: readSettings({}) }) }, isActive: () => true,
+  services = { host, owner: new Component(), learn, index: { getSnapshot: () => ({ cards: [] }) }, reviews: { subscribe: () => () => {}, getSnapshot: () => reviewSnapshot }, isActive: () => true,
     app: { workspace: { on: vi.fn(), offref: vi.fn(), openLinkText: vi.fn() }, vault: { getAllLoadedFiles: () => [] } } } as unknown as QardServices;
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });

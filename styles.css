@@ -662,3 +662,13 @@ div.qard-ask-q { cursor: default; }
 .qard-lesson-draw { display: flex; justify-content: flex-end; }
 .qard-lesson-draw:empty { display: none; }
 .qard-app button.qard-draw { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Study time */
+.qard-usage-bar .is-cards, .qard-usage-legend .is-cards i { background: var(--qard-blue); }
+.qard-usage-bar .is-lessons, .qard-usage-legend .is-lessons i { background: #8839ef; }
+.qard-usage-bar .is-checks, .qard-usage-legend .is-checks i { background: var(--qard-ok); }
+.qard-usage-bar .is-tests, .qard-usage-legend .is-tests i { background: #fe640b; }
+.qard-usage-bar .is-planning, .qard-usage-legend .is-planning i { background: #04a5e5; }
+.qard-usage-bar .is-browsing, .qard-usage-legend .is-browsing i { background: color-mix(in srgb, var(--qard-muted) 35%, transparent); }
+.qard-time-line { margin: 4px 0 0; }
+.qard-time-line button.qard-text-button { padding: 0; font-size: inherit; }

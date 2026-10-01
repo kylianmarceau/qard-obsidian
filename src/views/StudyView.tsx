@@ -15,6 +15,8 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
   const [confirmExit, setConfirmExit] = useState(false);
   const lock = useRef(false), surface = useRef<HTMLDivElement>(null), mounted = useRef(true), start = useRef(Date.now());
   const card = cards[position];
+  // Study time is split by deck, card by card.
+  useEffect(() => { services.time?.set(services.owner, { activity: 'cards', course: card?.deck }); }, [services, card?.deck]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; services.setFocus(false); }; }, [services]);
   useEffect(() => { services.setFocus(focus); return () => services.setFocus(false); }, [focus, services]);
   useEffect(() => { surface.current?.focus(); }, [position]);

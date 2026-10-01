@@ -292,6 +292,12 @@ Long waits show **While you wait** instead of a spinner, offering one thing at a
 
 While a practice test is written or marked, nothing from that test's own notes is offered, so warming up doesn't inflate your score or show answers you're about to review. Ratings and answers count as usual. Once you start something the screen stays put, and when the job is done a bar offers **Continue**.
 
+## Study time
+
+Qard records how long you actively study, by course and activity: cards, lessons, checks, practice tests, course maps and the library. Time counts only while a Qard tab is in front, Obsidian has focus, and you've typed, clicked or scrolled in the last two minutes. Card reviews count towards the card's deck, or towards the course a deck is named after (a `DS346 A1` deck counts towards DS346).
+
+Open **Study time** from Learn, or run **Qard: Show study time**. It shows a daily chart by activity and a table by course. Today shows how long you've studied today, and each course page shows its time over the last 30 days. Times are kept for a year in Qard's plugin data on this device. Nothing is sent anywhere.
+
 ## Token usage
 
 Qard records the tokens used by every call it makes to Claude Code, Codex, the Anthropic API or OpenRouter: input, output and cache tokens, the model that ran, and the cost where the provider reports it. **Qard: Show token usage** (also **Usage** on the Learn tab and **View usage** in Settings → Qard → AI roles) shows totals for today, 7 days, 30 days or all time, tokens per day, and breakdowns by feature (writing tests, marking, writing lessons, tutoring, course mapping and so on) and by connection and model.
