@@ -12,7 +12,8 @@ import { topicKey } from './decks/deck-index';
 import { parseCards, topicAtLine } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
-import { createRunner, type UsageEvent } from './agents/create-runner';
+import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
+import { pythonRunner } from './agents/python';
 import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
 import { VaultLearnStorage } from './learn/vault-learn-storage';
@@ -41,7 +42,7 @@ export default class QardPlugin extends Plugin {
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };
     this.jobs = new JobClock(() => this.reviews.getSnapshot().timings, (key, ms) => this.reviews.recordTiming(key, ms), () => settings().agents.roles);
     const timing = (kind: string, ms: number) => this.jobs.record(kind, ms);
-    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing);
+    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing, (() => { const host = nodeHost(); return host && pythonRunner(host); })());
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
       record: (test, attempt) => this.learn.recordTest(test, attempt)

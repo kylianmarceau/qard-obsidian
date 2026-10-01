@@ -101,7 +101,8 @@ export class QardSettingsTab extends PluginSettingTab {
       { name: 'Token usage', desc: 'See how many tokens Qard has used, by feature and by connection and model.', render: row => { row.addButton(b => b.setButtonText('View usage').onClick(() => { (this.app as unknown as { setting?: { close?: () => void } }).setting?.close?.(); void this.qard.show('usage'); })); } },
       role('tutor', 'Tutor', 'Replies live in lessons and marks checks. Choose a fast model. API keys respond fastest.'),
       role('writer', 'Writer', 'Maps courses and writes lessons, checks and tests. Choose your best model.'),
-      role('marker', 'Marker', 'Marks practice tests in the background.')
+      role('marker', 'Marker', 'Marks practice tests in the background.'),
+      role('illustrator', 'Illustrator', 'Draws figures for lessons: plots computed with Python on this computer, or diagrams. Choose a strong model.')
     ];
   }
   private testDefinitions(): SettingRow[] {
@@ -117,7 +118,8 @@ export class QardSettingsTab extends PluginSettingTab {
   }
   private learnDefinitions(): SettingRow[] {
     const l = this.qard.reviews.getSnapshot().settings.learn;
-    return [{ name: 'Lessons and checks folder', desc: 'Lessons are saved in Lessons, and checks in Checks, inside this folder. Mastery files stay next to your course notes.', render: row => { row.addText(x => { x.setValue(l.folder).setPlaceholder('Qard'); x.inputEl.addEventListener('change', () => { try { const folder = safeFolder(x.getValue()); if (folder) void this.patch(s => ({ ...s, learn: { folder } })); else throw new Error('Choose a folder.'); } catch (e) { new Notice((e as Error).message); x.setValue(this.qard.reviews.getSnapshot().settings.learn.folder); } }); }); } }];
+    return [{ name: 'Lessons and checks folder', desc: 'Lessons are saved in Lessons, and checks in Checks, inside this folder. Mastery files stay next to your course notes.', render: row => { row.addText(x => { x.setValue(l.folder).setPlaceholder('Qard'); x.inputEl.addEventListener('change', () => { try { const folder = safeFolder(x.getValue()); if (folder) void this.patch(s => ({ ...s, learn: { ...s.learn, folder } })); else throw new Error('Choose a folder.'); } catch (e) { new Notice((e as Error).message); x.setValue(this.qard.reviews.getSnapshot().settings.learn.folder); } }); }); } },
+      { name: 'Figures folder', desc: 'Figures the illustrator draws are saved here, in a subfolder per subject (e.g. assets/statistics), so you can reuse them in notes.', render: row => { row.addText(x => { x.setValue(l.figures).setPlaceholder('Figures folder'); x.inputEl.addEventListener('change', () => { try { const figures = safeFolder(x.getValue()); if (figures) void this.patch(s => ({ ...s, learn: { ...s.learn, figures } })); else throw new Error('Choose a folder.'); } catch (e) { new Notice((e as Error).message); x.setValue(this.qard.reviews.getSnapshot().settings.learn.figures); } }); }); } }];
   }
   display() { this.redraw(); }
   // Conditional rows depend on the provider, so the whole tab is redrawn when it changes.

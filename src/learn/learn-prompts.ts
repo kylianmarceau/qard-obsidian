@@ -12,6 +12,15 @@ export const TEACHING = `How to teach:
 - Ground everything in the student's notes and name the note. Where the notes are silent, use standard, correct knowledge.
 - Plain, direct language. Short paragraphs. Markdown, with LaTeX in $…$.`;
 
+/**
+ * When to show rather than tell, from the vault's figure guide: only when the student would understand
+ * significantly faster or more accurately with a visual. Most steps need none.
+ */
+const VISUALS = `Visuals. Use one only when the student would understand significantly faster or more accurately with it; text is the default, and most steps need none. Good reasons: the idea has a visual structure (a tree, graph, layout or flow), a shape (a distribution, a curve, convergence, a decision boundary), a spatial relationship, or would otherwise take 150 words to describe.
+- A flow, process, sequence, decision or small graph: a Mermaid block in the Markdown (\`\`\`mermaid, graph TD or LR). Put every node label in double quotes, and use <br/> for line breaks.
+- A figure already embedded in the notes that shows this idea: reuse it. Copy its embed, e.g. ![[beta-shapes.png|700]], followed by a blank line and an italic caption starting *Figure:*.`;
+const DRAWN = `- A shape or picture Mermaid can't show, with no figure in the notes (a distribution or function with specific parameters, a geometric picture, a data structure with real values, a worked example laid out in space): write a brief in figure and the illustrator will draw it. Name exactly what to plot or draw, with the parameters and values, and what the student should notice.`;
+
 const QUESTION_FORMAT = `${GOAL_RULES}
 ${MCQ_RULES}
 Every question needs a rubric of separate, checkable points whose marks add up to its marks, and a model answer that earns full marks.`;
@@ -125,7 +134,11 @@ Write step ${index + 1} of ${map.steps.length}: "${step.title}". Why it is neede
 - checkFirst: true when the student can plausibly work the idea out before reading the explanation; the check is then asked first.
 - check: one question (id "k${index + 1}") that shows whether the step landed, worth 1–4 marks.${lesson.objective ? ` Set objective to "${lesson.objective}".` : ''}
 - misconceptions: the two or three likely wrong answers to the check, each with a short re-explanation aimed at that mistake.
-${QUESTION_FORMAT}`;
+- figure: "" unless the step needs a figure drawn (see Visuals).
+${QUESTION_FORMAT}
+
+${VISUALS}
+${DRAWN}`;
 }
 
 export function tutorMarkPrompt(lesson: Lesson, step: LessonStep, answer: AnswerState | undefined, retryOf?: StepState) {
@@ -149,7 +162,7 @@ export function askPrompt(lesson: Lesson, step: LessonStep | undefined, asks: { 
 You are tutoring live. Lesson: ${lesson.topic}.${step ? `\nCurrent step: ${step.title}\n<explanation>${step.explain}</explanation>` : ''}
 Notes: ${lesson.notes.join(', ') || 'none'}
 ${sourcesBlock(sources)}${asks.length ? `Earlier questions in this step:\n${asks.map(a => `Q: ${a.q}\nA: ${a.a}`).join('\n\n')}\n` : ''}
-The student asks:\n<ask>\n${question.trim()}\n</ask>\nAnswer directly and correctly in at most 150 words, grounded in their notes where possible.`;
+The student asks:\n<ask>\n${question.trim()}\n</ask>\nAnswer directly and correctly in at most 150 words, grounded in their notes where possible.\n\n${VISUALS}\nThe student can ask for any other figure to be drawn.`;
 }
 
 export function closePrompt(lesson: Lesson) {
@@ -167,4 +180,20 @@ Return:
 - summary: what the lesson covered and what the student showed, for the lesson note. At most 200 words.
 - cards: two to four flashcards for the ideas most worth keeping fresh, and any gap the checks exposed. front is a precise question; back is short and complete.
 - noteEdit: only if one of the notes is missing something the lesson had to explain, the paragraph to add (path, the heading to put it under or "" for the end, and the Markdown). Omit it otherwise.`;
+}
+
+/** The illustrator draws one figure for a lesson step or an answer, from a brief. */
+export function illustratePrompt(o: { topic: string; step?: LessonStep; context?: string; brief: string; python: boolean; domains: string[] }) {
+  return `You are the illustrator for a lesson on: ${o.topic}.${o.step ? `\nThe step: ${o.step.title}\n<explanation>${o.step.explain.slice(0, 3000)}</explanation>` : ''}${o.context ? `\n${o.context}` : ''}
+
+Draw one figure for this brief:
+<brief>${o.brief.trim()}</brief>
+
+The figure must be correct, uncluttered and readable at 700px wide. Label axes, curves and parts directly, with a legend only when labels would crowd. Use the notation of the explanation. Show what the brief asks and nothing decorative.
+${o.python ? `Choose kind:
+- "python" for anything computed: functions, distributions, data, curves, regions, convergence. code is a matplotlib script. numpy is imported as np and matplotlib.pyplot as plt; import scipy, scipy.stats or seaborn if needed. The style is already set and Qard saves the current figure, so don't call savefig or show, set a style, or read or write files. Compute every value; never hard-code a shape. Use mathtext ($\\alpha$) for symbols. Use plt.subplots with one to three panels.
+- "svg" for structure: trees, layouts, data structures with values, geometric constructions, annotated diagrams.` : 'kind must be "svg": write the complete SVG yourself. For a plot, compute the coordinates carefully.'}
+For svg: a complete <svg> with xmlns and a viewBox, width at most 800. A white background rect; dark text (#24273a), muted labels (#5c6070), lines #9ca0b0, and highlights #1e66f5 (blue), #40a02b (green), #fe640b (orange), #d20f39 (red). Plain Unicode text, no LaTeX. Define arrowhead markers in <defs> for directed arrows. No scripts, images, links or external fonts.
+caption: what the figure shows, naming the specific parameters or values, so it makes sense on its own.
+name: a descriptive file name. domain: the subject folder${o.domains.length ? `; existing: ${o.domains.join(', ')}` : ''}.`;
 }

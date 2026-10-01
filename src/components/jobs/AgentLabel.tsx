@@ -4,7 +4,7 @@ import type { AgentProvider, AgentRole } from '../../agents/runner';
 import { defaultModel } from '../../agents/create-runner';
 
 const noSubscription = () => () => {};
-const ROLES: Record<AgentRole, string> = { tutor: 'Tutor', writer: 'Writer', marker: 'Marker' };
+const ROLES: Record<AgentRole, string> = { tutor: 'Tutor', writer: 'Writer', marker: 'Marker', illustrator: 'Illustrator' };
 const CONNECTIONS: Record<string, string> = { 'claude-code': 'Claude Code', codex: 'Codex', anthropic: 'Anthropic API', openrouter: 'OpenRouter' };
 
 /** A quiet "Tutor · Claude Code · haiku" tag showing who is working on something. Hidden when turned off in settings. */

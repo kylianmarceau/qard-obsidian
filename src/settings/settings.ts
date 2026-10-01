@@ -4,7 +4,8 @@ export interface TestSettings { planFirst: boolean; marking: 'section' | 'end'; 
 export interface RoleSetting { provider: AgentProvider; model: string }
 /** Connections are set up once; each role then picks a connection and a model. */
 export interface AgentSettings { claudePath: string; codexPath: string; roles: Record<AgentRole, RoleSetting> }
-export interface LearnSettings { folder: string }
+/** figures: where drawn figures are saved, one subfolder per subject (the vault's assets/<domain>/ convention). */
+export interface LearnSettings { folder: string; figures: string }
 export interface QardSettings {
   defaultMode: StudyMode; defaultOrder: CardOrder; keyboardHints: boolean;
   autoFocus: boolean; audioEnabled: boolean; cardFolder: string; scheduling: boolean;
@@ -13,8 +14,8 @@ export interface QardSettings {
   showAgent: boolean;
 }
 export const DEFAULT_TEST_SETTINGS: TestSettings = { planFirst: true, marking: 'section', questions: 10, useProfile: true, folder: 'Qard/Tests' };
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = { claudePath: '', codexPath: '', roles: { tutor: { provider: 'claude-code', model: 'haiku' }, writer: { provider: 'claude-code', model: '' }, marker: { provider: 'claude-code', model: '' } } };
-export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard' };
+export const DEFAULT_AGENT_SETTINGS: AgentSettings = { claudePath: '', codexPath: '', roles: { tutor: { provider: 'claude-code', model: 'haiku' }, writer: { provider: 'claude-code', model: '' }, marker: { provider: 'claude-code', model: '' }, illustrator: { provider: 'claude-code', model: '' } } };
+export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard', figures: 'assets' };
 export const DEFAULT_SETTINGS: QardSettings = { defaultMode: 'all', defaultOrder: 'note', keyboardHints: true, autoFocus: false, audioEnabled: false, cardFolder: 'Qard', scheduling: true, tests: DEFAULT_TEST_SETTINGS, agents: DEFAULT_AGENT_SETTINGS, learn: DEFAULT_LEARN_SETTINGS, showAgent: true };
 const PROVIDERS: AgentProvider[] = ['claude-code', 'codex', 'anthropic', 'openrouter'];
 const text = (value: unknown, fallback: string) => typeof value === 'string' ? value : fallback;
@@ -36,16 +37,17 @@ function readAgentSettings(raw: unknown, legacy: unknown): AgentSettings {
   const a = raw && typeof raw === 'object' ? raw as Partial<AgentSettings> : undefined;
   if (a) {
     const roles = (a.roles ?? {}) as Partial<Record<AgentRole, unknown>>, d = DEFAULT_AGENT_SETTINGS.roles;
-    return { claudePath: text(a.claudePath, ''), codexPath: text(a.codexPath, ''), roles: { tutor: readRole(roles.tutor, d.tutor), writer: readRole(roles.writer, d.writer), marker: readRole(roles.marker, d.marker) } };
+    return { claudePath: text(a.claudePath, ''), codexPath: text(a.codexPath, ''), roles: { tutor: readRole(roles.tutor, d.tutor), writer: readRole(roles.writer, d.writer), marker: readRole(roles.marker, d.marker), illustrator: readRole(roles.illustrator, readRole(roles.writer, d.writer)) } };
   }
   const old = legacy && typeof legacy === 'object' ? legacy as { provider?: unknown; model?: unknown; agentPath?: unknown } : {};
   const provider = PROVIDERS.includes(old.provider as AgentProvider) ? old.provider as AgentProvider : 'claude-code', model = text(old.model, ''), path = text(old.agentPath, '');
   const tutor: RoleSetting = provider === 'anthropic' ? { provider, model: 'claude-haiku-4-5' } : provider === 'claude-code' ? { provider, model: 'haiku' } : { provider, model: '' };
-  return { claudePath: provider === 'claude-code' ? path : '', codexPath: provider === 'codex' ? path : '', roles: { tutor, writer: { provider, model }, marker: { provider, model } } };
+  return { claudePath: provider === 'claude-code' ? path : '', codexPath: provider === 'codex' ? path : '', roles: { tutor, writer: { provider, model }, marker: { provider, model }, illustrator: { provider, model } } };
 }
 function readLearnSettings(raw: unknown): LearnSettings {
   const l = raw && typeof raw === 'object' ? raw as Partial<LearnSettings> : {};
-  return { folder: typeof l.folder === 'string' && l.folder.trim() ? l.folder : DEFAULT_LEARN_SETTINGS.folder };
+  const d = DEFAULT_LEARN_SETTINGS;
+  return { folder: typeof l.folder === 'string' && l.folder.trim() ? l.folder : d.folder, figures: typeof l.figures === 'string' && l.figures.trim() ? l.figures : d.figures };
 }
 export function readSettings(raw: unknown): QardSettings {
   const s = raw && typeof raw === 'object' ? raw as Partial<QardSettings> : {};

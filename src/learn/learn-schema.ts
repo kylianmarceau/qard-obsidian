@@ -26,8 +26,9 @@ export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps }))
 export const stepSchema = obj({
   title: str(), explain: str('Markdown. Establish the idea from what the student already accepts, showing how it could have been discovered.'),
   connect: str('One or two sentences linking it to the previous step and the goal.'), checkFirst: { type: 'boolean' },
-  check: questionSchema, misconceptions: arr(obj({ signs: str('What an answer showing this mistake looks like.'), reteach: str('Markdown: a short re-explanation aimed at this mistake.') }))
-});
+  check: questionSchema, misconceptions: arr(obj({ signs: str('What an answer showing this mistake looks like.'), reteach: str('Markdown: a short re-explanation aimed at this mistake.') })),
+  figure: str('"" for none (the usual case), or a brief for the illustrator: what the figure must show, with the exact functions, parameters or values, and why it helps.')
+}, ['figure']);
 export const tutorMarkSchema = obj({ ...markProps, reply: str('Markdown, at most 80 words, addressed to the student.'), misconception: { type: 'integer', description: 'Index of the anticipated misconception the answer shows, or -1.' } });
 export const answerSchema = obj({ answer: str('Markdown, at most 150 words.') });
 export const closeSchema = obj({
@@ -59,6 +60,15 @@ export function readProbeMap(v: unknown, expected: { id: string; rubric: number 
   ]);
 }
 export const readStep = (v: unknown) => check<LessonStep>(stepSchema, v, s => questionErrors([s.check], 'check'));
+export const figureSchema = obj({
+  kind: oneOf(['python', 'svg']),
+  code: str('For python: a matplotlib script that draws the figure (Qard sets the style and saves it). For svg: the complete SVG document.'),
+  caption: str('One or two sentences: what the figure shows, naming the specific parameters or values. LaTeX in $…$.'),
+  name: str('A descriptive file name: lowercase, hyphens, no dates, e.g. "beta-shapes-by-alpha".'),
+  domain: str('The subject folder, e.g. "statistics". Prefer an existing one.')
+});
+export interface FigureReply { kind: 'python' | 'svg'; code: string; caption: string; name: string; domain: string }
+export const readFigure = (v: unknown, python: boolean) => check<FigureReply>(figureSchema, v, f => f.kind === 'python' && !python ? ['kind must be "svg": Python is not available'] : f.code.trim() ? [] : ['code is empty']);
 export const readTutorMark = (v: unknown, rubric: number) => check<QuestionMark & { reply: string; misconception: number }>(tutorMarkSchema, v, m => m.awarded.length === rubric ? [] : [`awarded needs ${rubric} entries`]);
 export const readAnswer = (v: unknown) => check<{ answer: string }>(answerSchema, v);
 export const readClose = (v: unknown) => check<{ summary: string; cards: { front: string; back: string }[]; noteEdit?: { path: string; heading: string; text: string } }>(closeSchema, v);

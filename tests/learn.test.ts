@@ -1,9 +1,10 @@
+// @vitest-environment jsdom
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { addDays, applyEvidence, breakCycles, parseMastery, readyToLearn, setFrontmatter, shortLabel, writeObjectives, newMasteryNote, type Objective } from '../src/learn/mastery';
 import { layoutGraph, layoutTopic, OBJECTIVE, routeTo, topicsOf } from '../src/components/learn/CourseMap';
 import { courseUpdateSchema } from '../src/learn/learn-schema';
 import { LearnService, insertUnderHeading, summarise, type LearnStorage } from '../src/learn/learn-service';
-import { mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema, closeSchema } from '../src/learn/learn-schema';
+import { figureSchema, mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema, closeSchema } from '../src/learn/learn-schema';
 import { marksSchema } from '../src/tests/test-schema';
 import { readSettings } from '../src/settings/settings';
 import type { AgentRole, AgentTask } from '../src/agents/runner';
@@ -182,7 +183,7 @@ const q = (id: string, extra: Partial<Question> = {}): Question => ({ id, type: 
 const mcq = (id: string): Question => q(id, { type: 'mcq', marks: 1, rubric: [{ point: 'right', marks: 1 }], options: ['a', 'b'], answer: 1 });
 const markOf = (id: string, awarded: boolean[]) => ({ id, score: 99, awarded, annotations: [], mistake: 'incomplete', feedback: 'ok' });
 
-function setup() {
+function setup(python?: (script: string) => Promise<string>) {
   const files = new Map<string, string>([['Notes/DS346/Topic Models.md', '# Topic Models\n\n## Dirichlet\n\nA prior.\n'], ['Notes/DS346/DS346 Hub.md', 'hub']]);
   const modified = new Map<string, number>();
   const storage: LearnStorage = {
@@ -206,7 +207,7 @@ function setup() {
   let now = new Date(2026, 8, 29, 10).getTime();
   const settings = readSettings({ learn: { folder: 'Qard' } });
   const notices: string[] = [];
-  const make = () => new LearnService(storage, () => settings, runner, { get: id => links.get(id), set: async (id, l) => { links.set(id, l); } }, () => 4, () => now, m => notices.push(m));
+  const make = () => new LearnService(storage, () => settings, runner, { get: id => links.get(id), set: async (id, l) => { links.set(id, l); } }, () => 4, () => now, m => notices.push(m), undefined, python);
   const learn = make();
   // restart: a fresh service over the same files, as after a reload of Obsidian or the plugin.
   return { files, modified, learn, calls, reply, replies, links, notices, restart: make, advance: (days: number) => { now += days * 86_400_000; } };
@@ -371,6 +372,50 @@ describe('learning service', () => {
     t.reply(probeMapSchema, () => ({ marks: [], findings: 'F', map: { title: 'T', plan: 'P', mermaid: '', steps: [] } }));
     await t.learn.probe(lesson);
     expect(t.learn.lessonAt(lesson)!.probe).toBeDefined();
+  });
+
+  it('draws figures the writer asks for, runs plot scripts, retries a broken figure, and draws on request', async () => {
+    const scripts: string[] = [];
+    const svg = (label: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" onload="alert(1)"><script>alert(1)</script><text x="1" y="5">${label}</text></svg>`;
+    const t = setup(async script => { scripts.push(script); if (script.includes('broken')) throw new Error('NameError: name \'betta\' is not defined'); return `<?xml version="1.0"?>\n${svg('plot')}`; });
+    t.files.set('assets/statistics/beta-shapes.png', '');
+    t.reply(objectivesSchema, () => ({ course: 'DS346', objectives: [{ id: 'beta', title: 'Beta shapes', notes: ['Notes/DS346/Topic Models.md'], needs: [], group: 'Priors', label: 'Beta', state: 'new', evidence: '' }] }));
+    await t.learn.mapCourse('Notes/DS346');
+    const mastery = await t.learn.acceptCourse('Notes/DS346', ['beta']);
+    t.reply(probeSchema, () => ({ questions: [], note: 'None needed.' }));
+    t.reply(probeMapSchema, () => ({ marks: [], findings: 'F', map: { title: 'Beta', plan: 'P', mermaid: '', steps: [{ title: 'Shapes', why: 'w' }, { title: 'Plain', why: 'w' }] } }));
+    t.reply(stepSchema, task => ({ title: /Write step 1/.test(task.prompt) ? 'Shapes' : 'Plain', explain: 'E', connect: 'C', checkFirst: false, check: q('x'), misconceptions: [], figure: /Write step 1/.test(task.prompt) ? 'Plot Beta(2,5) and Beta(5,2) densities.' : '' }));
+    let figureCalls = 0;
+    t.reply(figureSchema, task => {
+      figureCalls++;
+      if (task.prompt.includes('Draw this answer')) return { kind: 'svg', code: svg('tree'), caption: 'A tree.', name: 'Answer Tree', domain: 'algorithms' };
+      return task.prompt.includes('previous figure failed') ? { kind: 'python', code: 'plt.plot(beta)', caption: 'Beta(2,5) and Beta(5,2).', name: 'Beta Shapes', domain: 'Statistics' } : { kind: 'python', code: 'broken(betta)', caption: 'x', name: 'x', domain: 'statistics' };
+    });
+    const lesson = await t.learn.startLesson({ topic: 'Beta', notes: [], mastery, objective: 'beta' });
+    await vi.waitFor(() => expect(t.learn.lessonAt(lesson)!.state[0]?.figure).toBeDefined());
+    // The writer was told when to use visuals; only the step with a brief was drawn, by the illustrator, and the first script's error went back.
+    expect(t.calls.find(c => c.task.schema === stepSchema)!.task.prompt).toContain('Mermaid block');
+    const drawn = t.calls.filter(c => c.task.schema === figureSchema);
+    expect(drawn.map(c => c.role)).toEqual(['illustrator', 'illustrator']);
+    expect(drawn[0]!.task.prompt).toContain('Plot Beta(2,5) and Beta(5,2) densities.');
+    expect(drawn[0]!.task.prompt).toContain('existing: statistics');
+    expect(drawn[1]!.task.prompt).toContain("NameError: name 'betta' is not defined");
+    expect(scripts).toEqual(['broken(betta)', 'plt.plot(beta)']);
+    // A clean SVG, named the vault's way; the existing file name is not overwritten.
+    const figure = t.learn.lessonAt(lesson)!.state[0]!.figure!;
+    expect(figure).toMatchObject({ path: 'assets/statistics/beta-shapes.svg', caption: 'Beta(2,5) and Beta(5,2).' });
+    const saved = t.files.get(figure.path)!;
+    expect(saved).toContain('<text x="1" y="5">plot</text>');
+    expect(saved).not.toMatch(/script|onload/);
+    expect(t.learn.lessonAt(lesson)!.state[1]?.figure).toBeUndefined();
+    expect(figureCalls).toBe(2);
+    // "Draw this" on an answer to a question asked in the step.
+    const st = t.learn.lessonAt(lesson)!.state;
+    t.files.set(lesson, JSON.stringify({ ...t.learn.lessonAt(lesson)!, state: st.map((x, i) => i === 1 ? { ...x, asks: [{ q: 'Draw this answer', a: 'A tree.' }] } : x) }));
+    const again = t.restart();
+    await again.openLesson(lesson);
+    await again.illustrate(lesson, 1, 0);
+    expect(again.lessonAt(lesson)!.state[1]!.asks[0]!.figure).toMatchObject({ path: 'assets/algorithms/answer-tree.svg' });
   });
 
   it('picks up unwritten lesson steps when a lesson is reopened after a restart', async () => {

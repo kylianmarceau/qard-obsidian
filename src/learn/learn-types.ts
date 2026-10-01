@@ -1,6 +1,7 @@
 /** Checks and lessons. As with tests, Qard is the only writer; agents return JSON that Qard validates. */
 import type { AnswerState, Goal, Question, QuestionMark } from '../tests/test-types';
 import type { MasteryState } from './mastery';
+import type { Figure } from './figures';
 
 /** One to three fresh questions on one objective, written ahead of time and kept afterwards as evidence. */
 export interface CheckRecord {
@@ -21,13 +22,17 @@ export interface LessonStep {
   checkFirst: boolean;
   check: Question;
   misconceptions: { signs: string; reteach: string }[];
+  /** The writer's brief for a figure, or "" when the step needs none. */
+  figure?: string;
 }
 export interface StepState {
   answer?: AnswerState; mark?: QuestionMark;
   /** The tutor's reply to the answer, and a prepared re-explanation when the mistake was anticipated. */
   reply?: string; reteach?: string;
   retry?: { text: string; mark: QuestionMark; reply: string };
-  asks: { q: string; a: string }[];
+  asks: { q: string; a: string; figure?: Figure }[];
+  /** A figure for the step: the writer's brief, or the student's "Draw this". */
+  figure?: Figure;
 }
 export interface LessonClose {
   summary: string;

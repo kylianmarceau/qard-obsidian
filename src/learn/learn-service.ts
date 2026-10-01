@@ -1,13 +1,15 @@
 import type { QardSettings } from '../settings/settings';
 import { tidyMermaid } from './mermaid';
+import { cleanSvg, figureDomain, figureMarkdown, figureName, type Figure } from './figures';
+import type { PythonRunner } from '../agents/python';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
 import { NEEDS_LESSON, PASS, addDays, applyEvidence, breakCycles, goalFor, isDue, isoDay, newMasteryNote, parseMastery, readyToLearn, setFrontmatter, slugId, stamp, writeObjectives, type Evidence, type Mastery, type MasteryState, type Objective } from './mastery';
-import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, readCourseUpdate, type ObjectiveReply, probeMapSchema, probeSchema, questionsSchema, readAnswer, readClose, readMap, readObjectives, readProbe, readProbeMap, readQuestions, readStep, readTutorMark, stepSchema, tutorMarkSchema } from './learn-schema';
-import { askPrompt, checkPrompt, closePrompt, mapCoursePrompt, updateCoursePrompt, markCheckPrompt, probeMapPrompt, probePrompt, reviseMapPrompt, stepPrompt, tutorMarkPrompt } from './learn-prompts';
+import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, readCourseUpdate, type ObjectiveReply, probeMapSchema, probeSchema, questionsSchema, readAnswer, readClose, readMap, readObjectives, readProbe, readProbeMap, readQuestions, readStep, readTutorMark, stepSchema, tutorMarkSchema, figureSchema, readFigure } from './learn-schema';
+import { askPrompt, checkPrompt, closePrompt, mapCoursePrompt, updateCoursePrompt, markCheckPrompt, probeMapPrompt, probePrompt, reviseMapPrompt, stepPrompt, tutorMarkPrompt, illustratePrompt } from './learn-prompts';
 import type { CardLink } from '../review/review-store';
-import type { CheckRecord, Lesson, LessonSummary, StepState, Today, TodayItem } from './learn-types';
+import type { CheckRecord, Lesson, LessonStep, LessonSummary, StepState, Today, TodayItem } from './learn-types';
 
 /** Vault access for learning files; the Obsidian adapter is vault-learn-storage.ts. */
 export interface LearnStorage {
@@ -27,7 +29,7 @@ export interface LearnStorage {
   remove(path: string): Promise<void>;
 }
 export interface CardLinks { get(cardId: string): CardLink | undefined; set(cardId: string, link: CardLink): Promise<void> }
-export type LearnJobKind = 'map-course' | 'check-write' | 'check-mark' | 'probe' | 'map' | 'revise' | 'steps' | 'tutor' | 'ask' | 'close';
+export type LearnJobKind = 'map-course' | 'check-write' | 'check-mark' | 'probe' | 'map' | 'revise' | 'steps' | 'tutor' | 'ask' | 'close' | 'figure';
 export interface LearnJob { kind: LearnJobKind; id: string; startedAt?: number; error?: string }
 export interface CourseProposal { folder: string; course: string; objectives: Objective[] }
 export interface CourseUpdate { mastery: string; course: string; notes: string[]; added: Objective[]; extended: { id: string; title: string; notes: string[]; needs: string[]; group?: string; label?: string }[]; outdated: { id: string; title: string; reason: string }[] }
@@ -76,7 +78,7 @@ export class LearnService {
   private disposed = false;
   private proposalsLoaded?: Promise<void>;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
-  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
+  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}, private python?: PythonRunner) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -429,6 +431,7 @@ export class LearnService {
     else if (!l.probe) void this.probe(path);
     else if (l.probe.submitted && !l.map) void this.submitProbe(path);
     else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some(s => !s))) await this.prepareSteps(path);
+    if (!l.finishedAt) l.steps.forEach((s, i) => { if (s?.figure?.trim() && !l.state[i]?.figure && !this.job(path, 'figure', String(i))?.error) void this.illustrate(path, i); });
     return l;
   }
   async listLessons(): Promise<LessonSummary[]> {
@@ -550,6 +553,8 @@ export class LearnService {
           const latest = this.lesson(path);
           if (latest.stepsFor !== plan) continue;
           await this.setLesson(path, { ...latest, steps: latest.steps.map((s, i) => i === index ? { ...step, check: { ...step.check, id: `k${index + 1}`, objective: latest.objective } } : s) });
+          // The illustrator starts on a figure the writer asked for while the remaining steps are written.
+          if (step.figure?.trim()) void this.illustrate(path, index);
         }
       };
       await Promise.all(Array.from({ length: STEP_WRITERS }, worker));
@@ -593,6 +598,46 @@ export class LearnService {
       if (latest) await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
     });
   }
+  /**
+   * Draws a figure for a step (from the writer's brief, or the student's "Draw this", with an optional request)
+   * or for the answer to a question asked in it.
+   */
+  illustrate(path: string, index: number, ask?: number, request?: string) {
+    return this.track(path, 'figure', ask === undefined ? String(index) : `${index}-ask-${ask}`, async signal => {
+      const lesson = this.lesson(path), step = lesson.steps[index], asked = ask === undefined ? undefined : lesson.state[index]?.asks[ask];
+      if (!step || (ask !== undefined && !asked)) return;
+      const previous = asked ? asked.figure : lesson.state[index]?.figure;
+      const base = asked ? `A figure that makes this answer clear.\nQuestion: ${asked.q}\nAnswer: ${asked.a}` : step.figure?.trim() || `The one figure that would make "${step.title}" clearest.`;
+      const brief = request?.trim() ? previous ? `${previous.brief}\n\nThe student saw the figure (${previous.caption}) and asks: ${request.trim()}` : `${base}\n\nThe student asks: ${request.trim()}` : previous?.brief ?? base;
+      const figure = await this.draw(lesson.map?.title ?? lesson.topic, step, brief, signal);
+      const latest = this.lesson(path), st = latest.state[index]; if (!st) return;
+      const next: StepState = asked ? { ...st, asks: st.asks.map((a, i) => i === ask ? { ...a, figure } : a) } : { ...st, figure };
+      await this.setLesson(path, { ...latest, state: latest.state.map((x, i) => i === index ? next : x) });
+    });
+  }
+  /**
+   * The illustrator replies with a matplotlib script or an SVG. Qard runs the script on this computer, cleans the
+   * SVG and saves it under the figures folder. A failure goes back to the illustrator once, with the error.
+   */
+  private async draw(topic: string, step: LessonStep, brief: string, signal: AbortSignal): Promise<Figure> {
+    const python = !!this.python, root = this.settings().learn.figures.replace(/\/+$/, '');
+    const domains = [...new Set(['svg', 'png'].flatMap(ext => this.storage.files(root, ext)).map(p => p.slice(root.length + 1).split('/')).filter(parts => parts.length > 1).map(parts => parts[0]!))].sort();
+    let prompt = illustratePrompt({ topic, step, brief, python, domains });
+    for (let attempt = 0; ; attempt++) {
+      const reply = await runValidated(this.runner('illustrator'), { signal, prompt, schema: figureSchema, effort: 'medium', vault: false }, v => readFigure(v, python));
+      try {
+        const svg = cleanSvg(reply.kind === 'python' ? await this.python!(reply.code, signal) : reply.code);
+        const folder = `${root}/${figureDomain(reply.domain)}`, name = figureName(reply.name);
+        let path = `${folder}/${name}.svg`;
+        for (let n = 2; this.storage.exists(path); n++) path = `${folder}/${name}-${n}.svg`;
+        await this.storage.write(path, svg);
+        return { path, caption: reply.caption.trim(), brief };
+      } catch (error) {
+        if (signal.aborted || attempt >= 1) throw error;
+        prompt = `${prompt}\n\nYour previous figure failed: ${(error as Error).message}\n<previous kind="${reply.kind}">\n${reply.code.slice(0, 20000)}\n</previous>\nFix it.`;
+      }
+    }
+  }
   async go(path: string, index: number) {
     const lesson = this.lesson(path);
     if (index >= 0 && index < lesson.steps.length && lesson.steps[index]) await this.setLesson(path, { ...lesson, current: index });
@@ -628,7 +673,7 @@ export class LearnService {
       if (!s) return '';
       const st = lesson.state[i], a = st?.answer;
       const answer = a?.unknown ? "_I didn't know._" : s.check.type === 'mcq' ? s.check.options?.[a?.choice ?? -1] ?? '_No answer._' : a?.text?.trim() || '_No answer._';
-      return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map(x => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
+      return `### ${i + 1}. ${s.title}\n\n${s.explain}${st?.figure ? `\n\n${figureMarkdown(st.figure)}` : ''}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map(x => `> **Q:** ${x.q}\n> ${(x.figure ? `${x.a}\n\n${figureMarkdown(x.figure)}` : x.a).replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
     }).filter(Boolean).join('\n\n');
     const mastery = lesson.mastery ? ` · [[${lesson.mastery.replace(/\.md$/, '')}|${lesson.course ?? 'Mastery'}]]${lesson.objective ? ` · \`${lesson.objective}\`` : ''}` : '';
     const body = `---\nqard-lesson: true\n${lesson.objective ? `qard-objective: ${lesson.objective}\n` : ''}---\n\n# ${lesson.map?.title ?? lesson.topic}\n\n${day}${mastery}\n\n## Summary\n\n${summary.trim()}\n\n## Plan\n\n${lesson.map?.plan ?? ''}\n\n\`\`\`mermaid\n${tidyMermaid(lesson.map?.mermaid ?? '')}\n\`\`\`\n\n## Steps\n\n${steps}\n`;

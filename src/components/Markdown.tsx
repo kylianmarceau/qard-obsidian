@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Component, MarkdownRenderer } from 'obsidian';
 import type { QardServices } from '../views/services';
+import { tidyMermaid } from '../learn/mermaid';
 /** Each render owns a Component, so embeds and render-child listeners are unloaded. */
 export function Markdown({ text, path, services }: { text: string; path: string; services: QardServices }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -15,7 +16,9 @@ export function Markdown({ text, path, services }: { text: string; path: string;
     const target = el.createDiv({ cls: replacing ? 'markdown-rendered qard-md-pending' : 'markdown-rendered' });
     const show = () => { for (const old of Array.from(el.children)) if (old !== target) old.remove(); target.classList.remove('qard-md-pending'); };
     // Do not automatically request remote image URLs from a local study surface.
-    const local = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/gi, '[$1 (remote image)]($2)');
+    const local = text.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)(?:\s+"[^"]*")?\)/gi, '[$1 (remote image)]($2)')
+      // Agents' Mermaid often has unquoted labels with brackets, which the parser rejects.
+      .replace(/```mermaid\n([\s\S]*?)```/g, (_, body: string) => '```mermaid\n' + tidyMermaid(body) + '\n```');
     void MarkdownRenderer.render(services.app, local, target, path, child).then(() => {
       if (!disposed) show(); else child.unload();
     }).catch(() => { if (!disposed) { target.textContent = text; show(); } else child.unload(); });
