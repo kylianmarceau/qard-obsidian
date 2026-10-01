@@ -133,6 +133,21 @@ describe('practice test lifecycle', () => {
     return { storage, runner, tests: new TestService(storage, () => ({ ...DEFAULT_TEST_SETTINGS, ...settings }), () => runner, () => new Date(2026, 8, 29).getTime()) };
   }
 
+  it('persists folder attachments and the full note snapshot through planning and generation', async () => {
+    const notes = Array.from({ length: 10 }, (_, i) => `Courses/AI/Lecture ${i + 1}.md`);
+    const input = { prompt: '', decks: [], notes, sources: notes, folders: ['Courses/AI'] };
+    const { storage, runner, tests } = service([() => PLAN, () => TEST]);
+    const folder = await tests.plan(input); await until(() => !!tests.get(folder)?.plan);
+    expect(JSON.parse(storage.files[`${folder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+    for (const note of notes) expect(runner.prompts[0]).toContain(note);
+    await tests.generate({ folder }); await until(() => !!tests.get(folder)?.test);
+    expect(JSON.parse(storage.files[`${folder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+    const direct = service([() => TEST]);
+    const directFolder = await direct.tests.generate({ request: input }); await until(() => !!direct.tests.get(directFolder)?.test);
+    for (const note of notes) expect(direct.runner.prompts[0]).toContain(note);
+    expect(JSON.parse(direct.storage.files[`${directFolder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+  });
+
   it('plans, revises, writes, marks per section, and wraps up with a profile', async () => {
     const { storage, runner, tests } = service([
       () => PLAN,

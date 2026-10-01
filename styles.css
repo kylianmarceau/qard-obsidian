@@ -247,6 +247,11 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-app button.qard-popover-item { display: flex; width: 100%; justify-content: flex-start; gap: 10px; border: 0; min-height: 36px; text-align: left; }
 .qard-popover-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qard-popover-item small { color: var(--qard-muted); font-size: 11px; }
+.qard-folder-chip { max-width: 100%; }
+.qard-folder-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qard-folder-chip small, .qard-folder-picker small { flex-shrink: 0; }
+.qard-folder-picker > p { padding: 8px; }
+.qard-folder-picker .qard-popover-item span { white-space: normal; overflow-wrap: anywhere; }
 .qard-hint { padding: 0 4px; font-size: 13px; }
 
 /* Plan */

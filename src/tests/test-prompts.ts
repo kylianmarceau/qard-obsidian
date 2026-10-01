@@ -26,6 +26,7 @@ ${objectives.trim()}
 const list = (paths: string[]) => paths.length ? paths.map(p => `- ${p}`).join('\n') : '(none)';
 const profileBlock = (profile?: string) => profile?.trim() ? `\nThe student's study profile (past weak spots and habits). Use it to target weaknesses:\n<profile>\n${profile.trim()}\n</profile>\n` : '';
 const requestBlock = (r: TestRequest) => `The student's request:\n<request>\n${r.prompt.trim() || '(no prompt: build a balanced test from the sources)'}\n</request>\n\n` +
+  (r.folders?.length ? `Course folders the student attached:\n${list(r.folders)}\nThe source list below includes their Markdown notes and subfolders. Read across the course material and balance coverage unless the request narrows the scope.\n\n` : '') +
   (r.sources.length ? `Sources the student chose (read these first):\n${list(r.sources)}${r.decks.length ? `\n(These include the flashcard decks: ${r.decks.join(', ')}.)` : ''}\n` : 'The student chose no sources. Search the vault for the notes that best fit the request.\n');
 
 export function planPrompt(r: TestRequest, d: TestDefaults) {
