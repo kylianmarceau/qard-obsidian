@@ -46,6 +46,8 @@
 .qard-app fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .qard-main { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 .qard-topbar { padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qard-topbar-actions, .qard-test-delete { display: flex; align-items: center; gap: 12px; }
+.qard-test-delete .qard-error { font-size: 12px; max-width: 280px; }
 .qard-breadcrumb { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--qard-muted); font-size: 12px; }
 .qard-breadcrumb button { border: 0; padding: 3px 0; color: var(--qard-muted); font-size: 12px; text-align: left; }
 .qard-breadcrumb > span, .qard-breadcrumb button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -126,6 +128,14 @@
 .qard-selection-modal { width: min(640px, 95vw); }
 .qard-selection-modal .qard-root, .qard-selection-modal .qard-app { height: auto; }
 .qard-editor-compact .qard-heading { display: none; }
+.qard-generate input[type="number"] { max-width: 120px; }
+.qard-generate .qard-composer { margin-top: 20px; }
+.qard-generation-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.qard-generation-card { border: 1px solid var(--qard-border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.qard-generation-card.is-skipped { opacity: .6; }
+.qard-generation-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.qard-generation-card-head button { display: flex; align-items: center; gap: 8px; }
+.qard-generation-card > .qard-link { display: inline-flex; gap: 6px; align-items: center; overflow-wrap: anywhere; text-align: left; }
 .qard-study-container { min-height: 100%; }
 .qard-study { outline: none; min-height: 100%; padding: 20px 28px 40px; }
 .qard-study-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--qard-muted); }

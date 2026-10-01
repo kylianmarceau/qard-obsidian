@@ -1,6 +1,7 @@
 import { Plugin, addIcon, Notice, MarkdownView, TFile } from 'obsidian';
 import { QardView, VIEW_TYPE } from './views/QardView';
 import { VaultIndexer } from './cards/indexer';
+import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
 import { QardSettingsTab } from './settings/SettingsTab';
@@ -22,6 +23,7 @@ import { JobClock } from './jobs/job-clock';
 export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
   writer!: CardWriter;
+  flashcards!: FlashcardGenerationService;
   reviews!: ReviewStore;
   tests!: TestService;
   learn!: LearnService;
@@ -41,6 +43,8 @@ export default class QardPlugin extends Plugin {
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };
     this.jobs = new JobClock(() => this.reviews.getSnapshot().timings, (key, ms) => this.reviews.recordTiming(key, ms), () => settings().agents.roles);
     const timing = (kind: string, ms: number) => this.jobs.record(kind, ms);
+    this.flashcards = new FlashcardGenerationService(new VaultTestStorage(this.app), () => settings().cardFolder, () => this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(settings().tests.folder.replace(/\/+$/, '') + '/')).map(f => f.path), () => runner('writer'), this.writer, message => new Notice(message, 8000), timing);
+    void this.flashcards.load();
     this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing);
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
@@ -121,6 +125,6 @@ export default class QardPlugin extends Plugin {
     this.disposed = true;
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
-    this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
+    this.flashcards?.dispose(); this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
   }
 }

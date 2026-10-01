@@ -5,17 +5,23 @@ import type { LearnNav } from '../learn/common';
 import { overdue, roleOf, timeLeft } from '../../jobs/job-clock';
 import { AgentLabel } from './AgentLabel';
 import { InlineMarkdown } from '../Markdown';
+import type { GenerationSnapshot } from '../../cards/generation-service';
 
 export interface RunningJob { key: string; kind: string; label: string; detail: string; startedAt?: number; open: () => void; cancel: () => void }
+const EMPTY_FLASHCARDS: GenerationSnapshot = { saving: false, loading: false };
+const noSubscribe = () => () => {};
+const noSnapshot = () => EMPTY_FLASHCARDS;
 const TEST_LABELS: Record<string, string> = { plan: 'Planning test', generate: 'Writing test', mark: 'Marking test', wrapup: 'Wrapping up test' };
 const LEARN_LABELS: Record<string, string> = { probe: 'Preparing lesson', map: 'Planning lesson', steps: 'Writing lesson steps', close: 'Wrapping up lesson', 'map-course': 'Mapping course', 'check-write': 'Writing check' };
 const name = (path: string) => path.split('/').pop()!.replace(/\.(md|json)$/, '').replace(/ mastery$/i, '');
 
 /** The jobs worth showing: the long ones. Quick tutor replies and inline follow-ups are left out. */
-export function useRunningJobs(services: QardServices, nav: TestNav, learnNav: LearnNav): RunningJob[] {
+export function useRunningJobs(services: QardServices, nav: TestNav, learnNav: LearnNav, flashcards?: () => void): RunningJob[] {
   const tests = useSyncExternalStore(services.tests.subscribe, services.tests.getSnapshot);
   const learn = useSyncExternalStore(services.learn.subscribe, services.learn.getSnapshot);
+  const generation = useSyncExternalStore(services.flashcards?.subscribe ?? noSubscribe, services.flashcards?.getSnapshot ?? noSnapshot);
   const jobs: RunningJob[] = [];
+  if (generation.job && !generation.job.error && flashcards) jobs.push({ key: 'flashcards', kind: 'flashcards', label: 'Writing flashcards', detail: generation.batch?.request.deck ?? '', startedAt: generation.job.startedAt, open: flashcards, cancel: () => services.flashcards?.cancel() });
   for (const [key, job] of Object.entries(tests.jobs)) {
     if (job.error || !TEST_LABELS[job.kind]) continue;
     const [folder = '', , id = ''] = key.split('|'), entry = services.tests.get(folder), cancel = () => services.tests.cancel(folder, job.kind, id);
@@ -47,8 +53,8 @@ export function useTick(active: boolean) {
 const clock = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 /** "● 2 running" in the header, opening a list of background jobs you can jump to. */
-export function RunningJobs({ services, nav, learnNav }: { services: QardServices; nav: TestNav; learnNav: LearnNav }) {
-  const jobs = useRunningJobs(services, nav, learnNav), [open, setOpen] = useState(false);
+export function RunningJobs({ services, nav, learnNav, flashcards }: { services: QardServices; nav: TestNav; learnNav: LearnNav; flashcards?: () => void }) {
+  const jobs = useRunningJobs(services, nav, learnNav, flashcards), [open, setOpen] = useState(false);
   const now = useTick(open && jobs.length > 0);
   useEffect(() => { if (!jobs.length) setOpen(false); }, [jobs.length]);
   if (!jobs.length) return null;

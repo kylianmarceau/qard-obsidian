@@ -10,6 +10,7 @@ export interface TestStorage {
   read(path: string): Promise<string | null>;
   write(path: string, text: string): Promise<void>;
   exists(path: string): boolean;
+  trash(folder: string): Promise<void>;
 }
 export type JobKind = 'plan' | 'generate' | 'mark' | 'wrapup' | 'retry' | 'ask' | 'dispute';
 /** startedAt lets the UI show elapsed time and how long is left. */
@@ -34,6 +35,8 @@ export class TestService {
   private writes = new Map<string, Promise<void>>();
   private timers = new Map<string, number>();
   private controllers = new Map<string, AbortController>();
+  private removed = new Set<string>();
+  private removals = new Map<string, Promise<void>>();
   private disposed = false;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
   constructor(private storage: TestStorage, private settings: () => TestSettings, private runner: (role: AgentRole) => AgentRunner, private now = () => Date.now(), private learning?: TestLearning, private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
@@ -49,7 +52,46 @@ export class TestService {
   /** Runs one agent job; errors stay on the job until dismissed or retried. */
   /** Stops a running job; it shows as cancelled, with the usual Try again. */
   cancel(folder: string, kind: JobKind, id = '') { this.controllers.get(key(folder, kind, id))?.abort(); }
+  /** Prevent late replies from a cancelled provider from being written back. */
+  private activeRunner(role: AgentRole, signal: AbortSignal): AgentRunner {
+    const runner = this.runner(role);
+    return { name: runner.name, run: async task => {
+      if (signal.aborted) throw new Error(CANCELLED);
+      const result = await runner.run(task);
+      if (signal.aborted) throw new Error(CANCELLED);
+      return result;
+    } };
+  }
+  /** Recoverable deletion of one test, including its plan and attempts, through Obsidian's trash. */
+  remove(folder: string): Promise<void> {
+    const pending = this.removals.get(folder); if (pending) return pending;
+    const root = this.settings().folder.replace(/\/+$/, ''), child = folder.slice(root.length + 1);
+    if (!root || /^(?:[\\/]|[A-Za-z]:)/.test(root) || root.split(/[\\/]/).some(p => !p || p === '.' || p === '..') || !folder.startsWith(root + '/') || !child || child.includes('/') || child.includes('\\') || child === '.' || child === '..') return Promise.reject(new Error('Only a specific test folder can be deleted.'));
+    this.removed.add(folder);
+    window.clearTimeout(this.timers.get(folder)); this.timers.delete(folder);
+    const priorJobs = Object.fromEntries(Object.entries(this.snapshot.jobs).filter(([k]) => k.startsWith(folder + '|')));
+    for (const [k, controller] of this.controllers) if (k.startsWith(folder + '|')) controller.abort();
+    this.publish(Object.fromEntries(Object.entries(this.snapshot.jobs).filter(([k]) => !k.startsWith(folder + '|'))));
+    const work = (async () => {
+      try {
+        // Finish any in-flight file write before moving its folder to trash.
+        await this.writes.get(folder)?.catch(() => {});
+        await this.storage.trash(folder);
+        this.cache.delete(folder); this.writes.delete(folder); this.publish();
+        this.notify('Test moved to trash.');
+      } catch (error) {
+        this.removed.delete(folder);
+        this.publish({ ...this.snapshot.jobs, ...Object.fromEntries(Object.entries(priorJobs).map(([k, job]) => [k, { ...job, error: job.error ?? CANCELLED }])) });
+        // Preserve the latest answers if deletion failed while an autosave was queued.
+        const attempt = this.cache.get(folder)?.attempt;
+        if (attempt && this.storage.exists(folder)) await this.save(folder, 'attempt', attempt).catch(() => {});
+        throw error;
+      } finally { this.removals.delete(folder); }
+    })();
+    this.removals.set(folder, work); return work;
+  }
   private async track<T>(folder: string, kind: JobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+    if (this.removed.has(folder)) return undefined;
     const k = key(folder, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
     const startedAt = this.now(), controller = new AbortController();
@@ -60,11 +102,11 @@ export class TestService {
     cancelled.catch(() => {}); running.catch(() => {});
     try {
       const result = await Promise.race([running, cancelled]);
-      const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed) this.publish(jobs);
-      this.timing(kind, this.now() - startedAt);
+      const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed && !this.removed.has(folder)) this.publish(jobs);
+      if (!this.removed.has(folder)) this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed && !this.removed.has(folder)) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
       return undefined;
     } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
   }
@@ -74,20 +116,24 @@ export class TestService {
   private async profile() { return this.settings().useProfile ? (await this.storage.read(this.profilePath())) ?? undefined : undefined; }
 
   private async save(folder: string, file: keyof typeof FILES, value: unknown) {
+    if (this.removed.has(folder)) return;
     const previous = this.writes.get(folder) ?? Promise.resolve();
-    const next = previous.catch(() => {}).then(() => this.storage.write(`${folder}/${FILES[file]}`, JSON.stringify(value, null, 2) + '\n'));
+    const next = previous.catch(() => {}).then(() => this.removed.has(folder) ? undefined : this.storage.write(`${folder}/${FILES[file]}`, JSON.stringify(value, null, 2) + '\n'));
     this.writes.set(folder, next); return next;
   }
   private update(folder: string, patch: Partial<TestFolder>) {
+    if (this.removed.has(folder)) return;
     const current = this.cache.get(folder) ?? { folder };
     this.cache.set(folder, { ...current, ...patch }); this.publish();
   }
   private attemptOf(folder: string): { test: PracticeTest; attempt: Attempt } {
+    if (this.removed.has(folder)) throw new Error('This test has been deleted.');
     const entry = this.cache.get(folder);
     if (!entry?.test) throw new Error('This test has not been written yet.');
     return { test: entry.test, attempt: entry.attempt ?? emptyAttempt(entry.test, this.now()) };
   }
   private setAttempt(folder: string, attempt: Attempt, immediate = true) {
+    if (this.removed.has(folder)) return Promise.resolve();
     this.update(folder, { attempt });
     window.clearTimeout(this.timers.get(folder));
     if (immediate) return this.save(folder, 'attempt', attempt);
@@ -99,6 +145,7 @@ export class TestService {
     const root = this.settings().folder.replace(/\/+$/, '');
     const result: TestSummary[] = [];
     for (const folder of await this.storage.folders(root)) {
+      if (this.removed.has(folder)) continue;
       let entry: TestFolder;
       try { entry = await this.load(folder); } catch { result.push({ folder, title: folder.split('/').pop()!, created: 0, status: 'failed' }); continue; }
       const running = this.jobsFor(folder);
@@ -112,14 +159,16 @@ export class TestService {
       else if (entry.plan) result.push({ folder, title, created, status: 'plan' });
       else if (entry.request) result.push({ folder, title, created, status: 'failed' });
     }
-    return result.sort((a, b) => b.created - a.created || b.folder.localeCompare(a.folder));
+    return result.filter(t => !this.removed.has(t.folder)).sort((a, b) => b.created - a.created || b.folder.localeCompare(a.folder));
   }
 
   async load(folder: string): Promise<TestFolder> {
+    if (this.removed.has(folder)) throw new Error('This test has been deleted.');
     const cached = this.cache.get(folder);
     if (cached) return cached;
     const json = async (file: keyof typeof FILES) => { const text = await this.storage.read(`${folder}/${FILES[file]}`); return text === null ? undefined : JSON.parse(text) as unknown; };
     const [request, plan, test, attempt] = await Promise.all([json('request'), json('plan'), json('test'), json('attempt')]);
+    if (this.removed.has(folder)) throw new Error('This test has been deleted.');
     const entry: TestFolder = { folder, request: request as TestRequest | undefined, plan: plan ? readPlan(plan) : undefined };
     // Tests may be written outside Qard, so validate them the same way as agent output.
     if (test) { const valid = readTest(test); const t = test as Partial<PracticeTest>; entry.test = { version: 1, createdAt: typeof t.createdAt === 'number' ? t.createdAt : 0, ...valid }; }
@@ -131,7 +180,7 @@ export class TestService {
   private async newFolder(request: TestRequest) {
     const root = this.settings().folder.replace(/\/+$/, ''), base = `${root}/${day(this.now())} ${slug(request.prompt || request.decks[0] || 'Practice test')}`;
     let folder = base, n = 2;
-    while (this.storage.exists(folder) || this.cache.has(folder)) folder = `${base} ${n++}`;
+    while (this.storage.exists(folder) || this.cache.has(folder) || this.removed.has(folder)) folder = `${base} ${n++}`;
     this.cache.set(folder, { folder, request });
     await this.save(folder, 'request', request);
     return folder;
@@ -142,7 +191,7 @@ export class TestService {
     const folder = await this.newFolder(request);
     void this.track(folder, 'plan', '', async signal => {
       const profile = await this.profile(), course = await this.course(request.sources);
-      const plan = await runValidated(this.runner('writer'), { signal, prompt: planPrompt(request, this.defaults(profile, course?.lines)), schema: planSchema }, readPlan);
+      const plan = await runValidated(this.activeRunner('writer', signal), { signal, prompt: planPrompt(request, this.defaults(profile, course?.lines)), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
     return folder;
@@ -150,7 +199,7 @@ export class TestService {
   revise(folder: string, change: string) {
     return this.track(folder, 'plan', '', async signal => {
       const current = this.cache.get(folder)?.plan; if (!current) throw new Error('There is no plan to revise.');
-      const plan = await runValidated(this.runner('writer'), { signal, prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
+      const plan = await runValidated(this.activeRunner('writer', signal), { signal, prompt: revisePrompt(current, change, this.defaults(await this.profile())), schema: planSchema }, readPlan);
       await this.save(folder, 'plan', plan); this.update(folder, { plan });
     });
   }
@@ -167,19 +216,20 @@ export class TestService {
     void this.track(folder, 'generate', '', async signal => {
       await this.save(folder, 'request', { ...request, writing: this.now() });
       const course = await this.course([...new Set([...request.sources, ...(entry?.plan?.sources.map(s => s.path) ?? [])])]);
-      const written = await runValidated(this.runner('writer'), { signal, prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
+      const written = await runValidated(this.activeRunner('writer', signal), { signal, prompt: generatePrompt({ request, plan: entry?.plan }, this.defaults(await this.profile(), course?.lines)), schema: testSchema }, readTest);
       const test: PracticeTest = { version: 1, createdAt: this.now(), ...written, ...(course ? { mastery: course.mastery } : {}) };
       const attempt = emptyAttempt(test, this.now());
       await this.save(folder, 'test', test); await this.save(folder, 'attempt', attempt);
       const { writing: _done, ...finished } = request; void _done;
       await this.save(folder, 'request', finished);
       this.update(folder, { test, attempt, request: finished });
-      this.notify(`Practice test ready: ${test.title}`);
+      if (!this.removed.has(folder) && !signal.aborted) this.notify(`Practice test ready: ${test.title}`);
     });
     return folder;
   }
 
   answer(folder: string, id: string, patch: Partial<AnswerState>) {
+    if (this.removed.has(folder)) return;
     const { attempt } = this.attemptOf(folder);
     void this.setAttempt(folder, { ...attempt, answers: { ...attempt.answers, [id]: { ...attempt.answers[id], ...patch } } }, false);
   }
@@ -213,7 +263,7 @@ export class TestService {
       const answers = this.attemptOf(folder).attempt.answers;
       const targets = test.sections.filter(s => sectionIds.includes(s.id)).flatMap(s => s.questions).filter(q => q.type !== 'mcq' && !answers[q.id]?.unknown);
       try {
-        const marks = targets.length ? await runValidated(this.runner('marker'), { signal, prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length })))) : {};
+        const marks = targets.length ? await runValidated(this.activeRunner('marker', signal), { signal, prompt: markPrompt(test, this.attemptOf(folder).attempt, targets.map(q => q.id)), schema: marksSchema }, v => readMarks(v, targets.map(q => ({ id: q.id, rubric: q.rubric.length })))) : {};
         for (const q of targets) { const m = marks[q.id]!; m.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0)); }
         const a = this.attemptOf(folder).attempt;
         await this.setAttempt(folder, { ...a, marks: { ...a.marks, ...marks }, sections: { ...a.sections, ...Object.fromEntries(sectionIds.map(id => [id, { status: 'marked' as const }])) } });
@@ -230,11 +280,11 @@ export class TestService {
         await this.learning.record(test, attempt);
         const recorded = { ...test, recorded: true }; await this.save(folder, 'test', recorded); this.update(folder, { test: recorded });
       }
-      const result = await runValidated(this.runner('writer'), { signal, prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
+      const result = await runValidated(this.activeRunner('writer', signal), { signal, prompt: wrapupPrompt(test, attempt, profile, day(this.now())), schema: wrapupSchema }, readWrapup);
       const ids = new Set(questions(test).map(q => q.id));
       const latest = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...latest, wrapup: { fixes: result.fixes.filter(f => ids.has(f.questionId)).slice(0, 3), cards: result.cards.filter(c => ids.has(c.questionId)).slice(0, 6) } });
-      if (this.settings().useProfile && result.profile.trim()) await this.storage.write(this.profilePath(), result.profile.trim() + '\n');
+      if (!signal.aborted && !this.removed.has(folder) && this.settings().useProfile && result.profile.trim()) await this.storage.write(this.profilePath(), result.profile.trim() + '\n');
       const { score, marks } = scoreOf(test, this.attemptOf(folder).attempt);
       this.notify(`${test.title} is marked: ${score} / ${marks}`);
     });
@@ -242,7 +292,7 @@ export class TestService {
   retry(folder: string, id: string, text: string) {
     return this.track(folder, 'retry', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner('tutor'), { signal, prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
+      const result = await runValidated(this.activeRunner('tutor', signal), { signal, prompt: retryPrompt(q, attempt, text), schema: retrySchema }, readRetry);
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], retry: { text, feedback: result.feedback, score: Math.min(q.marks, result.score) } } } });
     });
@@ -250,7 +300,7 @@ export class TestService {
   ask(folder: string, id: string, question: string) {
     return this.track(folder, 'ask', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const result = await runValidated(this.runner('tutor'), { signal, prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
+      const result = await runValidated(this.activeRunner('tutor', signal), { signal, prompt: askPrompt(q, attempt, question), schema: askSchema }, readAsk);
       const a = this.attemptOf(folder).attempt, prior = a.review[id]?.followups ?? [];
       await this.setAttempt(folder, { ...a, review: { ...a.review, [id]: { ...a.review[id], followups: [...prior, { q: question, a: result.answer }] } } });
     });
@@ -258,7 +308,7 @@ export class TestService {
   dispute(folder: string, id: string, argument: string) {
     return this.track(folder, 'dispute', id, async signal => {
       const { test, attempt } = this.attemptOf(folder), q = questions(test).find(x => x.id === id)!;
-      const { reply, ...mark } = await runValidated(this.runner('marker'), { signal, prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
+      const { reply, ...mark } = await runValidated(this.activeRunner('marker', signal), { signal, prompt: disputePrompt(test, attempt, q, argument), schema: disputeSchema }, v => readDispute(v, q.rubric.length));
       mark.score = Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (mark.awarded[i] ? r.marks : 0), 0));
       const a = this.attemptOf(folder).attempt;
       await this.setAttempt(folder, { ...a, marks: { ...a.marks, [id]: mark }, review: { ...a.review, [id]: { ...a.review[id], dispute: { text: argument, reply } } } });
