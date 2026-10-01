@@ -209,7 +209,7 @@ function setup() {
   const make = () => new LearnService(storage, () => settings, runner, { get: id => links.get(id), set: async (id, l) => { links.set(id, l); } }, () => 4, () => now, m => notices.push(m));
   const learn = make();
   // restart: a fresh service over the same files, as after a reload of Obsidian or the plugin.
-  return { files, modified, learn, calls, reply, replies, links, notices, restart: make, advance: (days: number) => { now += days * 86_400_000; } };
+  return { storage, files, modified, learn, calls, reply, replies, links, notices, restart: make, advance: (days: number) => { now += days * 86_400_000; } };
 }
 const settle = () => new Promise(r => setTimeout(r, 0));
 async function mapped() {
@@ -549,5 +549,77 @@ describe('OpenRouter', () => {
     expect(retry.tools).toBeUndefined();
     await expect(new OpenRouterRunner(vault, () => 'bad', 'm', [], vi.fn<Http>().mockResolvedValue({ status: 401, json: {} })).run({ prompt: 'x', schema: { type: 'string' } })).rejects.toThrow(/key was rejected/);
     await expect(new OpenRouterRunner(vault, () => null, 'm', []).run({ prompt: 'x', schema: { type: 'string' } })).rejects.toThrow(/Add an OpenRouter API key/);
+  });
+});
+
+
+describe('deleting learning material', () => {
+  it('removes a course and only its own generated lessons/checks, preserving notes and other courses', async () => {
+    const t = await mapped();
+    const lesson = 'Qard/Lessons/delete.json', other = 'Qard/Lessons/other.json', check = 'Qard/Checks/DS346/delete.json';
+    const record = { version: 1, createdAt: 1, topic: 'LDA', mastery: t.path, notes: [], steps: [], state: [], current: 0 };
+    t.files.set(lesson, JSON.stringify(record)); t.files.set(lesson.replace('.json', '.md'), '---\nqard-lesson: true\n---\nSummary.');
+    t.files.set(other, JSON.stringify({ ...record, mastery: 'Other/Mastery.md' }));
+    t.files.set(check, JSON.stringify({ version: 1, mastery: t.path, objective: 'params', answers: {}, marks: {}, questions: [] }));
+    t.files.set('Qard/Tests/keep/test.json', 'keep');
+    await t.learn.loadLesson(lesson); await t.learn.loadCheck(check);
+    t.learn.answerCheck(check, 'c1', { text: 'Latest answer' });
+    await t.learn.removeCourse(t.path); await t.learn.flush();
+    expect(t.files.has(t.path)).toBe(false); expect(t.files.has(lesson)).toBe(false); expect(t.files.has(check)).toBe(false);
+    expect(t.files.has(lesson.replace('.json', '.md'))).toBe(false);
+    expect(t.files.has(other)).toBe(true); expect(t.files.has('Notes/DS346/Topic Models.md')).toBe(true); expect(t.files.has('Qard/Tests/keep/test.json')).toBe(true);
+    expect(await t.learn.courses()).toEqual([]); expect(t.learn.lessonAt(lesson)).toBeUndefined(); expect(t.learn.checkAt(check)).toBeUndefined();
+    expect(await t.restart().listLessons()).toHaveLength(1);
+    await t.learn.record(t.path, 'params', { kind: 'card', day: DAY, label: 'late lapse' });
+    expect(t.files.has(t.path)).toBe(false);
+  });
+  it('deletes a mapping immediately and a late AI reply cannot recreate it, including after reload', async () => {
+    const t = setup(); let finish!: (value: unknown) => void;
+    t.reply(objectivesSchema, () => new Promise(resolve => { finish = resolve; }));
+    const running = t.learn.mapCourse('Notes/DS346'); await settle();
+    await t.learn.removeMapping('Notes/DS346');
+    expect(Object.keys(t.learn.getSnapshot().jobs)).toHaveLength(0);
+    finish({ course: 'DS346', objectives: [] }); await running; await settle();
+    expect(t.learn.proposal('Notes/DS346')).toBeUndefined(); expect([...t.files.keys()].some(p => p.includes('/Proposals/'))).toBe(false);
+    const pending = await t.restart().pending(); expect(pending.mapping).toEqual([]); expect(pending.failed).toEqual([]); expect(pending.proposals).toEqual([]);
+    t.replies.length = 0; t.reply(objectivesSchema, () => ({ course: 'New course', objectives: [{ id: 'new', title: 'New objective', notes: [], needs: [], group: '', label: '', state: 'new', evidence: '' }] }));
+    await t.learn.mapCourse('Notes/DS346'); expect(t.learn.proposal('Notes/DS346')?.course).toBe('New course');
+  });
+  it('cancels course check generation and late replies cannot recreate files', async () => {
+    const t = await mapped(); let finish!: (value: unknown) => void;
+    t.reply(questionsSchema, () => new Promise(resolve => { finish = resolve; }));
+    const running = t.learn.ensureCheck(t.path, 'params'); await settle();
+    await t.learn.removeCourse(t.path); finish({ questions: [q('c1')] }); await running; await settle();
+    expect([...t.files.keys()].some(p => p.includes('/Checks/'))).toBe(false); expect(Object.keys(t.learn.getSnapshot().jobs)).toHaveLength(0);
+  });
+  it('deletes an individual lesson, cancels its probe, and preserves the course', async () => {
+    const t = await mapped(); let finish!: (value: unknown) => void;
+    t.reply(probeSchema, () => new Promise(resolve => { finish = resolve; }));
+    const path = await t.learn.startLesson({ topic: 'LDA', notes: [], mastery: t.path }); await settle();
+    await t.learn.removeLesson(path); finish({ questions: [] }); await settle(); await t.learn.flush();
+    expect(t.files.has(path)).toBe(false); expect(t.learn.lessonAt(path)).toBeUndefined(); expect(t.files.has(t.path)).toBe(true);
+    expect(await t.learn.listLessons()).toEqual([]); expect(Object.keys(t.learn.getSnapshot().jobs)).toHaveLength(0);
+  });
+  it('drains an in-flight save before trashing a lesson', async () => {
+    const t = setup(); const path = 'Qard/Lessons/slow.json'; let release!: () => void;
+    const original = t.storage.write; const events: string[] = [];
+    vi.spyOn(t.storage, 'write').mockImplementation(async (p, text) => { if (p === path) { await new Promise<void>(r => { release = r; }); events.push('save'); } await original(p, text); });
+    t.files.set(path, JSON.stringify({ version: 1, createdAt: 1, topic: 'slow', notes: [], steps: [], state: [], current: 0 }));
+    await t.learn.loadLesson(path);
+    t.learn.lessonAt(path)!.steps = [{ title: 'Step', explain: '', connect: '', checkFirst: false, check: q('c1'), misconceptions: [] }];
+    const pending = t.learn.go(path, 0); await settle();
+    const remove = t.storage.remove; vi.spyOn(t.storage, 'remove').mockImplementation(async p => { events.push('trash'); await remove(p); });
+    const deleting = t.learn.removeLesson(path); await settle(); expect(events).toEqual([]);
+    release(); await pending; await deleting; expect(events).toEqual(['save', 'trash']); expect(t.files.has(path)).toBe(false);
+  });
+  it('keeps a lesson accessible if moving to trash fails, and refuses to delete source notes', async () => {
+    const t = setup(), path = 'Qard/Lessons/keep.json';
+    t.files.set(path, JSON.stringify({ version: 1, createdAt: 1, topic: 'keep', notes: [], steps: [], state: [], current: 0 }));
+    vi.spyOn(t.storage, 'remove').mockRejectedValueOnce(new Error('Trash unavailable'));
+    await expect(t.learn.removeLesson(path)).rejects.toThrow('Trash unavailable'); expect((await t.learn.loadLesson(path)).topic).toBe('keep');
+    await expect(t.learn.removeCourse('Notes/DS346/Topic Models.md')).rejects.toThrow('mastery');
+    await expect(t.learn.removeLesson('Notes/DS346/Topic Models.md')).rejects.toThrow('Qard learning');
+    expect(t.files.has('Notes/DS346/Topic Models.md')).toBe(true);
+    await t.learn.removeLesson(path); expect(t.files.has(path)).toBe(false);
   });
 });

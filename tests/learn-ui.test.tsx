@@ -9,8 +9,9 @@ import { readSettings } from '../src/settings/settings';
 import { marksSchema } from '../src/tests/test-schema';
 import { CheckView } from '../src/components/learn/CheckView';
 import { LessonView } from '../src/components/learn/LessonView';
-import { CourseView, TodayRow } from '../src/components/learn/LearnScreens';
+import { CourseView, TodayRow, LearnBrowser } from '../src/components/learn/LearnScreens';
 import type { LearnNav } from '../src/components/learn/common';
+import { DeleteLearnItem } from '../src/components/learn/DeleteLearnItem';
 import { RunningJobs } from '../src/components/jobs/RunningJobs';
 import type { QardServices } from '../src/views/services';
 import type { AgentTask } from '../src/agents/runner';
@@ -22,6 +23,7 @@ const q = (id: string, extra = {}) => ({ id, type: 'short', prompt: `Prompt ${id
 let host: HTMLElement, root: Root, services: QardServices, files: Map<string, string>;
 const nav = { library: vi.fn(), today: vi.fn(), learn: vi.fn(), mapCourse: vi.fn(), course: vi.fn(), check: vi.fn(), lesson: vi.fn(), studyDue: vi.fn() } satisfies LearnNav;
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   files = new Map([[MASTERY, newMasteryNote('DS346', [{ id: 'params', title: 'Parameter counts', state: 'taught', due: '2000-01-01', notes: [], needs: [], evidence: [], cells: {} }])],
     [CHECK, JSON.stringify({ version: 1, createdAt: 1, mastery: MASTERY, course: 'DS346', objective: 'params', title: 'Parameter counts', goal: 'explain', questions: [q('c1', { type: 'mcq', marks: 1, rubric: [{ point: 'x', marks: 1 }], options: ['VK', 'K+KV'], answer: 1 }), q('c2')], answers: {}, marks: {}, status: 'ready' })]]);
@@ -143,4 +145,22 @@ it('the header shows background jobs and jumps to them', async () => {
   expect(host.querySelector('.qard-jobs-item')?.textContent).toContain('Mapping courseDS346');
   await click(host.querySelector('.qard-jobs-item'));
   expect(nav.mapCourse).toHaveBeenCalledWith('Notes/DS346');
+});
+
+
+it('offers course deletion in Learn and removes it without opening the course', async () => {
+  const testNav = { library: vi.fn(), tests: vi.fn(), newTest: vi.fn(), plan: vi.fn(), take: vi.fn(), results: vi.fn(), review: vi.fn(), cards: vi.fn() };
+  // Reflect file deletion in the vault's frontmatter index.
+  const courses = services.learn.courses.bind(services.learn);
+  vi.spyOn(services.learn, 'courses').mockImplementation(async () => files.has(MASTERY) ? courses() : []);
+  await act(async () => root.render(<LearnBrowser services={services} nav={nav} testNav={testNav}/>)); await tick(); await tick();
+  await click(host.querySelector('[aria-label="Delete course"]')); expect(files.has(MASTERY)).toBe(true);
+  await click(buttons('Delete').find(b => b.textContent === 'Delete')); await tick();
+  expect(files.has(MASTERY)).toBe(false); expect(files.has(CHECK)).toBe(false); expect(host.textContent).toContain('No courses yet.');
+});
+it('selected check deletion returns to Learn', async () => {
+  const deleted = vi.fn();
+  await act(async () => root.render(<DeleteLearnItem services={services} kind="check" path={CHECK} deleted={deleted}/>));
+  await click(host.querySelector('[aria-label="Delete check"]')); await click(buttons('Delete').find(b => b.textContent === 'Delete'));
+  expect(files.has(CHECK)).toBe(false); expect(files.has(MASTERY)).toBe(true); expect(deleted).toHaveBeenCalledOnce();
 });

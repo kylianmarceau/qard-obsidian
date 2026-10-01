@@ -157,6 +157,10 @@ Order can be deck/note order or shuffle. The session shows progress and finishes
 
 Shortcuts are inactive in text fields, editable content, other workspace tabs, modal inputs, media controls, and while recording. Held keys and modified shortcuts do not rate cards. Focus mode fills the app window without requiring Electron’s Fullscreen API, hides Qard navigation, and restores the original workspace when exited or the view/plugin closes. Native OS window decorations may remain visible.
 
+Delete a whole deck with the trash icon on its row or beside the deck title. Delete a topic with the trash icon beside its Study button. Confirming removes all matching flashcard callouts across the vault, including cards hidden by search, while preserving headings, prose, attachments and other cards. This cannot be undone from Qard.
+
+Under **Learn**, trash icons remove courses, lessons and pending course mappings. Opened courses, lessons and checks also have a trash icon in the top bar. Deleting a course moves its mastery file and associated generated lessons/checks to Obsidian's configured trash; source notes, flashcards and practice tests remain. Deleting a running mapping stops it and removes its saved proposal so it cannot restart on reload.
+
 Every preview and study card has **Open source**; previews also offer edit and delete. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
 
 ## Commands
