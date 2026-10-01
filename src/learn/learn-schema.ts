@@ -22,7 +22,7 @@ export const questionsSchema = obj({ questions: arr(questionSchema) });
 export const probeSchema = obj({ questions: arr(questionSchema), note: str('One sentence on what the probe checks, or why none is needed.') });
 const mapProps = { title: str('At most eight words.'), plan: str('Two to four sentences, addressed to the student.'), mermaid: str('A small Mermaid flowchart (graph TD) from starting facts at the top to the goal at the bottom. Put every node label in double quotes, e.g. A["x[[1]] picks one"]. No code fences.'), objective: str('Mastery objective id this lesson teaches, if one fits.'), steps: arr(obj({ title: str(), why: str('One sentence: why this step is needed now.') })) };
 export const mapSchema = obj(mapProps, ['objective']);
-export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps })), findings: str('One or two sentences on what the answers show, addressed to the student.'), map: mapSchema });
+export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps })), findings: str('One or two sentences, at most 50 words, on what the answers show, addressed to the student.'), map: mapSchema });
 export const stepSchema = obj({
   title: str(), explain: str('Markdown. Establish the idea from what the student already accepts, showing how it could have been discovered.'),
   connect: str('One or two sentences linking it to the previous step and the goal.'), checkFirst: { type: 'boolean' },
@@ -72,3 +72,19 @@ export const readFigure = (v: unknown, python: boolean) => check<FigureReply>(fi
 export const readTutorMark = (v: unknown, rubric: number) => check<QuestionMark & { reply: string; misconception: number }>(tutorMarkSchema, v, m => m.awarded.length === rubric ? [] : [`awarded needs ${rubric} entries`]);
 export const readAnswer = (v: unknown) => check<{ answer: string }>(answerSchema, v);
 export const readClose = (v: unknown) => check<{ summary: string; cards: { front: string; back: string }[]; noteEdit?: { path: string; heading: string; text: string } }>(closeSchema, v);
+
+/**
+ * The first few sentences of an agent's text, within a word limit. Models sometimes ignore "one or two
+ * sentences" and ramble or repeat; this keeps short fields short. Never splits inside $…$ maths.
+ */
+export function firstSentences(text: string, sentences = 2, maxWords = 60): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  let maths = false, count = 0, end = clean.length;
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i]!;
+    if (c === '$' && clean[i - 1] !== '\\') maths = !maths;
+    else if (!maths && /[.!?]/.test(c) && (i === clean.length - 1 || /\s/.test(clean[i + 1]!)) && ++count === sentences) { end = i + 1; break; }
+  }
+  const words = clean.slice(0, end).split(' ');
+  return words.length <= maxWords ? clean.slice(0, end) : `${words.slice(0, maxWords).join(' ').replace(/[,;:—–-]+$/, '')}…`;
+}

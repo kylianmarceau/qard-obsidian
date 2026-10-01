@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { addDays, applyEvidence, breakCycles, parseMastery, readyToLearn, setFrontmatter, shortLabel, writeObjectives, newMasteryNote, type Objective } from '../src/learn/mastery';
 import { layoutGraph, layoutTopic, OBJECTIVE, routeTo, topicsOf } from '../src/components/learn/CourseMap';
-import { courseUpdateSchema } from '../src/learn/learn-schema';
+import { courseUpdateSchema, firstSentences } from '../src/learn/learn-schema';
 import { LearnService, insertUnderHeading, summarise, type LearnStorage } from '../src/learn/learn-service';
 import { figureSchema, mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema, closeSchema } from '../src/learn/learn-schema';
 import { marksSchema } from '../src/tests/test-schema';
@@ -595,4 +595,10 @@ describe('OpenRouter', () => {
     await expect(new OpenRouterRunner(vault, () => 'bad', 'm', [], vi.fn<Http>().mockResolvedValue({ status: 401, json: {} })).run({ prompt: 'x', schema: { type: 'string' } })).rejects.toThrow(/key was rejected/);
     await expect(new OpenRouterRunner(vault, () => null, 'm', []).run({ prompt: 'x', schema: { type: 'string' } })).rejects.toThrow(/Add an OpenRouter API key/);
   });
+});
+
+it('keeps short agent fields short, without splitting maths', () => {
+  expect(firstSentences('One. Two has $p = 0.5. q$ inside. Three.')).toBe('One. Two has $p = 0.5. q$ inside.');
+  expect(firstSentences('No full stop at all')).toBe('No full stop at all');
+  expect(firstSentences(Array.from({ length: 100 }, (_, i) => `w${i}`).join(' ') + '.')).toBe(Array.from({ length: 60 }, (_, i) => `w${i}`).join(' ') + '…');
 });

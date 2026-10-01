@@ -13,6 +13,7 @@ import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 import { JobControls } from '../jobs/JobControls';
 import { tidyMermaid } from '../../learn/mermaid';
 import { DrawButton, FigureView } from './FigureView';
+import { firstSentences } from '../../learn/learn-schema';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: LearnNav; lesson: Lesson }) {
@@ -81,8 +82,9 @@ function LessonMapView({ services, path, lesson }: { services: QardServices; pat
   const map = lesson.map!, revising = job(path, 'revise'), busy = !!revising && !revising.error, probe = lesson.probe;
   const where = lesson.notes[0] ?? path;
   return <article className="qard-doc">
-    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1><InlineMarkdown text={map.title} path={where} services={services}/></h1>{probe?.findings && <div className="qard-lesson-findings"><Markdown text={probe.findings} path={where} services={services}/></div>}</header>
-    {probe && probe.questions.length > 0 && <section className="qard-probe-results">{probe.questions.map(q => { const m = probe.marks?.[q.id]; const ok = !!m && m.score >= q.marks; return <div key={q.id} className="qard-doc-row"><span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span><div className="qard-probe-prompt"><Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services}/></div></div>; })}</section>}
+    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1><InlineMarkdown text={map.title} path={where} services={services}/></h1></header>
+    {probe && (probe.findings || probe.questions.length > 0) && <section className="qard-probe-results"><h2>What your answers show</h2>
+      {probe.findings && <div className="qard-doc-body"><Markdown text={firstSentences(probe.findings)} path={where} services={services}/></div>}{probe.questions.map(q => { const m = probe.marks?.[q.id]; const ok = !!m && m.score >= q.marks; return <div key={q.id} className="qard-doc-row"><span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span><div className="qard-probe-prompt"><Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services}/></div></div>; })}</section>}
     <section><h2>Plan</h2><div className="qard-doc-body"><Markdown text={map.plan} path={where} services={services}/></div></section>
     {map.mermaid.trim() && <section className="qard-lesson-map"><Markdown text={'```mermaid\n' + tidyMermaid(map.mermaid) + '\n```'} path={where} services={services}/></section>}
     <section><h2>Steps</h2>{map.steps.map((s, i) => <div key={i} className="qard-doc-section"><span className="qard-muted">{i + 1}</span><div><strong><InlineMarkdown text={s.title} path={where} services={services}/></strong><div className="qard-doc-why"><Markdown text={s.why} path={where} services={services}/></div></div><span/></div>)}</section>

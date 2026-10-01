@@ -6,7 +6,7 @@ import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../ag
 import { marksSchema, readMarks } from '../tests/test-schema';
 import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
 import { NEEDS_LESSON, PASS, addDays, applyEvidence, breakCycles, goalFor, isDue, isoDay, newMasteryNote, parseMastery, readyToLearn, setFrontmatter, slugId, stamp, writeObjectives, type Evidence, type Mastery, type MasteryState, type Objective } from './mastery';
-import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, readCourseUpdate, type ObjectiveReply, probeMapSchema, probeSchema, questionsSchema, readAnswer, readClose, readMap, readObjectives, readProbe, readProbeMap, readQuestions, readStep, readTutorMark, stepSchema, tutorMarkSchema, figureSchema, readFigure } from './learn-schema';
+import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, readCourseUpdate, type ObjectiveReply, probeMapSchema, probeSchema, questionsSchema, readAnswer, readClose, readMap, readObjectives, readProbe, readProbeMap, readQuestions, readStep, readTutorMark, stepSchema, tutorMarkSchema, figureSchema, readFigure, firstSentences } from './learn-schema';
 import { askPrompt, checkPrompt, closePrompt, mapCoursePrompt, updateCoursePrompt, markCheckPrompt, probeMapPrompt, probePrompt, reviseMapPrompt, stepPrompt, tutorMarkPrompt, illustratePrompt } from './learn-prompts';
 import type { CardLink } from '../review/review-store';
 import type { CheckRecord, Lesson, LessonStep, LessonSummary, StepState, Today, TodayItem } from './learn-types';
@@ -500,7 +500,7 @@ export class LearnService {
       const result = await runValidated(this.runner('tutor'), { signal, prompt: probeMapPrompt(lesson, m, o, sources), schema: probeMapSchema, effort: 'low', vault: !sources }, v => readProbeMap(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
       for (const q of typed) { const found = result.marks.find(x => x.id === q.id)!; marks[q.id] = scoreQuestion(q, found); }
       const objective = lesson.objective ?? (m?.objectives.some(x => x.id === result.map.objective) ? result.map.objective : undefined);
-      await this.setLesson(path, { ...this.lesson(path), objective, probe: { ...probe, submitted: true, marks, findings: result.findings }, map: result.map });
+      await this.setLesson(path, { ...this.lesson(path), objective, probe: { ...probe, submitted: true, marks, findings: firstSentences(result.findings) }, map: result.map });
       // Steps start being written while the student reads the plan.
       await this.prepareSteps(path);
       // Probe answers on known objectives are evidence too.
