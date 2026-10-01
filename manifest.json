@@ -1,9 +1,9 @@
 {
   "id": "qard",
   "name": "Qard",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "minAppVersion": "1.7.2",
-  "description": "A focused study workspace for Markdown flashcards, manual sessions, and optional spaced repetition.",
+  "description": "A study workspace with Markdown flashcards, AI practice tests, guided lessons, and spaced repetition.",
   "author": "Qard",
   "fundingUrl": "https://buymeacoffee.com/kylianmarceau",
   "isDesktopOnly": false
