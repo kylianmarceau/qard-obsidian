@@ -1,9 +1,10 @@
 import type { FlashcardRequest } from './generation-service';
 
 export function flashcardPrompt(request: FlashcardRequest) {
-  return `Create exactly ${request.count} flashcards for the deck ${JSON.stringify(request.deck)}, topic ${JSON.stringify(request.topic)}.
+  return `Create flashcards for the deck ${JSON.stringify(request.deck)}, topic ${JSON.stringify(request.topic)}.
 The student's request:\n<request>\n${request.prompt || '(Create a balanced set from the selected notes.)'}\n</request>
 ${request.notes.length ? `Read these selected notes first:\n${request.notes.map(p => `- ${p}`).join('\n')}` : 'Search the vault for notes relevant to the request. If none fit, use correct standard subject knowledge and leave source empty.'}
+Choose how many cards the material needs: cover the important concepts and skills in the notes, with more cards for substantial material and fewer for short notes. There is no fixed target count. Do not pad the set with repetitive or trivial cards. Respect any scope the student requests.
 Rules:
 - Each card tests one useful idea. Avoid repeated questions, vague questions and answers that require seeing another card.
 - Favour active recall: definitions, distinctions, why/how, formulas and small applications, following the request's emphasis.

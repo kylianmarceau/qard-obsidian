@@ -30,11 +30,11 @@ const click = async (el?: Element | null) => { expect(el).toBeTruthy(); await ac
 const button = (text: string) => [...host.querySelectorAll('button')].find(b => b.textContent?.includes(text));
 const input = async (el: Element, value: string) => { await act(async () => { (el as HTMLInputElement).value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }); };
 const render = async () => { await act(async () => root.render(<GenerateFlashcards services={services} initial={{ deck: 'Networks' }} back={back} openDeck={openDeck}/>)); };
-it('chooses notes and a count, previews and edits generated cards, then adds only the selected cards', async () => {
-  await render(); await input(host.querySelector('input[type="number"]')!, '2');
+it('chooses notes, previews and edits generated cards, then adds only the selected cards', async () => {
+  await render(); expect(host.querySelector('input[type="number"]')).toBeNull();
   await click(button('+ Note')); await click(button('TCP')); expect(host.textContent).toContain('reads your selected notes');
   await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
-  expect(host.textContent).toContain('Review flashcards'); expect(run.mock.calls[0]![0].prompt).toContain('exactly 2');
+  expect(host.textContent).toContain('Review flashcards'); expect(run.mock.calls[0]![0].prompt).toContain('Choose how many cards the material needs');
   await input(host.querySelector('textarea[aria-label="Back of card 1"]')!, 'TCP provides ordered, reliable delivery.');
   await click(host.querySelector('[aria-label="Select card 2"]')); await click(button('Preview cards'));
   expect(host.querySelector('textarea')).toBeNull(); expect(host.textContent).toContain('ordered, reliable');
@@ -44,18 +44,18 @@ it('chooses notes and a count, previews and edits generated cards, then adds onl
 });
 it('keeps generation running after leaving, then reopens the same review draft', async () => {
   let resolve!: (v: unknown) => void; run.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
-  await render(); await input(host.querySelector('input[type="number"]')!, '2'); await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport basics');
+  await render(); expect(host.querySelector('input[type="number"]')).toBeNull(); await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport basics');
   await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
-  expect(host.textContent).toContain('Writing 2 flashcards'); await click(button('Back to decks')); expect(back).toHaveBeenCalled();
+  expect(host.textContent).toContain('Generating flashcards'); await click(button('Back to decks')); expect(back).toHaveBeenCalled();
   await act(async () => root.render(<div>Other screen</div>)); resolve(reply); await tick(); await render(); expect(host.textContent).toContain('Review flashcards');
 });
 it('allows cancellation and retry and preserves the request when editing it', async () => {
   run.mockImplementationOnce(() => new Promise(() => {})); await render();
-  await input(host.querySelector('input[type="number"]')!, '2'); await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport basics');
+  await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport basics');
   await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
   await click(button('Cancel')); expect(host.textContent).toContain('Cancelled.'); expect(button('Try again')).toBeTruthy();
   await click(button('Edit request')); expect((host.querySelector('[aria-label="Flashcard prompt"]') as HTMLTextAreaElement).value).toBe('Transport basics');
-  expect((host.querySelector('input[type="number"]') as HTMLInputElement).value).toBe('2');
+  expect(host.querySelector('input[type="number"]')).toBeNull(); expect(host.textContent).toContain('AI chooses how many cards');
 });
 it('offers AI generation from both the deck list and the manual new-card editor', async () => {
   const generate = vi.fn();
@@ -70,10 +70,10 @@ it('the Decks home row updates from generating to ready, opens the batch and dis
   const open = vi.fn(), service = services.flashcards!;
   await act(async () => root.render(<DeckBrowser decks={[]} search="" onSearch={vi.fn()} open={vi.fn()} create={vi.fn()} study={vi.fn()} loading={false} resume={<ResumeFlashcards service={service} open={open}/>}/>));
   expect(host.querySelector('.qard-resume')).toBeNull();
-  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', count: 2, prompt: 'Transport basics', notes: [] }); }); await tick();
+  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', prompt: 'Transport basics', notes: [] }); }); await tick();
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Generating flashcards');
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Networks › Transport');
-  expect(host.querySelector('.qard-resume')?.textContent).toContain('2 cards · Generating…');
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Generating…'); expect(host.querySelector('.qard-resume')?.textContent).not.toContain('2 cards');
   await click(host.querySelector('.qard-resume')); expect(open).toHaveBeenCalledOnce();
   await act(async () => { resolve(reply); }); await tick();
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Review flashcards');
@@ -87,7 +87,7 @@ it('the Decks home row updates from generating to ready, opens the batch and dis
 it('the home row keeps a cancelled job accessible and updates when it is retried', async () => {
   run.mockImplementationOnce(() => new Promise(() => {})); const service = services.flashcards!;
   await act(async () => root.render(<ResumeFlashcards service={service} open={vi.fn()}/>));
-  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', count: 2, prompt: 'Transport basics', notes: [] }); }); await tick();
+  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', prompt: 'Transport basics', notes: [] }); }); await tick();
   await act(async () => service.cancel()); await tick();
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Needs attention');
   await act(async () => { await service.generate(); });

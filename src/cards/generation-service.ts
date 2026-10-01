@@ -1,9 +1,9 @@
 import { CANCELLED, runValidated, type AgentRunner } from '../agents/runner';
 import { safeFolder, type CardWriter } from './card-writer';
 import { flashcardPrompt } from './generation-prompts';
-import { flashcardsSchema, MAX_FLASHCARDS, readFlashcards, type GeneratedContent } from './generation-schema';
+import { flashcardsSchema, readFlashcards, type GeneratedContent } from './generation-schema';
 
-export interface FlashcardRequest { prompt: string; count: number; deck: string; topic: string; notes: string[] }
+export interface FlashcardRequest { prompt: string; deck: string; topic: string; notes: string[] }
 export interface GeneratedDraft extends GeneratedContent { id: string; selected: boolean; added: boolean }
 interface Batch { id: string; folder: string; request: FlashcardRequest; cards: GeneratedDraft[] }
 export interface GenerationSnapshot { batch?: Batch; job?: { kind: 'flashcards'; startedAt: number; error?: string }; saving: boolean; error?: string; loading: boolean }
@@ -36,7 +36,7 @@ export class FlashcardGenerationService {
       if (!value) return;
       if (!/^[A-Za-z0-9_-]+$/.test(value.id) || safeFolder(value.folder) !== safeFolder(this.folder())) throw new Error('Invalid saved flashcard draft.');
       const request = this.validateRequest(value.request);
-      if (!Array.isArray(value.cards) || (value.cards.length && value.cards.length !== request.count)) throw new Error('Invalid saved flashcard draft.');
+      if (!Array.isArray(value.cards)) throw new Error('Invalid saved flashcard draft.');
       // Drafts may be mid-edit; the writer validates content when the student adds them.
       if (value.cards.some(c => !c || !/^[A-Za-z0-9_-]+$/.test(c.id) || typeof c.front !== 'string' || typeof c.back !== 'string' || typeof c.source !== 'string' || typeof c.selected !== 'boolean' || typeof c.added !== 'boolean') || new Set(value.cards.map(c => c.id)).size !== value.cards.length) throw new Error('Invalid saved flashcard draft.');
       this.publish({ batch: { ...value, request }, job: value.cards.length ? undefined : { kind: 'flashcards', startedAt: Date.now(), error: 'Generation was interrupted. Try again when you are ready.' } });
@@ -45,12 +45,11 @@ export class FlashcardGenerationService {
   }
   private validateRequest(r: FlashcardRequest): FlashcardRequest {
     if (!r || typeof r.prompt !== 'string' || typeof r.deck !== 'string' || typeof r.topic !== 'string' || !Array.isArray(r.notes) || r.notes.some(p => typeof p !== 'string')) throw new Error('Invalid flashcard request.');
-    if (!Number.isInteger(r.count) || r.count < 1 || r.count > MAX_FLASHCARDS) throw new Error(`Choose between 1 and ${MAX_FLASHCARDS} cards.`);
     const deck = r.deck.trim(), topic = r.topic.trim() || 'General', prompt = r.prompt.trim();
     if (!deck || deck.length > 200 || topic.length > 200 || /[\r\n]/.test(deck + topic)) throw new Error('Enter a deck and topic on a single line, up to 200 characters each.');
     if (prompt.length > 10000) throw new Error('Keep the prompt under 10,000 characters.');
     if (!prompt && !r.notes.length) throw new Error('Describe the cards or choose at least one note.');
-    return { prompt, deck, topic, count: r.count, notes: [...new Set(r.notes)] };
+    return { prompt, deck, topic, notes: [...new Set(r.notes)] };
   }
   async start(request: FlashcardRequest) {
     if (this.snapshot.loading) throw new Error('Wait for saved drafts to load.');
@@ -77,7 +76,7 @@ export class FlashcardGenerationService {
       if (controller.signal.aborted) throw new Error(CANCELLED);
       const paths = this.paths();
       if (batch.request.notes.some(p => !paths.includes(p))) throw new Error('A selected note no longer exists. Start a new batch and choose the notes again.');
-      const content = await Promise.race([runValidated(this.runner(), { prompt: flashcardPrompt(batch.request), schema: flashcardsSchema, signal: controller.signal, effort: 'high' }, v => readFlashcards(v, batch.request.count, paths)), cancelled]);
+      const content = await Promise.race([runValidated(this.runner(), { prompt: flashcardPrompt(batch.request), schema: flashcardsSchema, signal: controller.signal, effort: 'high' }, v => readFlashcards(v, paths)), cancelled]);
       if (controller.signal.aborted || this.disposed) return;
       this.publish({ batch: { ...batch, cards: content.map(c => ({ ...c, id: crypto.randomUUID(), selected: true, added: false })) } });
       await this.persist();

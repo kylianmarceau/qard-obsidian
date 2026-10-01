@@ -11,10 +11,9 @@ export const flashcardsSchema: Schema = {
     } } }
   }
 };
-export const MAX_FLASHCARDS = 100;
-export function readFlashcards(value: unknown, count: number, paths: string[]): GeneratedContent[] {
+export function readFlashcards(value: unknown, paths: string[]): GeneratedContent[] {
   const result = check<{ cards: GeneratedContent[] }>(flashcardsSchema, value);
-  if (result.cards.length !== count) throw new Error(`Return exactly ${count} cards; received ${result.cards.length}.`);
+  if (!result.cards.length) throw new Error('Return at least one useful flashcard based on the material.');
   const seen = new Set<string>();
   return result.cards.map((card, i) => {
     const front = card.front.trim(), back = card.back.trim(), source = card.source.trim();
