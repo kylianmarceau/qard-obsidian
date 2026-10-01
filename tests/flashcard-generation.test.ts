@@ -4,7 +4,7 @@ import { readFlashcards, flashcardsSchema } from '../src/cards/generation-schema
 import { flashcardPrompt } from '../src/cards/generation-prompts';
 import { purposeOf } from '../src/agents/usage-report';
 import type { AgentRunner } from '../src/agents/runner';
-const request: FlashcardRequest = { deck: 'Networks', topic: 'Transport', prompt: 'TCP congestion control', count: 2, notes: ['Notes/TCP.md'] };
+const request: FlashcardRequest = { deck: 'Networks', topic: 'Transport', prompt: 'TCP congestion control', notes: ['Notes/TCP.md'] };
 const content = { cards: [{ front: 'What is slow start?', back: 'Exponential growth of the congestion window.', source: 'Notes/TCP.md' }, { front: 'What ends slow start?', back: 'Reaching the threshold or detecting loss.', source: 'Notes/TCP.md' }] };
 function setup(run = vi.fn<AgentRunner['run']>().mockResolvedValue(content), files: Record<string, string> = {}) {
   const write = vi.fn(async (p: string, t: string) => { files[p] = t; });
@@ -29,13 +29,13 @@ it('generates through the writer, persists a review draft and only adds selected
   expect(JSON.parse(files['Qard/Flashcard drafts.json']!).cards.map((c: { added: boolean }) => c.added)).toEqual([true, false]);
   expect(timing).toHaveBeenCalledWith('flashcards', expect.any(Number)); expect(purposeOf(flashcardsSchema)).toBe('Writing flashcards');
 });
-it('corrects malformed output once, including a wrong count or invented source', async () => {
-  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce({ cards: [content.cards[0]] }).mockResolvedValueOnce(content);
+it('corrects malformed output once, including an empty batch or invented source', async () => {
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce({ cards: [] }).mockResolvedValueOnce(content);
   const { service } = setup(run); await service.load(); await service.start(request); await settled(service);
-  expect(run).toHaveBeenCalledTimes(2); expect(run.mock.calls[1]![0].prompt).toContain('Return exactly 2 cards');
-  expect(() => readFlashcards({ cards: [{ ...content.cards[0], source: '../missing.md' }, content.cards[1]] }, 2, ['Notes/TCP.md'])).toThrow('does not exist');
-  expect(() => readFlashcards({ cards: [content.cards[0], content.cards[0]] }, 2, ['Notes/TCP.md'])).toThrow('repeats');
-  expect(() => readFlashcards({ cards: [{ ...content.cards[0], back: '' }, content.cards[1]] }, 2, ['Notes/TCP.md'])).toThrow('required');
+  expect(run).toHaveBeenCalledTimes(2); expect(run.mock.calls[1]![0].prompt).toContain('Return at least one useful flashcard');
+  expect(() => readFlashcards({ cards: [{ ...content.cards[0], source: '../missing.md' }, content.cards[1]] }, ['Notes/TCP.md'])).toThrow('does not exist');
+  expect(() => readFlashcards({ cards: [content.cards[0], content.cards[0]] }, ['Notes/TCP.md'])).toThrow('repeats');
+  expect(() => readFlashcards({ cards: [{ ...content.cards[0], back: '' }, content.cards[1]] }, ['Notes/TCP.md'])).toThrow('required');
 });
 it('cancels immediately and ignores late replies from an uninterruptible provider', async () => {
   let reply!: (v: unknown) => void;
@@ -57,9 +57,9 @@ it('restores an interrupted job as an explicit retry, without silently spending 
   const restored = setup(undefined, files); await restored.service.load();
   expect(restored.service.getSnapshot().job?.error).toContain('interrupted'); expect(restored.run).not.toHaveBeenCalled(); service.dispose();
 });
-it('validates counts, notes, names and empty requests before calling the agent', async () => {
+it('validates notes, names and empty requests before calling the agent', async () => {
   const { service, run, files } = setup(); await service.load();
-  for (const patch of [{ count: 0 }, { count: 101 }, { count: 1.5 }, { deck: '' }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
+  for (const patch of [{ deck: '' }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
   expect(run).not.toHaveBeenCalled(); expect(files).toEqual({});
   expect(flashcardPrompt({ ...request, notes: [] })).toContain('Search the vault'); expect(flashcardPrompt(request)).toContain('Notes/TCP.md');
 });
@@ -84,9 +84,30 @@ it('does not contact the provider until the request can be saved', async () => {
   await service.generate(); expect(service.getSnapshot().batch?.cards).toHaveLength(2);
 });
 
-it('accepts the new maximum of 100 cards and validates the entire generated batch', async () => {
-  const reply = { cards: Array.from({ length: 100 }, (_, i) => ({ front: `Question ${i + 1}?`, back: `Answer ${i + 1}.`, source: 'Notes/TCP.md' })) };
-  const run = vi.fn<AgentRunner['run']>().mockResolvedValue(reply), { service } = setup(run);
-  await service.load(); await service.start({ ...request, count: 100 }); await settled(service);
-  expect(service.getSnapshot().batch?.cards).toHaveLength(100); expect(run.mock.calls[0]![0].prompt).toContain('exactly 100');
+it.each([1, 3, 101])('accepts an AI-chosen batch of %i cards without a fixed target', async length => {
+  const reply = { cards: Array.from({ length }, (_, i) => ({ front: `Question ${i + 1}?`, back: `Answer ${i + 1}.`, source: 'Notes/TCP.md' })) };
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue(reply), { service, notify } = setup(run);
+  await service.load(); await service.start(request); await settled(service);
+  expect(service.getSnapshot().batch?.cards).toHaveLength(length); expect(run).toHaveBeenCalledOnce();
+  expect(run.mock.calls[0]![0].prompt).toContain('Choose how many cards the material needs');
+  expect(notify).toHaveBeenCalledWith(`${length} flashcards ready to review: Networks`);
+});
+it('restores legacy count-based drafts without losing edits, selections or added cards', async () => {
+  const { service, files } = setup(); await service.load(); await service.start(request); await settled(service);
+  const cards = service.getSnapshot().batch!.cards;
+  service.updateCard(cards[0]!.id, { selected: false, front: 'Edited question?' }); await service.addSelected(); await service.flush();
+  const draft = JSON.parse(files['Qard/Flashcard drafts.json']!); draft.request.count = 2;
+  files['Qard/Flashcard drafts.json'] = JSON.stringify(draft);
+  const restored = setup(undefined, files); await restored.service.load();
+  expect(restored.service.getSnapshot().error).toBeUndefined(); expect(restored.run).not.toHaveBeenCalled();
+  expect(restored.service.getSnapshot().batch!.request).not.toHaveProperty('count');
+  expect(restored.service.getSnapshot().batch!.cards).toEqual(service.getSnapshot().batch!.cards);
+});
+it('retries an interrupted legacy request with an AI-chosen count', async () => {
+  const files = { 'Qard/Flashcard drafts.json': JSON.stringify({ id: 'old-batch', folder: 'Qard', request: { ...request, count: 40 }, cards: [] }) };
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ cards: [content.cards[0]] }), { service } = setup(run, files);
+  await service.load(); expect(service.getSnapshot().job?.error).toContain('interrupted'); expect(run).not.toHaveBeenCalled();
+  await service.generate(); expect(service.getSnapshot().batch!.cards).toHaveLength(1);
+  expect(run.mock.calls[0]![0].prompt).not.toContain('40');
+  expect(JSON.parse(files['Qard/Flashcard drafts.json']).request).not.toHaveProperty('count');
 });

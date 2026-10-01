@@ -11,7 +11,7 @@ export function ResumeFlashcards({ service, open }: { service: FlashcardGenerati
   if (batch.cards.length && !remaining && !running && !saving && !error && !job?.error) return null;
   const needsAttention = !!error || !!job?.error;
   const label = needsAttention ? 'Continue flashcards' : running || !batch.cards.length ? 'Generating flashcards' : 'Review flashcards';
-  const status = needsAttention ? 'Needs attention' : running || !batch.cards.length ? `${batch.request.count} cards · Generating…` : saving ? 'Adding…' : `${remaining} ready to review`;
+  const status = needsAttention ? 'Needs attention' : running || !batch.cards.length ? 'Generating…' : saving ? 'Adding…' : `${remaining} ready to review`;
   return <button className="qard-resume" onClick={open}>
     <span className="qard-muted">{label}</span><strong>{batch.request.deck} › {batch.request.topic}</strong><span className="qard-muted">{status}</span><ChevronRight size={16}/>
   </button>;
