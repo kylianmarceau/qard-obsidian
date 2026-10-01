@@ -3,7 +3,7 @@ import type { RoleSetting } from '../settings/settings';
 
 /** Which role each kind of job runs as, so timings are kept per connection and model. */
 export const ROLE: Record<string, AgentRole> = {
-  plan: 'writer', generate: 'writer', wrapup: 'writer', mark: 'marker', dispute: 'marker', retry: 'tutor', ask: 'tutor',
+  flashcards: 'writer', plan: 'writer', generate: 'writer', wrapup: 'writer', mark: 'marker', dispute: 'marker', retry: 'tutor', ask: 'tutor',
   'map-course': 'writer', 'check-write': 'writer', steps: 'writer', close: 'writer', 'check-mark': 'tutor', probe: 'tutor', map: 'tutor', revise: 'tutor', tutor: 'tutor'
 };
 

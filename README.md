@@ -37,6 +37,14 @@ YOUR-TEST-VAULT/.obsidian/plugins/qard/
 
 Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or the original web app into the vault. Qard is not yet listed in the Community Plugin directory.
 
+## AI flashcards
+
+Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Choose a deck and topic, a count from 1–40, and describe the material to cover. Attach notes with **+ Note**, or let the writer find relevant vault notes. Generation uses the existing Writer connection and model in Qard settings.
+
+Review the questions and answers, edit them or preview their Markdown, deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Later selections from the same batch go into the same generated note; retrying a save does not duplicate cards.
+
+Generation continues while you visit other screens, appears in the running-jobs menu, and can be cancelled or retried. The latest review draft, edits, selections and added status are saved in `Flashcard drafts.json` in your card folder. After a plugin reload, return to **Generate with AI** to resume reviewing. An interrupted AI request requires **Try again**. **Generate another batch** replaces the review draft; cards already added remain in the vault. Usage appears under **Writing flashcards** in the token usage report.
+
 ## Development
 
 - `npm run dev` — rebuild the plugin on source changes.
