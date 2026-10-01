@@ -45,6 +45,44 @@ export class CardWriter {
     await this.app.vault.process(file, source => deleteCardInSource(source, card));
     await this.index.refresh(file);
   }
+  /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
+  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string }[]): Promise<QardCard[]> {
+    const deck = target.deck.trim(), topic = target.topic.trim() || 'General', folder = safeFolder(target.folder);
+    if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
+    if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) throw new Error('Invalid batch ID.');
+    if (!cards.length || new Set(cards.map(c => c.id)).size !== cards.length) throw new Error('Choose distinct cards to add.');
+    // Validate the whole batch before making any changes.
+    cards.forEach(c => serializeCard(c.id, c.front, c.back));
+    const slug = deck.replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
+    const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
+    const append = (source: string) => {
+      const existing = parseCards(source, path).cards;
+      for (const card of cards) {
+        const matches = existing.filter(c => c.id === card.id);
+        if (matches.length > 1 || matches.some(c => c.deck !== deck || c.topic !== topic)) throw new Error('A saved card changed its deck, topic or ID. Check the generated note before retrying.');
+      }
+      const pending = cards.filter(c => !existing.some(old => old.id === c.id));
+      if (!pending.length) return source;
+      const eol = source.includes('\r\n') ? '\r\n' : '\n';
+      const next = source + eol + `# ${topic}${eol}${eol}` + pending.map(c => serializeCard(c.id, c.front, c.back, eol)).join(eol);
+      const parsed = parseCards(next, path).cards;
+      if (cards.some(c => parsed.filter(p => p.id === c.id && p.deck === deck && p.topic === topic).length !== 1)) throw new Error('The generated note changed or has an unfinished Markdown block. Reopen its source before adding cards.');
+      return next;
+    };
+    let file = this.app.vault.getAbstractFileByPath(path);
+    if (file && !(file instanceof TFile)) throw new Error('A folder is using the generated note path.');
+    if (file instanceof TFile) await this.app.vault.process(file, append);
+    else {
+      const source = append(`---\nqard-deck: ${JSON.stringify(deck)}\n---\n`);
+      let built = '';
+      for (const part of folder.split('/').filter(Boolean)) { built = built ? `${built}/${part}` : part; if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built); }
+      file = await this.app.vault.create(path, source);
+    }
+    if (!(file instanceof TFile)) throw new Error('The generated note could not be created.');
+    await this.index.refresh(file);
+    const parsed = parseCards(await this.app.vault.read(file), path).cards;
+    return cards.map(c => { const found = parsed.find(p => p.id === c.id); if (!found) throw new Error('A saved card could not be read back. Check the generated note.'); return found; });
+  }
   async create(draft: CardDraft): Promise<QardCard> {
     const deck = draft.deck.trim(), topic = draft.topic.trim() || 'General';
     if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
