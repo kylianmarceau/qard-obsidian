@@ -24,6 +24,8 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
     lock.current = true; setBusy(true); setError('');
     try {
       await services.reviews.review(card.id, rating);
+      // Two lapses on a card made for a mastered objective mark it as slipping.
+      if (rating === 1) void services.learn?.cardLapse(card.id).catch(() => {});
       if (mounted.current) { setResults(old => [...old, { cardId: card.id, rating }]); setPosition(i => i + 1); setRevealed(false); }
     } catch (e) { if (mounted.current) setError((e as Error).message || 'Could not save your review. Try again.'); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }

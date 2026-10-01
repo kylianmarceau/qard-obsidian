@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { placeAnnotations } from '../src/tests/annotate';
-import { readMarks, readTest, validate, planSchema } from '../src/tests/test-schema';
+import { readMarks, readTest, validate, planSchema, testSchema, marksSchema } from '../src/tests/test-schema';
 import { extractJson, runValidated, type AgentRunner, type AgentTask } from '../src/agents/runner';
 import { runVaultTool } from '../src/agents/vault-tools';
 import { ClaudeCodeRunner, type NodeHost } from '../src/agents/cli-runner';
 import { TestService, type TestStorage } from '../src/tests/test-service';
 import { DEFAULT_TEST_SETTINGS, readSettings, type TestSettings } from '../src/settings/settings';
-import { markPrompt } from '../src/tests/test-prompts';
+import { markPrompt, questionBlock } from '../src/tests/test-prompts';
 
 beforeAll(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 
@@ -98,6 +98,13 @@ describe('Claude Code runner', () => {
     expect(call.args).toEqual(expect.arrayContaining(['-p', '--json-schema', '--allowedTools', 'Read,Grep,Glob', '--disallowedTools']));
     expect(call.args.join(' ')).toMatch(/Bash,Edit,Write/);
     expect(call.input).toMatch(/never create, edit or delete files/);
+    expect(call.args).toContain('--no-session-persistence');
+    // A self-contained tutor task gets no tools at all, and its effort level.
+    await runner.run({ prompt: 'Mark', schema: { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }, vault: false, effort: 'low' });
+    const fast = calls.filter(c => c.command === '/opt/claude').at(-1)!.args;
+    expect(fast.join(' ')).toMatch(/--tools {2}--effort low$|--tools  .*--effort low/);
+    expect(fast).not.toContain('--allowedTools');
+    expect(fast[fast.indexOf('--tools') + 1]).toBe('');
   });
 });
 
@@ -218,5 +225,38 @@ it('marking prompts include rubric, model answer and confidence', () => {
 });
 it('settings default to Claude Code with plans and per-section marking', () => {
   expect(readSettings({}).tests).toEqual(DEFAULT_TEST_SETTINGS);
-  expect(readSettings({ tests: { provider: 'nope', questions: 999, folder: '' } }).tests).toMatchObject({ provider: 'claude-code', questions: 10, folder: 'Qard/Tests' });
+  expect(readSettings({ tests: { provider: 'nope', questions: 999, folder: '' } }).tests).toMatchObject({ questions: 10, folder: 'Qard/Tests' });
+  expect(readSettings({}).agents.roles).toEqual({ tutor: { provider: 'claude-code', model: 'haiku' }, writer: { provider: 'claude-code', model: '' }, marker: { provider: 'claude-code', model: '' } });
+});
+
+it('moves the old single agent setting into roles, with a fast tutor', () => {
+  const agents = readSettings({ tests: { provider: 'anthropic', model: 'claude-sonnet-5-5' } }).agents;
+  expect(agents.roles).toEqual({ tutor: { provider: 'anthropic', model: 'claude-haiku-4-5' }, writer: { provider: 'anthropic', model: 'claude-sonnet-5-5' }, marker: { provider: 'anthropic', model: 'claude-sonnet-5-5' } });
+  expect(readSettings({ tests: { provider: 'codex', agentPath: '/bin/codex' } }).agents).toMatchObject({ codexPath: '/bin/codex', claudePath: '' });
+  // Once roles exist they win, and unknown providers fall back per role.
+  expect(readSettings({ tests: { provider: 'codex' }, agents: { roles: { tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'bad' } } } }).agents.roles).toMatchObject({ tutor: { provider: 'openrouter', model: 'x/y' }, writer: { provider: 'claude-code', model: '' } });
+});
+
+it('after a reload, writes again a test that was being written, and marks sections left marking', async () => {
+  const now = Date.now();
+  const files: Record<string, string> = {
+    'Qard/Tests/a/request.json': JSON.stringify({ prompt: 'HMM', decks: [], notes: [], sources: [], writing: now - 60_000 }),
+    'Qard/Tests/b/request.json': JSON.stringify({ prompt: 'Old', decks: [], notes: [], sources: [], writing: now - 3 * 86_400_000 }),
+    'Qard/Tests/c/test.json': JSON.stringify({ version: 1, createdAt: now, ...TEST }),
+    'Qard/Tests/c/attempt.json': JSON.stringify({ version: 1, startedAt: now - 1000, answers: { q1: { text: 'x' } }, marks: {}, review: {}, sections: { s1: { status: 'marking' }, s2: { status: 'open' } } })
+  };
+  const storage = memory(files), roles: string[] = [];
+  const service = new TestService(storage, () => DEFAULT_TEST_SETTINGS, role => ({ name: 'fake', run: async (task: AgentTask) => { roles.push(`${role}:${task.schema === testSchema ? 'test' : task.schema === marksSchema ? 'marks' : 'other'}`); return new Promise(() => {}); } }), () => now);
+  await service.resume();
+  await new Promise(r => setTimeout(r, 0));
+  expect(roles.sort()).toEqual(['marker:marks', 'writer:test']);
+  expect(JSON.parse(files['Qard/Tests/a/request.json']!).writing).toBeGreaterThan(now - 1000);
+});
+
+it('shows agents the option a student picked in multiple choice, not a blank answer', () => {
+  const mcq = TEST.sections[0]!.questions[1]! as Parameters<typeof questionBlock>[0];
+  const block = questionBlock(mcq, { choice: 0, confidence: 'unsure' });
+  expect(block).toContain('A. Forward\nB. Viterbi (correct)');
+  expect(block).toContain('<student_answer confidence="unsure">Picked A. Forward (wrong)</student_answer>');
+  expect(questionBlock(mcq, undefined)).toContain('(blank)');
 });

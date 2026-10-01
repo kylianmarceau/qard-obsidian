@@ -4,6 +4,7 @@ export interface Child { stdout: Stream | null; stderr: Stream | null; stdin: { 
 export interface SpawnOptions { cwd: string; env: Record<string, string | undefined>; stdio: ['pipe', 'pipe', 'pipe']; windowsHide: boolean }
 import { PREAMBLE } from '../tests/test-prompts';
 import { SCHEMA_INSTRUCTION, extractJson, type AgentRunner, type AgentTask } from './runner';
+import { fromClaudeCode, fromCodexEvents } from './usage';
 
 /** Node access, injected so tests never spawn anything and mobile never loads Node modules. */
 export interface NodeHost {
@@ -56,6 +57,23 @@ export async function findBinary(host: NodeHost, name: string, override: string)
   return undefined;
 }
 
+export interface ModelChoice { value: string; label: string }
+/** Claude Code takes an alias for the latest model of a family, or a full model name. */
+export const CLAUDE_CODE_MODELS: ModelChoice[] = [
+  { value: 'fable', label: 'Fable (latest)' }, { value: 'opus', label: 'Opus (latest)' }, { value: 'sonnet', label: 'Sonnet (latest)' }, { value: 'haiku', label: 'Haiku (latest, fastest)' },
+  { value: 'claude-fable-5-1', label: 'Claude Fable 5.1' }, { value: 'claude-opus-5-5', label: 'Claude Opus 5.5' }, { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
+];
+/** The models Codex lists for this account, from its own cache (~/.codex/models_cache.json), in its order. */
+export function codexModels(host: NodeHost): ModelChoice[] {
+  const file = `${host.env.CODEX_HOME || `${host.home}/.codex`}/models_cache.json`;
+  try {
+    if (!host.exists(file)) return [];
+    const models = (JSON.parse(host.readFile(file)) as { models?: { slug?: unknown; display_name?: unknown; description?: unknown; visibility?: unknown; priority?: unknown }[] }).models ?? [];
+    return models.filter(m => typeof m.slug === 'string' && m.visibility !== 'hide').sort((a, b) => Number(a.priority ?? 99) - Number(b.priority ?? 99))
+      .map(m => ({ value: m.slug as string, label: [m.display_name, m.description].filter(x => typeof x === 'string' && x).join(' — ') || (m.slug as string) }));
+  } catch { return []; }
+}
+
 abstract class CliRunner implements AgentRunner {
   abstract readonly name: string;
   protected abstract readonly binary: string;
@@ -74,11 +92,15 @@ export class ClaudeCodeRunner extends CliRunner {
   readonly name = 'Claude Code'; protected readonly binary = 'claude';
   async run(task: AgentTask) {
     const { bin, path } = await this.command();
-    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(task.schema), '--allowedTools', 'Read,Grep,Glob', '--disallowedTools', 'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch'];
+    // Qard's calls stay out of the user's session history. When the prompt holds everything, no tools at all: faster, and nothing to wander into.
+    const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(task.schema), '--no-session-persistence',
+      ...(task.vault === false ? ['--tools', ''] : ['--allowedTools', 'Read,Grep,Glob', '--disallowedTools', 'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch'])];
     if (this.model.trim()) args.push('--model', this.model.trim());
+    if (task.effort) args.push('--effort', task.effort);
     const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });
-    let envelope: { result?: unknown; structured_output?: unknown; is_error?: boolean };
+    let envelope: { result?: unknown; structured_output?: unknown; is_error?: boolean; usage?: Record<string, unknown>; total_cost_usd?: unknown; modelUsage?: Record<string, unknown> };
     try { envelope = JSON.parse(out) as typeof envelope; } catch { return extractJson(out); }
+    const usage = fromClaudeCode(envelope); if (usage) task.onUsage?.(usage);
     if (envelope.is_error) throw new Error(typeof envelope.result === 'string' && envelope.result ? envelope.result : 'Claude Code returned an error.');
     // --json-schema yields validated structured_output; older versions only return the text.
     if (envelope.structured_output !== undefined) return envelope.structured_output;
@@ -93,12 +115,18 @@ export class CodexRunner extends CliRunner {
   async run(task: AgentTask) {
     const { bin, path } = await this.command();
     const last = this.host.tempFile(`qard-codex-${Date.now()}.txt`);
-    const args = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', '--output-last-message', last];
+    // --json streams events to stdout, including each turn's token usage; the reply itself is read from the last-message file.
+    const args = ['exec', '--json', '--sandbox', 'read-only', '--skip-git-repo-check', '--color', 'never', '--output-last-message', last];
     if (this.model.trim()) args.push('--model', this.model.trim());
+    if (task.effort) args.push('-c', `model_reasoning_effort=${task.effort}`);
     args.push('-');
     try {
       const out = await runProcess(this.host, bin, args, this.input(task), { cwd: this.vault, path, signal: task.signal });
-      return extractJson(this.host.exists(last) ? this.host.readFile(last) : out);
+      const usage = fromCodexEvents(out); if (usage) task.onUsage?.({ ...usage, model: this.model.trim() || undefined });
+      if (this.host.exists(last)) return extractJson(this.host.readFile(last));
+      // Without the file, the final agent message is the last completed item in the event stream.
+      const items = out.split('\n').map(l => { try { return JSON.parse(l) as { type?: string; item?: { type?: string; text?: string } }; } catch { return undefined; } }).filter(e => e?.type === 'item.completed' && e.item?.type === 'agent_message');
+      return extractJson(items.at(-1)?.item?.text ?? out);
     } finally { if (this.host.exists(last)) this.host.remove(last); }
   }
 }

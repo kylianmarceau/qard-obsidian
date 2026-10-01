@@ -53,8 +53,9 @@ it('the empty library offers creation without showing example decks', () => {
 
 it('the library links to practice tests and shows an unfinished test', () => {
   const noop = vi.fn();
-  const html = renderToStaticMarkup(<DeckBrowser decks={[]} search="" onSearch={noop} open={noop} create={noop} study={noop} loading={false} tests={noop} newTest={noop} resume={<button className="qard-resume">Continue HMM inference</button>}/>);
+  const html = renderToStaticMarkup(<DeckBrowser decks={[]} search="" onSearch={noop} open={noop} create={noop} study={noop} loading={false} tests={noop} newTest={noop} learn={noop} resume={<button className="qard-resume">Continue HMM inference</button>}/>);
   expect(html).toContain('Practice test');
-  expect(html).toContain('role="tab"');
+  expect(html.match(/role="tab"/g)).toHaveLength(3);
+  expect(html).toContain('>Learn<');
   expect(html).toContain('Continue HMM inference');
 });
