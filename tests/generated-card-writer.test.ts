@@ -41,3 +41,25 @@ it('never overwrites a generated note whose deck or Markdown boundary has change
   texts[first!.sourceFile] = texts[first!.sourceFile]!.replace('"Networks"', '"Changed"'); const before = texts[first!.sourceFile];
   await expect(writer.createBatch(target, cards)).rejects.toThrow('changed'); expect(texts[first!.sourceFile]).toBe(before);
 });
+it('deletes a topic across notes while preserving other topics, decks and prose', async () => {
+  const { writer, texts, index } = setup();
+  const a = await writer.createBatch(target, cards);
+  const b = await writer.createBatch({ ...target, batchId: 'batch-2' }, [{ ...cards[0]!, id: 'card-3' }]);
+  await writer.createBatch({ ...target, topic: 'Routing', batchId: 'batch-3' }, [{ ...cards[0]!, id: 'card-4' }]);
+  await writer.createBatch({ ...target, deck: 'Other', batchId: 'batch-4' }, [{ ...cards[0]!, id: 'card-5' }]);
+  for (const path of [a[0]!.sourceFile, b[0]!.sourceFile]) texts[path] += '\nKeep this prose.\n';
+  await writer.deleteGroup('Networks', 'Transport');
+  expect(index.getSnapshot().cards.map(c => c.id)).toEqual(['card-4', 'card-5']);
+  expect(texts[a[0]!.sourceFile]).toContain('Keep this prose.');
+  expect(texts[b[0]!.sourceFile]).toContain('Keep this prose.');
+  await writer.deleteGroup('Networks');
+  expect(index.getSnapshot().cards.map(c => c.id)).toEqual(['card-5']);
+});
+it('uses current note contents and preserves a card moved out of the selected topic', async () => {
+  const { writer, texts, index } = setup();
+  const [a] = await writer.createBatch(target, cards);
+  texts[a!.sourceFile] = texts[a!.sourceFile]!.replace('# Transport', '# Edited topic');
+  await writer.deleteGroup('Networks', 'Transport');
+  expect(index.getSnapshot().cards).toHaveLength(2);
+  expect(index.getSnapshot().cards[0]?.topic).toBe('Edited topic');
+});

@@ -1,7 +1,7 @@
 import { TFile, normalizePath, type App } from 'obsidian';
 import type { QardCard } from './card-types';
 import type { VaultIndexer } from './indexer';
-import { deleteCardInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
+import { deleteCardInSource, deleteGroupInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
 import { parseCards } from './parser';
 export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string }
 export function safeFolder(folder: string): string {
@@ -44,6 +44,15 @@ export class CardWriter {
     this.unique(card); const file = this.file(card.sourceFile);
     await this.app.vault.process(file, source => deleteCardInSource(source, card));
     await this.index.refresh(file);
+  }
+  /** Use the full index, even when the library has a search filter. Each note is patched atomically. */
+  async deleteGroup(deck: string, topic?: string) {
+    const paths = [...new Set(this.index.getSnapshot().cards.filter(c => c.deck === deck && (topic === undefined || c.topic === topic)).map(c => c.sourceFile))];
+    for (const path of paths) {
+      const file = this.file(path);
+      await this.app.vault.process(file, source => deleteGroupInSource(source, path, deck, topic));
+      await this.index.refresh(file);
+    }
   }
   /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
   async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string }[]): Promise<QardCard[]> {

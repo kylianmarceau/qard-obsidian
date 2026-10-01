@@ -660,3 +660,14 @@ div.qard-ask-q { cursor: default; }
 .qard-app button.qard-jobs-cancel:hover { color: var(--text-error, #d04255); }
 .qard-jobs-stuck { color: var(--text-warning, #d9822b); font-size: 11px; }
 .qard-ask-thinking { display: flex; align-items: center; gap: 12px; }
+
+/* Delete actions remain separate from row navigation and visible on touch screens. */
+.qard-deletable-row { display: flex; align-items: center; gap: 10px; }
+.qard-deletable-row > button { flex: 1; min-width: 0; }
+.qard-deletable-row > .qard-deck { width: auto; }
+.qard-delete-item { flex-shrink: 0; }
+.qard-delete-dialog::backdrop { background: #0008; }
+.qard-delete-dialog { width: min(460px, calc(100% - 48px)); color: var(--qard-text); background: var(--qard-bg); border: 1px solid var(--qard-border); border-radius: 12px; padding: 24px; box-shadow: 0 12px 48px #0005; }
+.qard-delete-dialog h2 { margin-top: 0; }
+.qard-delete-dialog p { line-height: 1.6; margin-top: 12px; }
+.qard-delete-dialog .qard-actions { justify-content: flex-end; margin-top: 20px; }
