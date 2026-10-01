@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Component, TFile } from 'obsidian';
+import { ResumeFlashcards } from '../src/components/ResumeFlashcards';
 import { GenerateFlashcards } from '../src/components/GenerateFlashcards';
 import { CardEditor } from '../src/components/CardEditor';
 import { DeckBrowser } from '../src/components/DeckBrowser';
@@ -62,4 +63,33 @@ it('offers AI generation from both the deck list and the manual new-card editor'
   await click(button('Generate with AI')); expect(generate).toHaveBeenCalledOnce();
   await act(async () => root.render(<CardEditor services={services} initial={{ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' }} cancel={back} saved={vi.fn()} generate={generate}/>));
   await click(button('Generate with AI')); expect(generate).toHaveBeenLastCalledWith({ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' });
+});
+
+it('the Decks home row updates from generating to ready, opens the batch and disappears after all cards are added', async () => {
+  let resolve!: (v: unknown) => void; run.mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+  const open = vi.fn(), service = services.flashcards!;
+  await act(async () => root.render(<DeckBrowser decks={[]} search="" onSearch={vi.fn()} open={vi.fn()} create={vi.fn()} study={vi.fn()} loading={false} resume={<ResumeFlashcards service={service} open={open}/>}/>));
+  expect(host.querySelector('.qard-resume')).toBeNull();
+  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', count: 2, prompt: 'Transport basics', notes: [] }); }); await tick();
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Generating flashcards');
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Networks › Transport');
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('2 cards · Generating…');
+  await click(host.querySelector('.qard-resume')); expect(open).toHaveBeenCalledOnce();
+  await act(async () => { resolve(reply); }); await tick();
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Review flashcards');
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('2 ready to review');
+  const second = service.getSnapshot().batch!.cards[1]!;
+  await act(async () => { service.updateCard(second.id, { selected: false }); await service.addSelected(); });
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('1 ready to review');
+  await act(async () => { service.updateCard(second.id, { selected: true }); await service.addSelected(); });
+  expect(host.querySelector('.qard-resume')).toBeNull();
+});
+it('the home row keeps a cancelled job accessible and updates when it is retried', async () => {
+  run.mockImplementationOnce(() => new Promise(() => {})); const service = services.flashcards!;
+  await act(async () => root.render(<ResumeFlashcards service={service} open={vi.fn()}/>));
+  await act(async () => { await service.start({ deck: 'Networks', topic: 'Transport', count: 2, prompt: 'Transport basics', notes: [] }); }); await tick();
+  await act(async () => service.cancel()); await tick();
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Needs attention');
+  await act(async () => { await service.generate(); });
+  expect(host.querySelector('.qard-resume')?.textContent).toContain('Review flashcards');
 });
