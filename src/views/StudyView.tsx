@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { reviewIntervals } from '../review/fsrs-scheduler';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, Maximize2, Minimize2, RotateCcw, CheckCircle2, ExternalLink } from 'lucide-react';
 import { StudyCard } from '../components/StudyCard';
 import { VoiceAnswer } from '../audio/VoiceAnswer';
@@ -7,7 +8,7 @@ import type { Rating } from '../review/scheduler';
 import type { SessionResult } from '../review/session';
 import type { QardServices } from './services';
 import { ignoresStudyKey } from '../review/keyboard';
-const ratings: { rating: Rating; name: string }[] = [{ rating: 1, name: 'Again' }, { rating: 2, name: 'Hard' }, { rating: 3, name: 'Good' }, { rating: 4, name: 'Easy' }];
+const ratings: { rating: Rating; name: string; hint: string }[] = [{ rating: 1, name: 'Again', hint: 'I forgot the answer' }, { rating: 2, name: 'Hard', hint: 'I recalled it with effort' }, { rating: 3, name: 'Good', hint: 'I recalled it' }, { rating: 4, name: 'Easy', hint: 'I recalled it immediately' }];
 export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]; services: QardServices; exit: () => void; repeat: (cards: QardCard[]) => void }) {
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const [position, setPosition] = useState(0), [revealed, setRevealed] = useState(false), [focus, setFocus] = useState(saved.settings.autoFocus);
@@ -15,6 +16,9 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
   const [confirmExit, setConfirmExit] = useState(false);
   const lock = useRef(false), surface = useRef<HTMLDivElement>(null), mounted = useRef(true), start = useRef(Date.now());
   const card = cards[position];
+  const intervals = useMemo(() => card && revealed && saved.settings.scheduling && saved.settings.scheduler === 'fsrs'
+    ? reviewIntervals(card.id, saved.states[card.id], Date.now(), saved.settings.desiredRetention) : undefined,
+  [card, revealed, saved]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; services.setFocus(false); }; }, [services]);
   useEffect(() => { services.setFocus(focus); return () => services.setFocus(false); }, [focus, services]);
   useEffect(() => { surface.current?.focus(); }, [position]);
@@ -57,7 +61,7 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
       <StudyCard key={card.id} card={card} revealed={revealed} services={services}/>
       {saved.settings.audioEnabled && <VoiceAnswer key={card.id} onBusy={onRecording}/>}
       {error && <p className="qard-error" role="alert">{error}</p>}
-      <div className="qard-study-controls">{revealed ? <><div className="qard-ratings">{ratings.map(r => <button key={r.rating} className={'qard-rating qard-rating-' + r.rating} disabled={busy || recording || confirmExit} onClick={() => void rate(r.rating)}><strong>{r.name}</strong>{saved.settings.keyboardHints && <kbd>{r.rating}</kbd>}</button>)}</div><button className="qard-hide-answer" onClick={() => setRevealed(false)} disabled={recording}>Hide answer {saved.settings.keyboardHints && <kbd>Space</kbd>}</button></> : <button className="qard-primary qard-reveal" disabled={recording || confirmExit} onClick={() => setRevealed(true)}>Reveal answer {saved.settings.keyboardHints && <kbd>Space</kbd>}</button>}</div>
+      <div className="qard-study-controls">{revealed ? <><div className="qard-ratings">{ratings.map(r => <button key={r.rating} className={'qard-rating qard-rating-' + r.rating} title={r.hint} disabled={busy || recording || confirmExit} onClick={() => void rate(r.rating)}><strong>{r.name}</strong>{intervals && <small className="qard-rating-interval" aria-label={`Next review in ${intervals[r.rating - 1]}`}>{intervals[r.rating - 1]}</small>}{saved.settings.keyboardHints && <kbd>{r.rating}</kbd>}</button>)}</div><button className="qard-hide-answer" onClick={() => setRevealed(false)} disabled={recording}>Hide answer {saved.settings.keyboardHints && <kbd>Space</kbd>}</button></> : <button className="qard-primary qard-reveal" disabled={recording || confirmExit} onClick={() => setRevealed(true)}>Reveal answer {saved.settings.keyboardHints && <kbd>Space</kbd>}</button>}</div>
       <div className="qard-study-foot"><span>{busy ? 'Saving…' : ''}</span><button onClick={() => { setFocus(false); void services.openSource(card).catch(e => setError((e as Error).message)); }}><ExternalLink size={14}/>Open source</button></div>
     </div></div>;
 }

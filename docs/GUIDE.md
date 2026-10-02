@@ -294,6 +294,19 @@ Long waits show **While you wait** instead of a spinner, offering one thing at a
 
 While a practice test is written or marked, nothing from that test's own notes is offered, so warming up doesn't inflate your score or show answers you're about to review. Ratings and answers count as usual. Once you start something the screen stays put, and when the job is done a bar offers **Continue**.
 
+## Study statistics
+
+Choose **Statistics** in the workspace header or run **Qard: Show study statistics**.
+
+- **Review performance:** reviews, self-rated recall and active study days over 7 days, 30 days or saved history. Recall counts Hard, Good and Easy as remembered, and shows the change from the preceding period when both periods have reviews.
+- **Study activity:** a yearly calendar heatmap with daily review counts, active days, reviews per active day and the longest streak within that year. Choose a year, click a square, or focus the calendar and use arrow keys to inspect days. The current streak spans years and stays active if you studied today or yesterday. Days follow the device’s local time.
+- **Rating-based difficulty:** a histogram and median for currently indexed cards with recorded ratings. Each card’s average rating is mapped from Easy (0%) through Good (33%) and Hard (67%) to Again (100%). This observed score is not FSRS difficulty; cards with only a few ratings have little evidence yet.
+- **Memory estimates (FSRS):** predicted recall now, median stability, median model difficulty, and cards below your retention target. Stability is the number of days until predicted recall falls to 90%, independently of the selected target. The difficulty distribution displays FSRS’s 1–10 scale as 0–100%. These are estimates rather than measured test scores.
+- **Your collection:** reviewed and new card counts, coverage, and due cards. The seven-day forecast uses current due dates, including overdue cards today, and changes as you review. Scheduling controls due counts and the forecast; ratings are recorded even when scheduling is off.
+- **By deck:** collection coverage, recall and due counts, with a shortcut to study that deck.
+
+Daily and per-card rating totals are kept locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. If older reviews were already removed by that limit, they cannot be recovered and the page says the history may be incomplete. Imported schedules affect collection counts but do not create historical reviews. Deleted cards remain in activity totals and are excluded from collection and difficulty charts. Duplicate card IDs are excluded from collection counts until fixed.
+
 ## Token usage
 
 Qard records the tokens used by every call it makes to Claude Code, Codex, the Anthropic API or OpenRouter: input, output and cache tokens, the model that ran, and the cost where the provider reports it. **Qard: Show token usage** (also **Usage** on the Learn tab and **View usage** in Settings → Qard → AI roles) shows totals for today, 7 days, 30 days or all time, tokens per day, and breakdowns by feature (writing tests, marking, writing lessons, tutoring, course mapping and so on) and by connection and model.
@@ -325,9 +338,18 @@ Each Claude Code or Codex call starts a new process, which adds a few seconds. F
 
 ## Review data and settings
 
-Review states, the most recent 10,000 rating events, settings, the links between cards and mastery objectives, job timings and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
 
-The scheduler is deliberately small and isolated behind an interface; it is **not FSRS**. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease. Disabling scheduling still saves ratings without changing due dates. **All cards never consults the scheduler.**
+Choose **Settings → Qard → Study preferences → Review scheduler**:
+
+- **FSRS (adaptive memory):** uses [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs), with FSRS-6 defaults and a 90% target retention. New vaults start here. You can set a target from 70% to 97%; a higher target means more frequent reviews. Target changes take effect as cards are reviewed. Personal parameter optimization is not included yet.
+- **Simple intervals:** the previous scheduler, kept as the default for existing vaults. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease.
+
+Switching schedulers preserves current due dates and review counts. When enabling FSRS, complete saved histories are replayed into its memory model. Cards with missing history or imported schedules start with approximate memory estimates based on their current interval; the statistics page labels these. Switching back to simple intervals retains due dates and removes FSRS memory state. No past review events are invented.
+
+FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step after a lapse. Reveal the answer to preview the next review interval for each rating. **Again** means you forgot; **Hard** means you remembered with effort; **Good** means you remembered; **Easy** means immediate recall. A forgotten answer should be rated Again. Finishing a session does not automatically repeat learning cards; use Due cards once their next review is due.
+
+Disabling scheduling still saves ratings and updates FSRS memory estimates without changing due dates or intervals. **All cards never consults the scheduler.** All timestamped rating events are now retained locally for memory reconstruction and future personalization. Earlier versions truncated history at 10,000 events; removed events cannot be recovered.
 
 Settings include default All/Due mode, order, keyboard hints, automatic focus, optional voice answers, new-card folder and scheduling enable/disable.
 
@@ -337,7 +359,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- No FSRS, cloze cards, general import/export, advanced statistics, persistent recordings or speech recognition.
+- No FSRS, cloze cards, general import/export, persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.

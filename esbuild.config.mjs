@@ -1,9 +1,13 @@
 import { build, context } from 'esbuild';
-import { mkdir, copyFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, copyFile, stat, writeFile, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+const fsrsLicense = await readFile('node_modules/ts-fsrs/LICENSE', 'utf8');
 const watch=process.argv.includes('--watch');
-const options={entryPoints:['src/main.ts'],bundle:true,alias:{'react-dom/client':'preact/compat/client','react-dom':'preact/compat','react/jsx-runtime':'preact/jsx-runtime','react':'preact/compat'},external:['obsidian'],format:'cjs',platform:'browser',target:'es2020',outfile:'main.js',jsx:'automatic',logLevel:'info',sourcemap:watch?'inline':false,minify:!watch,define:{'process.env.NODE_ENV':JSON.stringify(watch?'development':'production')},banner:{js:'/* Qard — local-first Obsidian study workspace. MIT license. */'}};
+const options={entryPoints:['src/main.ts'],bundle:true,alias:{'react-dom/client':'preact/compat/client','react-dom':'preact/compat','react/jsx-runtime':'preact/jsx-runtime','react':'preact/compat'},external:['obsidian'],format:'cjs',platform:'browser',target:'es2020',outfile:'main.js',jsx:'automatic',logLevel:'info',sourcemap:watch?'inline':false,minify:!watch,define:{'process.env.NODE_ENV':JSON.stringify(watch?'development':'production')},banner:{js:`/* Qard — local-first Obsidian study workspace. MIT license.
+Includes ts-fsrs:
+${fsrsLicense}
+*/`}};
 const FILES=['main.js','manifest.json','styles.css'];
 
 // Optional: copy each build into a vault you name (--vault=PATH or QARD_VAULT). Only the three plugin files are copied;

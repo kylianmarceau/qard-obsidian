@@ -49,3 +49,9 @@ A local desktop browser preview compared the real new-test and flashcard compose
 ## Remove cloze and image occlusion — 2 October 2026
 
 Reverted the feature changes from `9e40287` while preserving the prompt-first generation changes from `4fb21c7`. The Cloze composer toggle was removed with the card formats. The original question/answer editor, Markdown parser, writer, preview and study renderer were restored. `npm run check` passed strict TypeScript, lint with zero warnings, **236 tests across 33 files**, the production build and release-content verification. The retained generation tests cover description-only requests, note/folder sources, inferred and editable destinations, saved drafts and save retries. The published 0.3.4 tag and its historical release notes remain unchanged.
+
+## Study statistics and FSRS — 2 October 2026
+
+For release 0.3.5, `npm run check` passed strict TypeScript, lint with zero warnings, **260 tests across 36 files**, the production build and release-content verification. New coverage includes heatmap date boundaries and leap years, streaks, period comparisons, rating histograms, collection forecasts, atomic statistics saves, FSRS learning/graduation/lapses, actual elapsed review times, retention targets, scheduler migration in both directions, incomplete/imported history, scheduling off, persistence failures, numeric state restoration, full review-log retention, and interval previews.
+
+In Obsidian 1.13.7 on macOS, the existing isolated test vault was updated and the statistics command, page and new scheduler controls were verified. An isolated browser preview with sample ratings verified the FSRS memory charts and the four rating interval previews. Test-vault settings and review data were preserved. Personal parameter optimization is not implemented. Mobile hardware and large-vault performance have not been validated for this release.
