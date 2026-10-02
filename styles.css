@@ -194,6 +194,7 @@
 .qard-generation-card { border: 1px solid var(--qard-border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
 .qard-generation-card.is-skipped { opacity: .6; }
 .qard-generation-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.qard-generation-card-topic { margin: 16px 0; }
 .qard-generation-card-head button { display: flex; align-items: center; gap: 8px; }
 .qard-generation-card > .qard-link { display: inline-flex; gap: 6px; align-items: center; overflow-wrap: anywhere; text-align: left; }
 .qard-study-container { min-height: 100%; }

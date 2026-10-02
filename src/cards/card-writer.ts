@@ -55,27 +55,34 @@ export class CardWriter {
     }
   }
   /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
-  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string }[]): Promise<QardCard[]> {
+  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string; topic?: string }[]): Promise<QardCard[]> {
     const deck = target.deck.trim(), topic = target.topic.trim() || 'General', folder = safeFolder(target.folder);
     if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
     if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) throw new Error('Invalid batch ID.');
     if (!cards.length || new Set(cards.map(c => c.id)).size !== cards.length) throw new Error('Choose distinct cards to add.');
     // Validate the whole batch before making any changes.
-    cards.forEach(c => serializeCard(c.id, c.front, c.back));
+    const topicOf = (card: typeof cards[number]) => card.topic === undefined ? topic : card.topic.trim();
+    cards.forEach(c => {
+      const name = topicOf(c);
+      if (!name || name.length > 200 || /[\r\n]/.test(name)) throw new Error('Card topics must be nonempty single lines, up to 200 characters each.');
+      serializeCard(c.id, c.front, c.back);
+    });
     const slug = deck.replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
     const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
     const append = (source: string) => {
       const existing = parseCards(source, path).cards;
       for (const card of cards) {
         const matches = existing.filter(c => c.id === card.id);
-        if (matches.length > 1 || matches.some(c => c.deck !== deck || c.topic !== topic)) throw new Error('A saved card changed its deck, topic or ID. Check the generated note before retrying.');
+        if (matches.length > 1 || matches.some(c => c.deck !== deck || c.topic !== topicOf(card))) throw new Error('A saved card changed its deck, topic or ID. Check the generated note before retrying.');
       }
       const pending = cards.filter(c => !existing.some(old => old.id === c.id));
       if (!pending.length) return source;
       const eol = source.includes('\r\n') ? '\r\n' : '\n';
-      const next = source + eol + `# ${topic}${eol}${eol}` + pending.map(c => serializeCard(c.id, c.front, c.back, eol)).join(eol);
+      const groups = new Map<string, typeof cards>();
+      for (const card of pending) { const name = topicOf(card); groups.set(name, [...(groups.get(name) ?? []), card]); }
+      const next = source + eol + [...groups].map(([name, group]) => `# ${name}${eol}${eol}` + group.map(c => serializeCard(c.id, c.front, c.back, eol)).join(eol)).join(eol);
       const parsed = parseCards(next, path).cards;
-      if (cards.some(c => parsed.filter(p => p.id === c.id && p.deck === deck && p.topic === topic).length !== 1)) throw new Error('The generated note changed or has an unfinished Markdown block. Reopen its source before adding cards.');
+      if (cards.some(c => parsed.filter(p => p.id === c.id && p.deck === deck && p.topic === topicOf(c)).length !== 1)) throw new Error('The generated note changed or has an unfinished Markdown block. Reopen its source before adding cards.');
       return next;
     };
     let file = this.app.vault.getAbstractFileByPath(path);

@@ -15,7 +15,7 @@ import type { CardWriter } from '../src/cards/card-writer';
 import type { AgentRunner } from '../src/agents/runner';
 let root: Root, host: HTMLElement, services: QardServices, run: ReturnType<typeof vi.fn<AgentRunner['run']>>, writer: { createBatch: ReturnType<typeof vi.fn<CardWriter['createBatch']>> };
 const back = vi.fn(), openDeck = vi.fn();
-const reply = { deck: 'Networks', topic: 'Transport', cards: [{ front: 'What is TCP?', back: 'Reliable transport.', source: 'Notes/TCP.md' }, { front: 'What is UDP?', back: 'Connectionless transport.', source: 'Notes/TCP.md' }] };
+const reply = { deck: 'Networks', topic: 'Transport', cards: [{ front: 'What is TCP?', back: 'Reliable transport.', source: 'Notes/TCP.md', topic: 'Transport' }, { front: 'What is UDP?', back: 'Connectionless transport.', source: 'Notes/TCP.md', topic: 'Transport' }] };
 beforeEach(async () => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   run = vi.fn<AgentRunner['run']>().mockResolvedValue(reply); writer = { createBatch: vi.fn<CardWriter['createBatch']>().mockResolvedValue([]) };
@@ -117,4 +117,29 @@ it('the home row keeps a cancelled job accessible and updates when it is retried
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Needs attention');
   await act(async () => { await service.generate(); });
   expect(host.querySelector('.qard-resume')?.textContent).toContain('Review flashcards');
+});
+
+it('reviews, edits and saves individual topics within the same deck', async () => {
+  run.mockResolvedValueOnce({ ...reply, cards: reply.cards.map((c, i) => ({ ...c, topic: i === 0 ? 'TCP' : 'UDP' })) });
+  await render(); await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Separate protocol topics'); await click(button('Start'));
+  expect(host.textContent).toContain('Networks › 2 topics');
+  expect((host.querySelector('[aria-label="Topic of card 1"]') as HTMLInputElement).value).toBe('TCP');
+  expect((host.querySelector('[aria-label="Topic of card 2"]') as HTMLInputElement).value).toBe('UDP');
+  await input(host.querySelector('[aria-label="Topic of card 2"]')!, 'UDP basics');
+  await click(button('Add selected (2)'));
+  expect(writer.createBatch.mock.calls[0]![1].map(c => c.topic)).toEqual(['TCP', 'UDP basics']);
+  expect((host.querySelector('[aria-label="Topic of card 2"]') as HTMLInputElement).disabled).toBe(true);
+});
+it('splits source notes into separate topics before saving an older draft', async () => {
+  const service = services.flashcards!;
+  await act(async () => { await service.start({ prompt: 'Protocols', notes: [] }); }); await tick();
+  const batch = service.getSnapshot().batch!;
+  // Model a restored draft from the old one-topic flow with distinct source-note links.
+  batch.cards[0]!.source = 'Notes/01_TCP.md'; batch.cards[1]!.source = 'Notes/02_UDP.md';
+  await render(); await click(button('One topic per note'));
+  expect(host.textContent).toContain('2 topics');
+  expect((host.querySelector('[aria-label="Topic of card 1"]') as HTMLInputElement).value).toBe('01 TCP');
+  expect((host.querySelector('[aria-label="Topic of card 2"]') as HTMLInputElement).value).toBe('02 UDP');
+  await click(button('Add selected (2)'));
+  expect(writer.createBatch.mock.calls[0]![1].map(c => c.topic)).toEqual(['01 TCP', '02 UDP']);
 });

@@ -7,6 +7,8 @@ export interface FlashcardRequest { prompt: string; deck?: string; topic?: strin
 export interface GeneratedDraft extends GeneratedContent { id: string; selected: boolean; added: boolean }
 interface Batch { id: string; folder: string; request: FlashcardRequest; cards: GeneratedDraft[]; destination?: FlashcardDestination; destinationLocked?: boolean }
 export const flashcardDestination = (batch: Batch): FlashcardDestination => batch.destination ?? { deck: batch.request.deck ?? '', topic: batch.request.topic ?? '' };
+export const flashcardTopics = (batch: Batch): string[] => [...new Set(batch.cards.map(c => c.topic ?? flashcardDestination(batch).topic))];
+const noteTopic = (source: string) => source.replace(/\.md$/i, '').split('/').pop()!.replace(/_/g, ' ').trim().slice(0, 200);
 export interface GenerationSnapshot { batch?: Batch; job?: { kind: 'flashcards'; startedAt: number; error?: string }; saving: boolean; error?: string; loading: boolean }
 interface DraftStorage { read(path: string): Promise<string | null>; write(path: string, text: string): Promise<void> }
 const draftPath = (folder: string) => [folder, 'Flashcard drafts.json'].filter(Boolean).join('/');
@@ -42,7 +44,10 @@ export class FlashcardGenerationService {
       if (value.cards.some(c => !c || !/^[A-Za-z0-9_-]+$/.test(c.id) || typeof c.front !== 'string' || typeof c.back !== 'string' || typeof c.source !== 'string' || typeof c.selected !== 'boolean' || typeof c.added !== 'boolean') || new Set(value.cards.map(c => c.id)).size !== value.cards.length) throw new Error('Invalid saved flashcard draft.');
       if (value.destination) readDestination(value.destination, false);
       if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean') throw new Error('Invalid saved destination.');
-      if (value.destinationLocked || value.cards.some(c => c.added)) readDestination(flashcardDestination(value));
+      for (const card of value.cards) {
+        if (card.topic !== undefined) readDestination({ deck: 'validation', topic: card.topic }, false);
+        if (value.destinationLocked || card.added) readDestination({ ...flashcardDestination(value), topic: card.topic ?? flashcardDestination(value).topic });
+      }
       this.publish({ batch: { ...value, request }, job: value.cards.length ? undefined : { kind: 'flashcards', startedAt: Date.now(), error: 'Generation was interrupted. Try again when you are ready.' } });
     } catch (e) { this.publish({ error: `Could not restore flashcard drafts: ${message(e)}` }); }
     finally { this.publish({ loading: false }); }
@@ -87,7 +92,7 @@ export class FlashcardGenerationService {
         return { ...generated, destination: { deck: batch.request.deck || generated.destination.deck, topic: batch.request.topic || generated.destination.topic } };
       }), cancelled]);
       if (controller.signal.aborted || this.disposed) return;
-      this.publish({ batch: { ...batch, destination: result.destination, cards: result.cards.map(c => ({ ...c, id: crypto.randomUUID(), selected: true, added: false })) } });
+      this.publish({ batch: { ...batch, destination: result.destination, cards: result.cards.map(c => ({ ...c, ...(batch.request.topic ? { topic: batch.request.topic } : {}), id: crypto.randomUUID(), selected: true, added: false })) } });
       await this.persist();
       if (this.disposed) return;
       this.publish({ job: undefined });
@@ -101,14 +106,28 @@ export class FlashcardGenerationService {
     if (!batch || !batch.cards.length || this.snapshot.saving || this.controller || batch.destinationLocked || batch.cards.some(c => c.added)) return;
     const destination = { ...flashcardDestination(batch), ...patch };
     try { readDestination(destination, false); } catch (e) { this.publish({ error: message(e) }); return; }
-    this.publish({ batch: { ...batch, destination }, error: undefined });
+    const cards = patch.topic !== undefined ? batch.cards.map(c => ({ ...c, topic: destination.topic })) : batch.cards;
+    this.publish({ batch: { ...batch, destination, cards }, error: undefined });
     void this.persist().catch(e => this.publish({ error: `Could not save the destination: ${message(e)}` }));
   }
-  updateCard(id: string, patch: Partial<Pick<GeneratedDraft, 'front' | 'back' | 'selected'>>) {
+  updateCard(id: string, patch: Partial<Pick<GeneratedDraft, 'front' | 'back' | 'selected' | 'topic'>>) {
     const batch = this.snapshot.batch;
     if (!batch || this.snapshot.saving) return;
+    if (patch.topic !== undefined) {
+      if (batch.destinationLocked || batch.cards.some(c => c.added)) return;
+      try { readDestination({ deck: 'validation', topic: patch.topic }, false); } catch (e) { this.publish({ error: message(e) }); return; }
+    }
     this.publish({ batch: { ...batch, cards: batch.cards.map(c => c.id === id && !c.added ? { ...c, ...patch } : c) } });
     void this.persist().catch(e => this.publish({ error: `Could not save draft edits: ${message(e)}` }));
+  }
+  useTopicsFromNotes() {
+    const batch = this.snapshot.batch;
+    if (!batch || this.snapshot.saving || this.controller || batch.destinationLocked || batch.cards.some(c => c.added)) return;
+    const sources = [...new Set(batch.cards.map(c => c.source).filter(Boolean))];
+    const names = sources.map(noteTopic);
+    const topics = new Map(sources.map((source, i) => [source, names.filter(name => name === names[i]).length > 1 ? source.replace(/\.md$/i, '').replace(/_/g, ' ').slice(-200) : names[i]!]));
+    this.publish({ batch: { ...batch, cards: batch.cards.map(c => c.source ? { ...c, topic: topics.get(c.source)! } : c) }, error: undefined });
+    void this.persist().catch(e => this.publish({ error: `Could not save topics: ${message(e)}` }));
   }
   async addSelected() {
     const batch = this.snapshot.batch;
@@ -118,6 +137,10 @@ export class FlashcardGenerationService {
     this.publish({ saving: true, error: undefined });
     try {
       const destination = readDestination(flashcardDestination(batch));
+      for (const [i, card] of batch.cards.entries()) {
+        try { readDestination({ ...destination, topic: card.topic ?? destination.topic }); }
+        catch { throw new Error(`Card ${i + 1} needs a topic on one line, up to 200 characters. Choose its topic before adding this batch.`); }
+      }
       // A write may succeed before indexing fails. Freeze its destination before trying,
       // so changing the name cannot put the same batch in a second note on retry.
       const savingBatch = { ...batch, destination, destinationLocked: true };

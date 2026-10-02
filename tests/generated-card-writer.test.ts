@@ -63,3 +63,34 @@ it('uses current note contents and preserves a card moved out of the selected to
   expect(index.getSnapshot().cards).toHaveLength(2);
   expect(index.getSnapshot().cards[0]?.topic).toBe('Edited topic');
 });
+
+it('indexes separate topics in one deck and retries a mixed-topic save without duplicates', async () => {
+  const { writer, refresh, create, index } = setup();
+  const mixed = [{ ...cards[0]!, topic: 'Introduction I' }, { ...cards[1]!, topic: 'Agent architectures' }];
+  refresh.mockRejectedValueOnce(new Error('Index failed after save'));
+  await expect(writer.createBatch(target, mixed)).rejects.toThrow('Index failed');
+  const result = await writer.createBatch(target, mixed);
+  expect(create).toHaveBeenCalledOnce();
+  expect(result.map(c => [c.id, c.deck, c.topic])).toEqual([
+    ['card-1', 'Networks', 'Introduction I'], ['card-2', 'Networks', 'Agent architectures']
+  ]);
+  expect(index.getSnapshot().decks[0]?.topics.map(t => t.name)).toEqual(['Introduction I', 'Agent architectures']);
+});
+it('rejects an invalid individual topic before writing and detects topic changes on retry', async () => {
+  const { writer, files, texts } = setup();
+  await expect(writer.createBatch(target, [{ ...cards[0]!, topic: 'One\nTwo' }])).rejects.toThrow('single lines');
+  expect(files.size).toBe(0);
+  const [saved] = await writer.createBatch(target, [{ ...cards[0]!, topic: 'Introduction' }]);
+  const before = texts[saved!.sourceFile];
+  await expect(writer.createBatch(target, [{ ...cards[0]!, topic: 'Changed' }, cards[1]!])).rejects.toThrow('changed');
+  expect(texts[saved!.sourceFile]).toBe(before);
+});
+it('appends later selections to their own topic while preserving saved answers', async () => {
+  const { writer, texts, create } = setup();
+  const mixed = [{ ...cards[0]!, topic: 'TCP' }, { ...cards[1]!, topic: 'UDP' }];
+  const [saved] = await writer.createBatch(target, [mixed[0]!]);
+  texts[saved!.sourceFile] = texts[saved!.sourceFile]!.replace('**Reliable.**', 'Edited answer.');
+  const result = await writer.createBatch(target, mixed);
+  expect(create).toHaveBeenCalledOnce(); expect(result[0]?.backMarkdown).toBe('Edited answer.');
+  expect(result.map(c => c.topic)).toEqual(['TCP', 'UDP']);
+});

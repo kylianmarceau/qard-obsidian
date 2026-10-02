@@ -112,7 +112,7 @@ it('retries an interrupted legacy request with an AI-chosen count', async () => 
   expect(JSON.parse(files['Qard/Flashcard drafts.json']).request).not.toHaveProperty('count');
 });
 it('generates from a description alone and persists the AI destination without requiring names in the request', async () => {
-  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ ...content, deck: 'Computer Networks', topic: 'Congestion control' });
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ ...content, cards: content.cards.map(c => ({ ...c, topic: 'Congestion control' })), deck: 'Computer Networks', topic: 'Congestion control' });
   const { service, writer, files } = setup(run); await service.load(); await service.start({ prompt: 'Explain TCP congestion control', notes: [] }); await settled(service);
   expect(run.mock.calls[0]![0].schema).toBe(flashcardBatchSchema); expect(purposeOf(flashcardBatchSchema)).toBe('Writing flashcards');
   expect(service.getSnapshot().batch?.request).not.toHaveProperty('deck'); expect(service.getSnapshot().batch?.request).not.toHaveProperty('topic');
@@ -121,7 +121,7 @@ it('generates from a description alone and persists the AI destination without r
   await service.addSelected(); expect(writer.createBatch.mock.calls[0]![0]).toMatchObject({ deck: 'Computer Networks', topic: 'Congestion control' });
 });
 it('retries missing or unusable AI destinations before offering a draft', async () => {
-  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce(content).mockResolvedValueOnce({ ...content, deck: 'Networks', topic: 'Transport' });
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce(content).mockResolvedValueOnce({ ...content, cards: content.cards.map(c => ({ ...c, topic: 'Transport' })), deck: 'Networks', topic: 'Transport' });
   const { service } = setup(run); await service.load(); await service.start({ prompt: 'TCP and UDP', notes: [] }); await settled(service);
   expect(run).toHaveBeenCalledTimes(2); expect(service.getSnapshot().batch?.destination).toEqual({ deck: 'Networks', topic: 'Transport' });
 });
@@ -147,4 +147,53 @@ it('restores old drafts with the explicit destination stored only in their reque
   files['Qard/Flashcard drafts.json'] = JSON.stringify(batch);
   const restored = setup(undefined, files); await restored.service.load();
   expect(restored.service.getSnapshot().error).toBeUndefined(); expect(restored.service.getSnapshot().batch?.cards.every(c => c.added)).toBe(true);
+});
+
+it('preserves AI topics through edits, reload, selection and saving', async () => {
+  const reply = { deck: 'Networks', topic: 'Lectures', cards: content.cards.map((c, i) => ({ ...c, topic: `Lecture ${i + 1}` })) };
+  const { service, files } = setup(vi.fn<AgentRunner['run']>().mockResolvedValue(reply));
+  await service.load(); await service.start({ prompt: 'Separate topics for each lecture', notes: [] }); await settled(service);
+  const drafts = service.getSnapshot().batch!.cards;
+  service.updateCard(drafts[0]!.id, { topic: 'Introduction' });
+  service.updateCard(drafts[1]!.id, { selected: false }); await service.flush();
+  const restored = setup(undefined, files); await restored.service.load(); await restored.service.addSelected();
+  expect(restored.writer.createBatch.mock.calls[0]![1]).toEqual([expect.objectContaining({ topic: 'Introduction' })]);
+  restored.service.updateCard(drafts[1]!.id, { topic: 'Cannot change after saving', selected: true });
+  expect(restored.service.getSnapshot().batch!.cards[1]?.topic).toBe('Lecture 2');
+  restored.service.updateCard(drafts[1]!.id, { selected: true }); await restored.service.addSelected();
+  expect(restored.writer.createBatch.mock.calls[1]![1]).toEqual([expect.objectContaining({ topic: 'Lecture 2' })]);
+});
+it('splits a legacy unsaved draft by source note, disambiguates duplicate titles and preserves source-less cards', async () => {
+  const sources = ['Notes/A/01_Introduction.md', 'Notes/B/01_Introduction.md', 'Notes/02_Agents.md', ''];
+  const batch = { id: 'old-batch', folder: 'Qard', request, destination: { deck: 'Networks', topic: 'Lectures 1–9' }, cards: sources.map((source, i) => ({ id: `card-${i}`, front: `Q${i}?`, back: 'Answer.', source, selected: i !== 2, added: false })) };
+  const { service, files, writer } = setup(undefined, { 'Qard/Flashcard drafts.json': JSON.stringify(batch) });
+  await service.load(); service.useTopicsFromNotes(); await service.flush();
+  expect(service.getSnapshot().batch!.cards.map(c => c.topic)).toEqual(['Notes/A/01 Introduction', 'Notes/B/01 Introduction', '02 Agents', undefined]);
+  expect(service.getSnapshot().batch!.cards[2]?.selected).toBe(false);
+  const restored = setup(undefined, files); await restored.service.load();
+  expect(restored.service.getSnapshot().batch!.cards).toEqual(service.getSnapshot().batch!.cards);
+  await service.addSelected(); expect(writer.createBatch.mock.calls[0]![1]).toHaveLength(3);
+  const before = service.getSnapshot().batch!.cards;
+  service.useTopicsFromNotes(); expect(service.getSnapshot().batch!.cards).toBe(before);
+});
+it('requires individual AI topics and retries malformed topic names', async () => {
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce({ ...content, deck: 'Networks', topic: 'Transport' }).mockResolvedValueOnce({ ...content, deck: 'Networks', topic: 'Transport', cards: content.cards.map(c => ({ ...c, topic: 'TCP' })) });
+  const { service } = setup(run); await service.load(); await service.start({ prompt: 'TCP', notes: [] }); await settled(service);
+  expect(run).toHaveBeenCalledTimes(2); expect(run.mock.calls[1]![0].prompt).toContain('topic is missing');
+  expect(() => readFlashcards({ cards: [{ ...content.cards[0], topic: 'Two\nlines' }] }, ['Notes/TCP.md'])).toThrow('single lines');
+});
+it('keeps an explicitly selected topic for every card even if AI suggests others', async () => {
+  const { service, writer } = setup(vi.fn<AgentRunner['run']>().mockResolvedValue({ cards: content.cards.map(c => ({ ...c, topic: 'Other' })) }));
+  await service.load(); await service.start(request); await settled(service); await service.addSelected();
+  expect(writer.createBatch.mock.calls[0]![1].every((c: { topic: string }) => c.topic === 'Transport')).toBe(true);
+  expect(flashcardPrompt({ prompt: 'Separate topics', notes: [] })).toContain('one topic per source note');
+});
+it('keeps topics editable when a deselected card has no topic, before locking a save', async () => {
+  const { service, writer } = setup(); await service.load(); await service.start(request); await settled(service);
+  const drafts = service.getSnapshot().batch!.cards;
+  service.updateCard(drafts[1]!.id, { topic: '', selected: false }); await service.addSelected();
+  expect(writer.createBatch).not.toHaveBeenCalled(); expect(service.getSnapshot().batch!.destinationLocked).toBeFalsy();
+  expect(service.getSnapshot().error).toContain('Card 2 needs a topic');
+  service.updateCard(drafts[1]!.id, { topic: 'Transport' }); await service.addSelected();
+  expect(writer.createBatch).toHaveBeenCalledOnce();
 });

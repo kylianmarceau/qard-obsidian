@@ -382,3 +382,9 @@ Finding Qard helpful? You can buy me a coffee to support its continued developme
 Support @kylianmarceau:
 
 <a href="https://buymeacoffee.com/kylianmarceau" target="_blank" rel="noopener noreferrer"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="175" height="40"></a>
+
+## AI flashcard topics
+
+AI generation can create several topics within one deck. By default, the writer assigns one topic per source note; describe a different grouping in your request if needed. Review each card’s topic before adding it. **One topic per note** rebuilds the topic names from the source-note links, including for drafts created by older versions. Cards without a source keep their current topic. Entering a shared name in **Topic for all cards** combines the batch under that topic.
+
+Deck and topic assignments are fixed once you attempt to add cards, so a failed save can be retried safely. Already saved cards are not reorganized automatically.
