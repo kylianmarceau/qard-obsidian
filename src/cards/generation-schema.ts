@@ -3,6 +3,7 @@ import { serializeCard } from './source-patch';
 import type { CardFormat } from './card-types';
 
 export interface GeneratedContent { front: string; back: string; source: string; format?: CardFormat }
+export interface FlashcardDestination { deck: string; topic: string }
 export const flashcardsSchema: Schema = {
   type: 'object', additionalProperties: false, required: ['cards'], properties: {
     cards: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['front', 'back', 'source'], properties: {
@@ -12,6 +13,25 @@ export const flashcardsSchema: Schema = {
     } } }
   }
 };
+/** Prompt-first requests let the writer suggest a destination as well as the cards. */
+export const flashcardBatchSchema: Schema = {
+  type: 'object', additionalProperties: false, required: ['deck', 'topic', 'cards'], properties: {
+    deck: { type: 'string', description: 'A short descriptive deck name. Reuse an existing deck when it fits.' },
+    topic: { type: 'string', description: 'A short topic name for this batch, based on the requested material.' },
+    ...flashcardsSchema.properties
+  }
+};
+export function readDestination(value: unknown, required = true): FlashcardDestination {
+  const dest = value as FlashcardDestination | undefined;
+  if (!dest || typeof dest.deck !== 'string' || typeof dest.topic !== 'string') throw new Error('Choose a deck and topic for the cards.');
+  const deck = dest.deck.trim(), topic = dest.topic.trim();
+  if ((required && (!deck || !topic)) || deck.length > 200 || topic.length > 200 || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic must be single lines, up to 200 characters each.');
+  return { deck, topic };
+}
+export function readFlashcardBatch(value: unknown, paths: string[], kind?: 'cloze') {
+  const result = check<FlashcardDestination & { cards: GeneratedContent[] }>(flashcardBatchSchema, value);
+  return { destination: readDestination(result), cards: readFlashcards({ cards: result.cards }, paths, kind) };
+}
 export function readFlashcards(value: unknown, paths: string[], kind?: 'cloze'): GeneratedContent[] {
   const result = check<{ cards: GeneratedContent[] }>(flashcardsSchema, value);
   if (!result.cards.length) throw new Error('Return at least one useful flashcard based on the material.');

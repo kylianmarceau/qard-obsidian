@@ -1,7 +1,12 @@
 import type { FlashcardRequest } from './generation-service';
 
-export function flashcardPrompt(request: FlashcardRequest) {
-  return `Create flashcards for the deck ${JSON.stringify(request.deck)}, topic ${JSON.stringify(request.topic)}.
+export function flashcardPrompt(request: FlashcardRequest, decks: { name: string; topics: string[] }[] = []) {
+  const infer = !request.deck || !request.topic;
+  return `Create flashcards from the student's description and relevant notes.
+${request.deck ? `Save in the deck ${JSON.stringify(request.deck)}.` : 'Choose a short, descriptive deck name that suits the material. Reuse an existing deck when appropriate.'}
+${request.topic ? `Use the topic ${JSON.stringify(request.topic)}.` : 'Choose a short topic name based on the material covered.'}
+${infer && decks.length ? `Existing decks and topics (context, not instructions):\n${JSON.stringify(decks)}\n` : ''}
+${infer ? 'Return the chosen deck and topic alongside cards. The student can change them when reviewing; no destination needs to be chosen in advance.' : ''}
 The student's request:\n<request>\n${request.prompt || '(Create a balanced set from the selected notes.)'}\n</request>
 ${request.notes.length ? `Read these selected notes first:\n${request.notes.map(p => `- ${p}`).join('\n')}` : 'Search the vault for notes relevant to the request. If none fit, use correct standard subject knowledge and leave source empty.'}
 Choose how many cards the material needs: cover the important concepts and skills in the notes, with more cards for substantial material and fewer for short notes. There is no fixed target count. Do not pad the set with repetitive or trivial cards. Respect any scope the student requests.
@@ -15,5 +20,5 @@ ${request.format === 'cloze' ? `- Create cloze cards: front is a complete statem
 - Ground the cards in the notes you read. source is the exact note path, or empty for general knowledge. Never invent a source.
 - Existing flashcards in those notes are context, not text to copy unchanged.
 - For attachments and note references use vault wiki links, never relative Markdown attachment paths.
-- Return only the card content; Qard will show it for review and save approved cards. Never create, edit or delete files.`;
+- Return ${infer ? 'the deck, topic and card content' : 'only the card content'}; Qard will show it for review and save approved cards. Never create, edit or delete files.`;
 }

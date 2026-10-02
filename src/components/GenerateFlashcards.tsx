@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, useSyncExternalStore } from 'react';
-import { FileText, Sparkles, X } from 'lucide-react';
+import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import type { CardDraft } from '../cards/card-writer';
 import type { QardServices } from '../views/services';
 import { Markdown } from './Markdown';
@@ -7,46 +7,72 @@ import { CardContent } from './CardContent';
 import { AgentLabel } from './jobs/AgentLabel';
 import { JobControls } from './jobs/JobControls';
 import { Check, JobError, Waiting } from './tests/common';
+import { folderNotes, resolveTestNotes, testFolders, testNotePaths } from '../tests/test-sources';
+import { flashcardDestination } from '../cards/generation-service';
 
 export function GenerateFlashcards({ services, initial, back, openDeck }: { services: QardServices; initial?: Partial<CardDraft>; back: () => void; openDeck: (deck: string) => void }) {
   const service = services.flashcards!;
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
-  const [deck, setDeck] = useState(initial?.deck ?? ''), [topic, setTopic] = useState(initial?.topic ?? 'General');
+  const [context, setContext] = useState({ deck: initial?.deck, topic: initial?.topic });
   const [prompt, setPrompt] = useState('');
   const [kind, setKind] = useState<'basic' | 'cloze'>(initial?.format?.type === 'cloze' ? 'cloze' : 'basic');
   const [notes, setNotes] = useState<string[]>(initial?.sourceFile ? [initial.sourceFile] : []);
-  const [notesOpen, setNotesOpen] = useState(false), [query, setQuery] = useState(''), [starting, setStarting] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false);
-  const id = useId(), excluded = services.reviews.getSnapshot().settings.tests.folder.replace(/\/+$/, '');
-  const matches = useMemo(() => services.app.vault.getMarkdownFiles().filter(f => !notes.includes(f.path) && !f.path.startsWith(excluded + '/') && f.path.toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 8), [services, notes, query, excluded]);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [open, setOpen] = useState<'notes' | 'folders' | null>(null), [query, setQuery] = useState(''), [starting, setStarting] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false);
+  const id = useId(), excluded = services.reviews.getSnapshot().settings.tests.folder;
+  const files = useMemo(() => {
+    const all = services.app.vault.getMarkdownFiles(), allowed = new Set(testNotePaths(all.map(f => f.path), excluded));
+    return all.filter(f => allowed.has(f.path));
+  }, [services, excluded, index.revision]);
+  const paths = useMemo(() => files.map(f => f.path), [files]);
+  const attached = resolveTestNotes(paths, notes, folders), covered = new Set(folderNotes(paths, folders));
+  const matches = files.filter(f => !notes.includes(f.path) && !covered.has(f.path) && f.path.toLowerCase().includes(query.trim().toLowerCase())).sort((a, b) => b.stat.mtime - a.stat.mtime).slice(0, 6);
+  const matchingFolders = testFolders(paths).filter(f => !folders.includes(f.path) && f.path.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8);
   const run = async () => {
+    if (starting) return;
     setStarting(true); setError('');
-    try { await service.start({ deck, topic, prompt, notes, ...(kind === 'cloze' ? { format: 'cloze' as const } : {}) }); }
+    try {
+      const latest = testNotePaths(services.app.vault.getMarkdownFiles().map(f => f.path), excluded);
+      const selected = resolveTestNotes(latest, notes, folders);
+      if (!prompt.trim() && !selected.length) throw new Error('The selected sources no longer contain any Markdown notes. Choose another source or describe the cards.');
+      await service.start({ ...context, prompt, notes: selected, ...(folders.length ? { folders } : {}), ...(kind === 'cloze' ? { format: 'cloze' as const } : {}) });
+    }
     catch (e) { setError((e as Error).message); }
     finally { setStarting(false); }
   };
   const batch = state.batch, cards = batch?.cards ?? [], pending = cards.filter(c => c.selected && !c.added), added = cards.filter(c => c.added).length;
+  const destination = batch ? flashcardDestination(batch) : { deck: '', topic: '' };
+  const destinationLocked = !!batch?.destinationLocked || added > 0;
   const running = !!state.job && !state.job.error;
   const editRequest = async () => {
-    if (batch) { setDeck(batch.request.deck); setTopic(batch.request.topic); setPrompt(batch.request.prompt); setNotes(batch.request.notes); setKind(batch.request.format || 'basic'); }
+    if (batch) { setContext({ deck: batch.request.deck, topic: batch.request.topic }); setPrompt(batch.request.prompt); setNotes(batch.request.notes); setFolders(batch.request.folders ?? []); setKind(batch.request.format || 'basic'); }
     setError('');
     try { await service.clear(); } catch (e) { setError((e as Error).message); }
   };
-  return <div className="qard-editor qard-generate">
-    <div className="qard-heading"><div><h1>{cards.length ? 'Review flashcards' : 'Generate flashcards'}</h1><p>{cards.length ? `${batch!.request.deck} › ${batch!.request.topic} · ${added} of ${cards.length} added` : 'Describe what you want to remember, and let AI draft the cards.'}</p></div><button onClick={back}>Back to decks</button></div>
-    {state.loading ? <Waiting text="Loading saved drafts…"/> : state.saving && !cards.length ? <Waiting text="Saving request…"/> : running ? <div className="qard-panel"><Waiting text="Generating flashcards…"><AgentLabel services={services} role="writer"/></Waiting><JobControls services={services} job={state.job} cancel={() => service.cancel()}/><p className="qard-muted">You can leave this screen and return from Decks → Generate with AI. Qard will tell you when the cards are ready.</p></div> : !cards.length && !batch ? <form onSubmit={e => { e.preventDefault(); void run(); }}><fieldset disabled={starting}>
-      <div className="qard-editor-meta"><label>Deck<input required maxLength={200} value={deck} list={id + '-decks'} onChange={e => setDeck(e.target.value)} placeholder="e.g. Computer Networks"/></label><datalist id={id + '-decks'}>{index.decks.map(d => <option key={d.name} value={d.name}/>)}</datalist><label>Topic<input required maxLength={200} value={topic} onChange={e => setTopic(e.target.value)}/></label></div>
-      <label className="qard-card-kind">Card type<select value={kind} onChange={e => setKind(e.target.value as typeof kind)}><option value="basic">Question and answer</option><option value="cloze">Cloze (fill in the blanks)</option></select></label>
-      <div className="qard-composer"><textarea aria-label="Flashcard prompt" maxLength={10000} rows={4} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. Focus on TCP congestion control. Include definitions and short examples."/>
-        <div className="qard-composer-bar"><div className="qard-sources">{notes.map(path => <span key={path} className="qard-chip is-on"><FileText size={13}/>{path.split('/').pop()!.replace(/\.md$/, '')}<button type="button" className="qard-chip-x" aria-label={`Remove ${path}`} onClick={() => setNotes(notes.filter(n => n !== path))}><X size={12}/></button></span>)}<button type="button" className="qard-chip" aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}>+ Note</button>
-          {notesOpen && <div className="qard-popover"><input type="search" autoFocus aria-label="Find a note" placeholder="Find a note…" value={query} onChange={e => setQuery(e.target.value)}/>{matches.map(f => <button type="button" key={f.path} className="qard-popover-item" onClick={() => { setNotes([...notes, f.path]); setNotesOpen(false); setQuery(''); }}><span>{f.basename}</span><small>{f.path}</small></button>)}{!matches.length && <p className="qard-muted">No matching notes.</p>}</div>}
-        </div></div>
-      </div><p className="qard-muted">{notes.length ? 'The writer reads your selected notes first.' : 'Without selected notes, the writer finds relevant notes in your vault.'} AI chooses how many cards the material needs. Review and edit them before adding.</p><AgentLabel services={services} role="writer"/>
-      <div className="qard-form-actions"><button type="button" onClick={back}>Cancel</button><button type="submit" className="qard-primary" disabled={!deck.trim() || (!prompt.trim() && !notes.length)}><Sparkles size={16}/>{starting ? 'Starting…' : 'Generate cards'}</button></div>
+  const composing = !state.loading && !batch;
+  return <div className={composing ? 'qard-new-test qard-new-flashcards' : 'qard-editor qard-generate'}>
+    {composing ? <h1>What should these flashcards cover?</h1> : <div className="qard-heading"><div><h1>{cards.length ? 'Review flashcards' : 'Generate flashcards'}</h1>{cards.length > 0 && <p>{destination.deck} › {destination.topic} · {added} of {cards.length} added</p>}</div><button onClick={back}>Back to decks</button></div>}
+    {state.loading ? <Waiting text="Loading saved drafts…"/> : state.saving && !cards.length ? <Waiting text="Saving request…"/> : running ? <div className="qard-panel"><Waiting text="Generating flashcards…"><AgentLabel services={services} role="writer"/></Waiting><JobControls services={services} job={state.job} cancel={() => service.cancel()}/><p className="qard-muted">You can leave this screen and return from Decks → Generate with AI. Qard will tell you when the cards are ready.</p></div> : !cards.length && !batch ? <form onSubmit={e => { e.preventDefault(); void run(); }}><fieldset className="qard-flashcard-request" disabled={starting}>
+      <div className="qard-composer"><textarea aria-label="Flashcard prompt" maxLength={10000} rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. TCP congestion control. Focus on the key ideas and what I got wrong last time."/>
+        <div className="qard-composer-bar"><div className="qard-sources">
+          <button type="button" className={'qard-chip' + (kind === 'cloze' ? ' is-on' : '')} aria-pressed={kind === 'cloze'} onClick={() => setKind(kind === 'cloze' ? 'basic' : 'cloze')}><Check on={kind === 'cloze'}/>Cloze</button>
+          {notes.filter(path => !covered.has(path)).map(path => <span key={path} className="qard-chip is-on"><FileText size={13}/>{path.split('/').pop()!.replace(/\.md$/, '')}<button type="button" className="qard-chip-x" aria-label={`Remove ${path}`} onClick={() => setNotes(notes.filter(n => n !== path))}><X size={12}/></button></span>)}
+          {folders.map(path => <span key={path} className="qard-chip qard-folder-chip is-on" title={path}><Folder size={13}/><span>{path.split('/').pop()}</span><small>{folderNotes(paths, [path]).length} notes</small><button type="button" className="qard-chip-x" aria-label={`Remove folder ${path}`} onClick={() => setFolders(folders.filter(f => f !== path))}><X size={12}/></button></span>)}
+          <button type="button" className="qard-chip" aria-expanded={open === 'notes'} onClick={() => { setOpen(open === 'notes' ? null : 'notes'); setQuery(''); }}>+ Note</button>
+          <button type="button" className="qard-chip" aria-expanded={open === 'folders'} onClick={() => { setOpen(open === 'folders' ? null : 'folders'); setQuery(''); }}>+ Folder</button>
+          {open === 'notes' && <div className="qard-popover"><input type="search" autoFocus aria-label="Find a note" placeholder="Find a note…" value={query} onChange={e => setQuery(e.target.value)}/>{matches.map(f => <button type="button" key={f.path} className="qard-popover-item" onClick={() => { setNotes([...notes, f.path]); setOpen(null); setQuery(''); }}><span>{f.basename}</span><small>{f.parent?.path === '/' ? '' : f.parent?.path}</small></button>)}{!matches.length && <p className="qard-muted">No matching notes.</p>}</div>}
+          {open === 'folders' && <div className="qard-popover qard-folder-picker"><input type="search" autoFocus aria-label="Find a course folder" placeholder="Find a course folder…" value={query} onChange={e => setQuery(e.target.value)}/><p className="qard-muted qard-small">Includes Markdown notes in subfolders.</p>{matchingFolders.map(f => <button type="button" key={f.path} className="qard-popover-item" aria-label={`Attach folder ${f.path}, ${f.count} ${f.count === 1 ? 'note' : 'notes'}`} onClick={() => { setFolders([...folders, f.path]); setOpen(null); setQuery(''); }}><Folder size={14}/><span>{f.path}</span><small>{f.count} {f.count === 1 ? 'note' : 'notes'}</small></button>)}{!matchingFolders.length && <p className="qard-muted">No matching folders with Markdown notes.</p>}</div>}
+        </div><div className="qard-composer-go"><button type="submit" className="qard-primary" disabled={starting || (!prompt.trim() && !attached.length)}>{starting ? 'Starting…' : 'Start'}<ArrowRight size={15}/></button></div></div>
+      </div>
+      {attached.length > 0 && <p className="qard-muted qard-hint" role="status">{attached.length} {attached.length === 1 ? 'note' : 'notes'} attached{folders.length ? ', including subfolders' : ''}.</p>}
+      <p className="qard-muted qard-hint">{attached.length ? 'The AI reads your selected notes first. Review the cards before adding them.' : 'No sources selected. The AI will find the relevant notes itself.'}</p>
     </fieldset></form> : null}
     <JobError job={state.job} retry={!cards.length ? () => void service.generate() : undefined}/>
     {!cards.length && batch && !running && <div className="qard-form-actions"><button disabled={starting || state.saving} onClick={() => void editRequest()}>Edit request</button></div>}
     {cards.length > 0 && <>
+      <div className="qard-editor-meta"><label>Save to deck<input aria-label="Save to deck" maxLength={200} list={id + '-decks'} disabled={state.saving || destinationLocked} value={destination.deck} onChange={e => service.updateDestination({ deck: e.target.value })}/></label><datalist id={id + '-decks'}>{index.decks.map(d => <option key={d.name} value={d.name}/>)}</datalist><label>Topic<input aria-label="Topic" maxLength={200} disabled={state.saving || destinationLocked} value={destination.topic} onChange={e => service.updateDestination({ topic: e.target.value })}/></label></div>
+      <p className="qard-muted qard-generation-destination-hint">{destinationLocked ? 'Remaining cards will be added to the same deck and topic.' : 'AI suggested where these cards belong. Adjust it before adding them.'}</p>
       <div className="qard-generation-tools"><button disabled={state.saving} onClick={() => { const on = pending.length !== cards.filter(c => !c.added).length; cards.filter(c => !c.added).forEach(c => service.updateCard(c.id, { selected: on })); }}>{pending.length === cards.filter(c => !c.added).length ? 'Deselect all' : 'Select all'}</button><button aria-pressed={preview} onClick={() => setPreview(!preview)}>{preview ? 'Edit cards' : 'Preview cards'}</button><span className="qard-spacer"/><button className="qard-primary" disabled={state.saving || !pending.length} onClick={() => void service.addSelected()}>{state.saving ? 'Adding…' : `Add selected (${pending.length})`}</button></div>
       {cards.map((c, i) => <article key={c.id} className={'qard-generation-card' + (!c.selected && !c.added ? ' is-skipped' : '')}>
         <div className="qard-generation-card-head"><button aria-label={`Select card ${i + 1}`} aria-pressed={c.selected} disabled={state.saving || c.added} onClick={() => service.updateCard(c.id, { selected: !c.selected })}><Check on={c.selected}/>Card {i + 1}</button>{c.added && <span className="qard-muted">✓ Added</span>}</div>
@@ -54,7 +80,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
         {preview || c.added ? <div className="qard-editor-rendered"><div><span className="qard-eyebrow">FRONT</span><CardContent front={c.front} back={c.back} format={c.format} revealed={false} path={c.source} services={services}/></div><div><span className="qard-eyebrow">BACK</span>{c.format ? <CardContent front={c.front} back={c.back} format={c.format} revealed path={c.source} services={services}/> : <Markdown text={c.back} path={c.source} services={services}/>}</div></div> : <div className="qard-editor-sides"><label>{c.format ? 'Text with blanks' : 'Front'}<textarea aria-label={`Front of card ${i + 1}`} rows={3} value={c.front} disabled={state.saving} onChange={e => service.updateCard(c.id, { front: e.target.value })}/></label><label>{c.format ? 'Explanation (optional)' : 'Back'}<textarea aria-label={`Back of card ${i + 1}`} rows={4} value={c.back} disabled={state.saving} onChange={e => service.updateCard(c.id, { back: e.target.value })}/></label></div>}
         {c.source && <button className="qard-link qard-small" onClick={() => void services.app.workspace.openLinkText(c.source, '', true)}><FileText size={13}/>{c.source}</button>}
       </article>)}
-      <div className="qard-form-actions"><button disabled={state.saving} onClick={() => void service.clear().catch(e => setError((e as Error).message))}>Generate another batch</button>{added > 0 && <button className="qard-primary" disabled={state.saving} onClick={() => openDeck(batch!.request.deck)}>Open deck</button>}</div>
+      <div className="qard-form-actions"><button disabled={state.saving} onClick={() => void service.clear().catch(e => setError((e as Error).message))}>Generate another batch</button>{added > 0 && <button className="qard-primary" disabled={state.saving} onClick={() => openDeck(destination.deck)}>Open deck</button>}</div>
     </>}
     {(error || state.error) && <p className="qard-error" role="alert">{error || state.error}</p>}
   </div>;

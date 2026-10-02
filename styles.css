@@ -244,6 +244,8 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 /* New test */
 .qard-new-test { max-width: 720px; margin: clamp(20px, 10vh, 110px) auto 0; display: flex; flex-direction: column; gap: 16px; }
 .qard-new-test h1 { margin-bottom: 6px; }
+.qard-flashcard-request { display: flex; flex-direction: column; gap: 16px; }
+.qard-app .qard-generation-destination-hint { margin-bottom: 18px; }
 .qard-composer { border: 1px solid var(--qard-border); border-radius: 14px; padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 16px; background: var(--qard-bg); }
 .qard-app .qard-composer textarea { border: 0; padding: 0; min-height: 0; font-size: 17px; line-height: 1.6; resize: none; background: transparent; box-shadow: none; }
 .qard-app .qard-composer textarea:focus-visible { outline: none; }
