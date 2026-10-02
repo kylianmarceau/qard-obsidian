@@ -1,6 +1,7 @@
+import type { FsrsCard } from './fsrs-scheduler';
 export type Rating = 1 | 2 | 3 | 4;
-export interface ReviewState { cardId: string; lastReviewed?: number; due?: number; interval: number; ease: number; reviewCount: number; lapses: number; lastRating?: Rating }
-export interface ReviewEvent { cardId: string; at: number; rating: Rating; scheduled: boolean }
+export interface ReviewState { cardId: string; lastReviewed?: number; due?: number; interval: number; ease: number; reviewCount: number; lapses: number; lastRating?: Rating; fsrs?: FsrsCard }
+export interface ReviewEvent { cardId: string; at: number; rating: Rating; scheduled: boolean; scheduler?: 'simple' | 'fsrs'; desiredRetention?: number }
 export interface Scheduler {
   getCardState(cardId: string, states: Record<string, ReviewState>): ReviewState | undefined;
   isDue(state: ReviewState | undefined, now: number): boolean;

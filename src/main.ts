@@ -58,6 +58,7 @@ export default class QardPlugin extends Plugin {
     this.addCommand({ id: 'open-practice-tests', name: 'Open practice tests', callback: () => this.show('tests') });
     this.addCommand({ id: 'open-today', name: 'Open today', callback: () => this.show('today') });
     this.addCommand({ id: 'open-learn', name: 'Open courses', callback: () => this.show('learn') });
+    this.addCommand({ id: 'open-statistics', name: 'Show study statistics', callback: () => this.show('statistics') });
     this.addCommand({ id: 'open-usage', name: 'Show token usage', callback: () => this.show('usage') });
     this.addCommand({ id: 'teach-this-note', name: 'Teach me this note', checkCallback: checking => {
       const file = this.app.workspace.getActiveFile(); if (!file || file.extension !== 'md') return false;
@@ -107,7 +108,7 @@ export default class QardPlugin extends Plugin {
     return leaf.view;
   }
   openImport() { new ImportModal(this).open(); }
-  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
+  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'statistics') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
   async teach(file: TFile) {
     const path = await this.learn.startLesson({ topic: file.basename, notes: [file.path] });
     const view = await this.open(); view.show({ serial: Date.now(), kind: 'lesson', path });
