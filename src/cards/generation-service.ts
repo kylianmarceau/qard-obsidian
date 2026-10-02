@@ -2,9 +2,8 @@ import { CANCELLED, runValidated, type AgentRunner } from '../agents/runner';
 import { safeFolder, type CardWriter } from './card-writer';
 import { flashcardPrompt } from './generation-prompts';
 import { flashcardBatchSchema, flashcardsSchema, readDestination, readFlashcardBatch, readFlashcards, type FlashcardDestination, type GeneratedContent } from './generation-schema';
-import { readCardFormat } from './card-format';
 
-export interface FlashcardRequest { prompt: string; deck?: string; topic?: string; notes: string[]; folders?: string[]; format?: 'cloze' }
+export interface FlashcardRequest { prompt: string; deck?: string; topic?: string; notes: string[]; folders?: string[] }
 export interface GeneratedDraft extends GeneratedContent { id: string; selected: boolean; added: boolean }
 interface Batch { id: string; folder: string; request: FlashcardRequest; cards: GeneratedDraft[]; destination?: FlashcardDestination; destinationLocked?: boolean }
 export const flashcardDestination = (batch: Batch): FlashcardDestination => batch.destination ?? { deck: batch.request.deck ?? '', topic: batch.request.topic ?? '' };
@@ -41,7 +40,6 @@ export class FlashcardGenerationService {
       if (!Array.isArray(value.cards)) throw new Error('Invalid saved flashcard draft.');
       // Drafts may be mid-edit; the writer validates content when the student adds them.
       if (value.cards.some(c => !c || !/^[A-Za-z0-9_-]+$/.test(c.id) || typeof c.front !== 'string' || typeof c.back !== 'string' || typeof c.source !== 'string' || typeof c.selected !== 'boolean' || typeof c.added !== 'boolean') || new Set(value.cards.map(c => c.id)).size !== value.cards.length) throw new Error('Invalid saved flashcard draft.');
-      value.cards.forEach(c => { if (c.format) readCardFormat(c.format); });
       if (value.destination) readDestination(value.destination, false);
       if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean') throw new Error('Invalid saved destination.');
       if (value.destinationLocked || value.cards.some(c => c.added)) readDestination(flashcardDestination(value));
@@ -51,12 +49,11 @@ export class FlashcardGenerationService {
   }
   private validateRequest(r: FlashcardRequest): FlashcardRequest {
     if (!r || typeof r.prompt !== 'string' || (r.deck !== undefined && typeof r.deck !== 'string') || (r.topic !== undefined && typeof r.topic !== 'string') || !Array.isArray(r.notes) || r.notes.some(p => typeof p !== 'string') || (r.folders !== undefined && (!Array.isArray(r.folders) || r.folders.some(p => typeof p !== 'string')))) throw new Error('Invalid flashcard request.');
-    if (r.format !== undefined && r.format !== 'cloze') throw new Error('Invalid generated card type.');
     const { deck, topic } = readDestination({ deck: r.deck ?? '', topic: r.topic ?? '' }, false), prompt = r.prompt.trim();
     if (prompt.length > 10000) throw new Error('Keep the prompt under 10,000 characters.');
     if (!prompt && !r.notes.length) throw new Error('Describe the cards or choose at least one note.');
     const folders = r.folders?.map(safeFolder);
-    return { prompt, ...(deck ? { deck } : {}), ...(topic ? { topic } : {}), notes: [...new Set(r.notes)], ...(folders?.length ? { folders: [...new Set(folders)] } : {}), ...(r.format ? { format: r.format } : {}) };
+    return { prompt, ...(deck ? { deck } : {}), ...(topic ? { topic } : {}), notes: [...new Set(r.notes)], ...(folders?.length ? { folders: [...new Set(folders)] } : {}) };
   }
   async start(request: FlashcardRequest) {
     if (this.snapshot.loading) throw new Error('Wait for saved drafts to load.');
@@ -85,8 +82,8 @@ export class FlashcardGenerationService {
       if (batch.request.notes.some(p => !paths.includes(p))) throw new Error('A selected note no longer exists. Start a new batch and choose the notes again.');
       const infer = !batch.request.deck || !batch.request.topic;
       const result = await Promise.race([runValidated(this.runner(), { prompt: flashcardPrompt(batch.request, this.destinations()), schema: infer ? flashcardBatchSchema : flashcardsSchema, signal: controller.signal, effort: 'high' }, v => {
-        if (!infer) return { destination: readDestination(flashcardDestination(batch)), cards: readFlashcards(v, paths, batch.request.format) };
-        const generated = readFlashcardBatch(v, paths, batch.request.format);
+        if (!infer) return { destination: readDestination(flashcardDestination(batch)), cards: readFlashcards(v, paths) };
+        const generated = readFlashcardBatch(v, paths);
         return { ...generated, destination: { deck: batch.request.deck || generated.destination.deck, topic: batch.request.topic || generated.destination.topic } };
       }), cancelled]);
       if (controller.signal.aborted || this.disposed) return;

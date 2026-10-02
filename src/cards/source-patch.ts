@@ -1,5 +1,4 @@
-import type { CardFormat, QardCard } from './card-types';
-import { readCardFormat, validateCardFormat } from './card-format';
+import type { QardCard } from './card-types';
 import { parseCards, sameContent } from './parser';
 export function locateCard(source: string, card: QardCard): QardCard {
   const parsed = parseCards(source, card.sourceFile).cards;
@@ -18,35 +17,25 @@ export function ensureIdInSource(source: string, card: QardCard, id: string): { 
   if (!found) throw new Error('Could not safely assign a card ID.');
   return { source: updated, card: found };
 }
-export function serializeCard(id: string, front: string, back: string, eol = '\n', format?: CardFormat): string {
+export function serializeCard(id: string, front: string, back: string, eol = '\n'): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('Invalid card ID.');
   front = front.replace(/\r\n?/g, '\n').trim(); back = back.replace(/\r\n?/g, '\n').trim();
-  if (format) format = readCardFormat(format);
-  validateCardFormat(format, front);
-  if (!front || (!back && !format)) throw new Error('Both the question and answer are required.');
+  if (!front || !back) throw new Error('Both the question and answer are required.');
   const [first, ...rest] = front.split('\n');
-  // Keep metadata outside a code fence when a formatted front starts with code.
-  const startsWithFence = !!format && /^ {0,3}(`{3,}|~{3,})/.test(first!);
-  const lines = [`<!-- qard-id: ${id} -->`, `> [!qard]- ${startsWithFence ? '' : first}`];
-  if (format) {
-    lines.push(`> <!-- qard-format: ${JSON.stringify(format)} -->`);
-    // Ordinary Obsidian notes still show the original attachment when the callout is expanded.
-    if (format.type === 'occlusion') lines.push(`> ![[${format.image}]]`);
-  }
-  const frontBody = startsWithFence ? [first!, ...rest] : rest;
-  const content = frontBody.length || format ? [...frontBody, '<!-- qard-answer -->', ...back.split('\n')] : back.split('\n');
+  const lines = [`<!-- qard-id: ${id} -->`, `> [!qard]- ${first}`];
+  const content = rest.length ? [...rest, '<!-- qard-answer -->', ...back.split('\n')] : back.split('\n');
   lines.push(...content.map(line => line ? `> ${line}` : '>'));
   const serialized = lines.join(eol) + eol;
   const parsed = parseCards(serialized, 'validation.md');
-  if (parsed.cards.length !== 1 || parsed.cards[0]?.frontMarkdown !== front || parsed.cards[0]?.backMarkdown !== back || JSON.stringify(parsed.cards[0]?.format) !== JSON.stringify(format)) {
+  if (parsed.cards.length !== 1 || parsed.cards[0]?.frontMarkdown !== front || parsed.cards[0]?.backMarkdown !== back) {
     throw new Error('This content includes a reserved Qard boundary or malformed Markdown fence. Put literal Qard syntax inside a fenced code block.');
   }
   return serialized;
 }
-export function replaceCardInSource(source: string, original: QardCard, front: string, back: string, id: string, format: CardFormat | null | undefined = original.format): string {
+export function replaceCardInSource(source: string, original: QardCard, front: string, back: string, id: string): string {
   const current = locateCard(source, original);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  let replacement = serializeCard(id, front, back, eol, format ?? undefined);
+  let replacement = serializeCard(id, front, back, eol);
   if (!/[\r\n]$/.test(current.sourceText)) replacement = replacement.slice(0, -eol.length);
   return source.slice(0, current.sourcePosition.start) + replacement + source.slice(current.sourcePosition.end);
 }

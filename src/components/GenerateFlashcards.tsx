@@ -3,7 +3,6 @@ import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import type { CardDraft } from '../cards/card-writer';
 import type { QardServices } from '../views/services';
 import { Markdown } from './Markdown';
-import { CardContent } from './CardContent';
 import { AgentLabel } from './jobs/AgentLabel';
 import { JobControls } from './jobs/JobControls';
 import { Check, JobError, Waiting } from './tests/common';
@@ -16,7 +15,6 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
   const [context, setContext] = useState({ deck: initial?.deck, topic: initial?.topic });
   const [prompt, setPrompt] = useState('');
-  const [kind, setKind] = useState<'basic' | 'cloze'>(initial?.format?.type === 'cloze' ? 'cloze' : 'basic');
   const [notes, setNotes] = useState<string[]>(initial?.sourceFile ? [initial.sourceFile] : []);
   const [folders, setFolders] = useState<string[]>([]);
   const [open, setOpen] = useState<'notes' | 'folders' | null>(null), [query, setQuery] = useState(''), [starting, setStarting] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false);
@@ -36,7 +34,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
       const latest = testNotePaths(services.app.vault.getMarkdownFiles().map(f => f.path), excluded);
       const selected = resolveTestNotes(latest, notes, folders);
       if (!prompt.trim() && !selected.length) throw new Error('The selected sources no longer contain any Markdown notes. Choose another source or describe the cards.');
-      await service.start({ ...context, prompt, notes: selected, ...(folders.length ? { folders } : {}), ...(kind === 'cloze' ? { format: 'cloze' as const } : {}) });
+      await service.start({ ...context, prompt, notes: selected, ...(folders.length ? { folders } : {}) });
     }
     catch (e) { setError((e as Error).message); }
     finally { setStarting(false); }
@@ -46,7 +44,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
   const destinationLocked = !!batch?.destinationLocked || added > 0;
   const running = !!state.job && !state.job.error;
   const editRequest = async () => {
-    if (batch) { setContext({ deck: batch.request.deck, topic: batch.request.topic }); setPrompt(batch.request.prompt); setNotes(batch.request.notes); setFolders(batch.request.folders ?? []); setKind(batch.request.format || 'basic'); }
+    if (batch) { setContext({ deck: batch.request.deck, topic: batch.request.topic }); setPrompt(batch.request.prompt); setNotes(batch.request.notes); setFolders(batch.request.folders ?? []); }
     setError('');
     try { await service.clear(); } catch (e) { setError((e as Error).message); }
   };
@@ -56,7 +54,6 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
     {state.loading ? <Waiting text="Loading saved drafts…"/> : state.saving && !cards.length ? <Waiting text="Saving request…"/> : running ? <div className="qard-panel"><Waiting text="Generating flashcards…"><AgentLabel services={services} role="writer"/></Waiting><JobControls services={services} job={state.job} cancel={() => service.cancel()}/><p className="qard-muted">You can leave this screen and return from Decks → Generate with AI. Qard will tell you when the cards are ready.</p></div> : !cards.length && !batch ? <form onSubmit={e => { e.preventDefault(); void run(); }}><fieldset className="qard-flashcard-request" disabled={starting}>
       <div className="qard-composer"><textarea aria-label="Flashcard prompt" maxLength={10000} rows={3} value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="e.g. TCP congestion control. Focus on the key ideas and what I got wrong last time."/>
         <div className="qard-composer-bar"><div className="qard-sources">
-          <button type="button" className={'qard-chip' + (kind === 'cloze' ? ' is-on' : '')} aria-pressed={kind === 'cloze'} onClick={() => setKind(kind === 'cloze' ? 'basic' : 'cloze')}><Check on={kind === 'cloze'}/>Cloze</button>
           {notes.filter(path => !covered.has(path)).map(path => <span key={path} className="qard-chip is-on"><FileText size={13}/>{path.split('/').pop()!.replace(/\.md$/, '')}<button type="button" className="qard-chip-x" aria-label={`Remove ${path}`} onClick={() => setNotes(notes.filter(n => n !== path))}><X size={12}/></button></span>)}
           {folders.map(path => <span key={path} className="qard-chip qard-folder-chip is-on" title={path}><Folder size={13}/><span>{path.split('/').pop()}</span><small>{folderNotes(paths, [path]).length} notes</small><button type="button" className="qard-chip-x" aria-label={`Remove folder ${path}`} onClick={() => setFolders(folders.filter(f => f !== path))}><X size={12}/></button></span>)}
           <button type="button" className="qard-chip" aria-expanded={open === 'notes'} onClick={() => { setOpen(open === 'notes' ? null : 'notes'); setQuery(''); }}>+ Note</button>
@@ -76,8 +73,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
       <div className="qard-generation-tools"><button disabled={state.saving} onClick={() => { const on = pending.length !== cards.filter(c => !c.added).length; cards.filter(c => !c.added).forEach(c => service.updateCard(c.id, { selected: on })); }}>{pending.length === cards.filter(c => !c.added).length ? 'Deselect all' : 'Select all'}</button><button aria-pressed={preview} onClick={() => setPreview(!preview)}>{preview ? 'Edit cards' : 'Preview cards'}</button><span className="qard-spacer"/><button className="qard-primary" disabled={state.saving || !pending.length} onClick={() => void service.addSelected()}>{state.saving ? 'Adding…' : `Add selected (${pending.length})`}</button></div>
       {cards.map((c, i) => <article key={c.id} className={'qard-generation-card' + (!c.selected && !c.added ? ' is-skipped' : '')}>
         <div className="qard-generation-card-head"><button aria-label={`Select card ${i + 1}`} aria-pressed={c.selected} disabled={state.saving || c.added} onClick={() => service.updateCard(c.id, { selected: !c.selected })}><Check on={c.selected}/>Card {i + 1}</button>{c.added && <span className="qard-muted">✓ Added</span>}</div>
-        {c.format?.type === 'cloze' && <p className="qard-muted">Cloze · {'{{answer}}'} hides a blank; {'{{answer::hint}}'} adds a hint. Blanks reveal together.</p>}
-        {preview || c.added ? <div className="qard-editor-rendered"><div><span className="qard-eyebrow">FRONT</span><CardContent front={c.front} back={c.back} format={c.format} revealed={false} path={c.source} services={services}/></div><div><span className="qard-eyebrow">BACK</span>{c.format ? <CardContent front={c.front} back={c.back} format={c.format} revealed path={c.source} services={services}/> : <Markdown text={c.back} path={c.source} services={services}/>}</div></div> : <div className="qard-editor-sides"><label>{c.format ? 'Text with blanks' : 'Front'}<textarea aria-label={`Front of card ${i + 1}`} rows={3} value={c.front} disabled={state.saving} onChange={e => service.updateCard(c.id, { front: e.target.value })}/></label><label>{c.format ? 'Explanation (optional)' : 'Back'}<textarea aria-label={`Back of card ${i + 1}`} rows={4} value={c.back} disabled={state.saving} onChange={e => service.updateCard(c.id, { back: e.target.value })}/></label></div>}
+        {preview || c.added ? <div className="qard-editor-rendered"><div><span className="qard-eyebrow">FRONT</span><Markdown text={c.front} path={c.source} services={services}/></div><div><span className="qard-eyebrow">BACK</span><Markdown text={c.back} path={c.source} services={services}/></div></div> : <div className="qard-editor-sides"><label>Front<textarea aria-label={`Front of card ${i + 1}`} rows={3} value={c.front} disabled={state.saving} onChange={e => service.updateCard(c.id, { front: e.target.value })}/></label><label>Back<textarea aria-label={`Back of card ${i + 1}`} rows={4} value={c.back} disabled={state.saving} onChange={e => service.updateCard(c.id, { back: e.target.value })}/></label></div>}
         {c.source && <button className="qard-link qard-small" onClick={() => void services.app.workspace.openLinkText(c.source, '', true)}><FileText size={13}/>{c.source}</button>}
       </article>)}
       <div className="qard-form-actions"><button disabled={state.saving} onClick={() => void service.clear().catch(e => setError((e as Error).message))}>Generate another batch</button>{added > 0 && <button className="qard-primary" disabled={state.saving} onClick={() => openDeck(destination.deck)}>Open deck</button>}</div>

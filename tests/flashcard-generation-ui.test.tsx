@@ -64,19 +64,6 @@ it('offers AI generation from both the deck list and the manual new-card editor'
   await act(async () => root.render(<CardEditor services={services} initial={{ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' }} cancel={back} saved={vi.fn()} generate={generate}/>));
   await click(button('Generate with AI')); expect(generate).toHaveBeenLastCalledWith({ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' });
 });
-it('requests AI cloze cards and previews hidden answers before accepting them', async () => {
-  run.mockResolvedValue({ deck: 'Networks', topic: 'Transport', cards: [{ front: 'TCP provides {{reliable::property}} delivery.', back: '', source: 'Notes/TCP.md' }] });
-  await render();
-  await click(button('Cloze'));
-  await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport properties');
-  await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
-  expect(services.flashcards!.getSnapshot().batch!.request.format).toBe('cloze');
-  await click(button('Preview cards'));
-  const front = host.querySelector('.qard-editor-rendered > div')!;
-  expect(front.textContent).toContain('TCP provides [property] delivery.'); expect(front.textContent).not.toContain('reliable');
-  await click(button('Add selected (1)'));
-  expect(writer.createBatch.mock.calls[0]![1][0]).toMatchObject({ format: { type: 'cloze' }, front: 'TCP provides {{reliable::property}} delivery.' });
-});
 it('starts from a description without deck or topic controls, then offers the suggested destination for review', async () => {
   await act(async () => root.render(<GenerateFlashcards services={services} back={back} openDeck={openDeck}/>));
   expect(host.querySelector('input')).toBeNull(); expect(host.querySelector('select')).toBeNull();

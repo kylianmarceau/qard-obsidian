@@ -98,7 +98,7 @@ export function scanSrNote(source: string, path: string, settings: SrSettings = 
     } else if (block.length) {
       const body = text(0, block.length);
       if ((settings.clozeHighlight && /==[^=\n]+==/.test(body)) || (settings.clozeBold && /\*\*[^*\n]+\*\*/.test(body)) || (settings.clozeCurly && /\{\{[^}\n]+\}\}/.test(body)))
-        note.skipped.push({ line: block[0]!, reason: 'Spaced Repetition cloze import is not supported. The text and its schedules are left unchanged; create Qard cloze cards in the editor.' });
+        note.skipped.push({ line: block[0]!, reason: 'Cloze card. Qard has no cloze cards, so this text is left as it is.' });
     }
     block = []; separator = -1; reversed = false;
     return card;

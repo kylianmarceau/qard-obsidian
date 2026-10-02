@@ -3,7 +3,6 @@
 **Your learning, in focus.** Flashcards, practice tests and guided learning from your Obsidian notes.
 
 - **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic, with optional spaced repetition.
-- **Visual recall:** create cloze blanks in text, formulas and code, or draw masks over diagrams and screenshots. Reveal and rate them like any other card. AI can draft cloze cards too.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
 - **Learn:** map a course into connected topics, follow guided lessons and check what you remember. Track your progress and what to study next.
 

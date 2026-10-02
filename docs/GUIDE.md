@@ -39,7 +39,7 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 
 ## AI flashcards
 
-Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. Toggle **Cloze** for fill-in-the-blank cards. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
+Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
 
 Review the questions and answers, edit them or preview their Markdown, and adjust the suggested **Save to deck** and **Topic** if needed. Deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Once adding begins, the batch's destination stays fixed so later selections and save retries go into the same generated note without duplicating cards. Folder sources are snapshotted at Start, so background retries use the same notes even if a folder later gains new files.
 
@@ -137,42 +137,6 @@ The editor, delete action and ID assignment use `Vault.process` and replace only
 
 ## Studying at your pace
 
-### Cloze and image cards
-
-In **New card** or **Edit card**, choose a **Card type**:
-
-- **Question and answer** keeps the existing front/back format.
-- **Cloze (fill in the blanks)** hides marked parts of a statement, formula or code sample. Select text and choose **Mark as blank**, or write `{{answer}}`. An optional hint uses `{{answer::hint}}`. For example, `TCP provides {{reliable::property}} delivery.` displays `TCP provides [property] delivery.` before reveal. Single LaTeX braces inside a blank are supported, such as `$x = {{\frac{a}{b}}}$`. Nested blanks are rejected. All blanks on one card are revealed together and share one review history; use separate cards to test different targets independently.
-- **Image occlusion** covers parts of a local vault image. Choose a PNG, JPEG, GIF, WebP, AVIF or SVG attachment, then drag over the labels to hide. **Add mask** and the percentage position/size fields also work without dragging. Remove unwanted masks before saving. Coordinates stay aligned as the image scales. All masks reveal together, so use separate cards for independent targets. The explanation is optional; the unmasked diagram supplies the answer. Prefer a static image when labels move in an animation.
-
-**Show preview** displays both the hidden front and revealed back. Space reveals either format during study, and ratings and scheduling work normally. Editing a card or changing its type keeps its existing ID and review history. Attachments stay in the vault; Qard stores only their paths and masks. If an attachment moves, reopen the editor and select its new path. Missing images show an error.
-
-**Generate with AI** offers question/answer and cloze cards. Toggle **Cloze** in the prompt box to have the writer suggest blanks grounded in your selected notes. Review the marked text and explanation before adding. AI does not draw image masks; choose those in the image editor.
-
-The card remains an ordinary Qard callout. A hidden comment on the first body line identifies the format; `qard-answer` separates the front and optional explanation. Cloze content is readable in a normal note:
-
-```markdown
-<!-- qard-id: example-cloze -->
-> [!qard]- TCP provides {{reliable::property}} delivery.
-> <!-- qard-format: {"type":"cloze"} -->
-> <!-- qard-answer -->
-> TCP also preserves order.
-```
-
-Image cards include a normal attachment embed, so the expanded callout displays the original image outside Qard. Masks use percentages measured from the top-left:
-
-```markdown
-<!-- qard-id: example-image -->
-> [!qard]- Identify the hidden label.
-> <!-- qard-format: {"type":"occlusion","image":"Attachments/network.svg","masks":[{"x":20,"y":30,"width":25,"height":10}]} -->
-> ![[Attachments/network.svg]]
-> <!-- qard-answer -->
-```
-
-The `{{…}}` syntax is interpreted only in a card marked as cloze. Existing question/answer cards, including literal template syntax, keep their behaviour. Invalid format metadata or masks are reported as note issues and skipped.
-
-### Choose a session
-
 Choose **Study**, select any combination of decks/topics/individual cards, choose a mode and order, and start. Expand a deck to choose topics, then expand a topic to choose individual cards.
 
 | Mode | Includes |
@@ -229,7 +193,7 @@ Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Impor
    - A nested deck tag such as `#flashcards/cs315/hmm` becomes `qard-deck: "cs315/hmm"`, unless the note already sets `qard-deck`.
    - `<!--SR:...-->` due dates, intervals and ease become Qard review states. You can turn **Keep review schedule** off to import every card as new.
 
-Spaced Repetition cloze cards are not converted by this importer; their text and per-blank schedules are left unchanged. Create Qard cloze cards with the card editor instead. Question/answer cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
+Cloze cards are not converted, because Qard has no cloze cards. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
 
 The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
 
@@ -373,7 +337,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- No FSRS, general import/export, advanced statistics, persistent recordings or speech recognition. Cloze blanks and image masks reveal together; independent per-blank scheduling and AI image-mask suggestions are not implemented.
+- No FSRS, cloze cards, general import/export, advanced statistics, persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.

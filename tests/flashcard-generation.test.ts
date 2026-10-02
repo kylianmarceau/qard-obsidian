@@ -148,14 +148,3 @@ it('restores old drafts with the explicit destination stored only in their reque
   const restored = setup(undefined, files); await restored.service.load();
   expect(restored.service.getSnapshot().error).toBeUndefined(); expect(restored.service.getSnapshot().batch?.cards.every(c => c.added)).toBe(true);
 });
-it('keeps AI cloze format through generation, draft reload, edits and acceptance', async () => {
-  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ cards: [{ front: 'TCP provides {{reliable}} delivery.', back: '', source: 'Notes/TCP.md' }] });
-  const { service, files } = setup(run); await service.load(); await service.start({ ...request, format: 'cloze' }); await settled(service);
-  expect(run.mock.calls[0]![0].prompt).toContain('{{answer::short hint}}');
-  const restored = setup(undefined, files); await restored.service.load();
-  const card = restored.service.getSnapshot().batch!.cards[0]!;
-  expect(card.format).toEqual({ type: 'cloze' }); expect(restored.run).not.toHaveBeenCalled();
-  restored.service.updateCard(card.id, { front: 'TCP provides {{ordered::property}} delivery.' });
-  await restored.service.addSelected();
-  expect(restored.writer.createBatch.mock.calls[0]![1][0]).toMatchObject({ format: { type: 'cloze' }, front: 'TCP provides {{ordered::property}} delivery.' });
-});
