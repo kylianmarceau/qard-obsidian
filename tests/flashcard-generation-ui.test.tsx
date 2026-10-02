@@ -15,7 +15,7 @@ import type { CardWriter } from '../src/cards/card-writer';
 import type { AgentRunner } from '../src/agents/runner';
 let root: Root, host: HTMLElement, services: QardServices, run: ReturnType<typeof vi.fn<AgentRunner['run']>>, writer: { createBatch: ReturnType<typeof vi.fn<CardWriter['createBatch']>> };
 const back = vi.fn(), openDeck = vi.fn();
-const reply = { cards: [{ front: 'What is TCP?', back: 'Reliable transport.', source: 'Notes/TCP.md' }, { front: 'What is UDP?', back: 'Connectionless transport.', source: 'Notes/TCP.md' }] };
+const reply = { deck: 'Networks', topic: 'Transport', cards: [{ front: 'What is TCP?', back: 'Reliable transport.', source: 'Notes/TCP.md' }, { front: 'What is UDP?', back: 'Connectionless transport.', source: 'Notes/TCP.md' }] };
 beforeEach(async () => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   run = vi.fn<AgentRunner['run']>().mockResolvedValue(reply); writer = { createBatch: vi.fn<CardWriter['createBatch']>().mockResolvedValue([]) };
@@ -55,7 +55,7 @@ it('allows cancellation and retry and preserves the request when editing it', as
   await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
   await click(button('Cancel')); expect(host.textContent).toContain('Cancelled.'); expect(button('Try again')).toBeTruthy();
   await click(button('Edit request')); expect((host.querySelector('[aria-label="Flashcard prompt"]') as HTMLTextAreaElement).value).toBe('Transport basics');
-  expect(host.querySelector('input[type="number"]')).toBeNull(); expect(host.textContent).toContain('AI chooses how many cards');
+  expect(host.querySelector('input[type="number"]')).toBeNull(); expect(host.textContent).toContain('No sources selected');
 });
 it('offers AI generation from both the deck list and the manual new-card editor', async () => {
   const generate = vi.fn();
@@ -63,6 +63,44 @@ it('offers AI generation from both the deck list and the manual new-card editor'
   await click(button('Generate with AI')); expect(generate).toHaveBeenCalledOnce();
   await act(async () => root.render(<CardEditor services={services} initial={{ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' }} cancel={back} saved={vi.fn()} generate={generate}/>));
   await click(button('Generate with AI')); expect(generate).toHaveBeenLastCalledWith({ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' });
+});
+it('requests AI cloze cards and previews hidden answers before accepting them', async () => {
+  run.mockResolvedValue({ deck: 'Networks', topic: 'Transport', cards: [{ front: 'TCP provides {{reliable::property}} delivery.', back: '', source: 'Notes/TCP.md' }] });
+  await render();
+  await click(button('Cloze'));
+  await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'Transport properties');
+  await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); await tick();
+  expect(services.flashcards!.getSnapshot().batch!.request.format).toBe('cloze');
+  await click(button('Preview cards'));
+  const front = host.querySelector('.qard-editor-rendered > div')!;
+  expect(front.textContent).toContain('TCP provides [property] delivery.'); expect(front.textContent).not.toContain('reliable');
+  await click(button('Add selected (1)'));
+  expect(writer.createBatch.mock.calls[0]![1][0]).toMatchObject({ format: { type: 'cloze' }, front: 'TCP provides {{reliable::property}} delivery.' });
+});
+it('starts from a description without deck or topic controls, then offers the suggested destination for review', async () => {
+  await act(async () => root.render(<GenerateFlashcards services={services} back={back} openDeck={openDeck}/>));
+  expect(host.querySelector('input')).toBeNull(); expect(host.querySelector('select')).toBeNull();
+  expect(host.textContent).toContain('What should these flashcards cover?'); expect(button('Start')?.disabled).toBe(true);
+  await input(host.querySelector('[aria-label="Flashcard prompt"]')!, 'TCP and UDP basics'); await click(button('Start'));
+  expect(services.flashcards!.getSnapshot().batch?.request).not.toHaveProperty('deck'); expect(services.flashcards!.getSnapshot().batch?.request).not.toHaveProperty('topic');
+  expect((host.querySelector('[aria-label="Save to deck"]') as HTMLInputElement).value).toBe('Networks');
+  await input(host.querySelector('[aria-label="Save to deck"]')!, 'Exam revision'); await input(host.querySelector('[aria-label="Topic"]')!, 'Transport protocols');
+  await click(button('Add selected (2)')); expect(writer.createBatch.mock.calls[0]![0]).toMatchObject({ deck: 'Exam revision', topic: 'Transport protocols' });
+  expect((host.querySelector('[aria-label="Save to deck"]') as HTMLInputElement).disabled).toBe(true);
+  await click(button('Open deck')); expect(openDeck).toHaveBeenLastCalledWith('Exam revision');
+});
+it('attaches a whole folder and starts without a prompt or upfront destination', async () => {
+  await act(async () => root.render(<GenerateFlashcards services={services} back={back} openDeck={openDeck}/>));
+  await click(button('+ Folder')); await click(host.querySelector('[aria-label="Attach folder Notes, 1 note"]'));
+  expect(host.textContent).toContain('1 note attached, including subfolders'); expect(button('Start')?.disabled).toBe(false);
+  await click(button('Start')); expect(services.flashcards!.getSnapshot().batch?.request.notes).toEqual(['Notes/TCP.md']);
+  expect(services.flashcards!.getSnapshot().batch?.request.folders).toEqual(['Notes']); expect(services.flashcards!.getSnapshot().batch?.destination).toEqual({ deck: 'Networks', topic: 'Transport' });
+});
+it('blocks a source-only request when the attached folder loses its notes before Start', async () => {
+  await act(async () => root.render(<GenerateFlashcards services={services} back={back} openDeck={openDeck}/>));
+  await click(button('+ Folder')); await click(host.querySelector('[aria-label="Attach folder Notes, 1 note"]'));
+  vi.spyOn(services.app.vault, 'getMarkdownFiles').mockReturnValue([]); await click(button('Start'));
+  expect(run).not.toHaveBeenCalled(); expect(host.querySelector('[role="alert"]')?.textContent).toContain('no longer contain');
 });
 
 it('the Decks home row updates from generating to ready, opens the batch and disappears after all cards are added', async () => {

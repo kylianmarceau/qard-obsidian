@@ -123,6 +123,19 @@
 .qard-editor label { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 13px; color: var(--qard-muted); }
 .qard-editor-sides { display: grid; grid-template-columns: 1fr; gap: 20px; margin: 20px 0 12px; }
 .qard-editor-rendered { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; padding: 25px 0; }
+.qard-card-kind { max-width: 340px; margin-bottom: 18px; }
+.qard-editor-occlusion .qard-editor-sides { grid-template-columns: 1fr 1fr; }
+.qard-app .qard-editor-occlusion textarea { min-height: 80px; }
+.qard-occlusion-editor { display: grid; gap: 14px; margin: 20px 0; }
+.qard-occlusion { position: relative; width: 100%; max-width: 720px; margin: 16px auto; line-height: 0; }
+.qard-occlusion.is-editable { cursor: crosshair; touch-action: none; user-select: none; }
+.qard-occlusion img { display: block; width: 100%; height: auto; }
+.qard-image-mask { position: absolute; display: flex; align-items: center; justify-content: center; background: #4263dc; color: white; border: 1px solid white; font-size: 14px; line-height: 1; pointer-events: none; overflow: hidden; }
+.qard-mask-list { display: grid; gap: 12px; }
+.qard-editor fieldset.qard-mask-row { display: grid; grid-template-columns: repeat(4, minmax(60px, 1fr)) auto; align-items: end; gap: 10px; border: 1px solid var(--qard-border); padding: 12px; border-radius: 8px; }
+.qard-mask-row legend { color: var(--qard-muted); font-size: 13px; }
+.qard-mask-row input { width: 100%; }
+@media (max-width: 600px) { .qard-editor fieldset.qard-mask-row { grid-template-columns: repeat(2, minmax(60px, 1fr)); } .qard-editor-occlusion .qard-editor-sides { grid-template-columns: 1fr; } }
 .qard-editor fieldset > .qard-muted { margin-top: 18px; overflow-wrap: anywhere; }
 .qard-form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .qard-selection-modal { width: min(640px, 95vw); }
@@ -231,6 +244,8 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 /* New test */
 .qard-new-test { max-width: 720px; margin: clamp(20px, 10vh, 110px) auto 0; display: flex; flex-direction: column; gap: 16px; }
 .qard-new-test h1 { margin-bottom: 6px; }
+.qard-flashcard-request { display: flex; flex-direction: column; gap: 16px; }
+.qard-app .qard-generation-destination-hint { margin-bottom: 18px; }
 .qard-composer { border: 1px solid var(--qard-border); border-radius: 14px; padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 16px; background: var(--qard-bg); }
 .qard-app .qard-composer textarea { border: 0; padding: 0; min-height: 0; font-size: 17px; line-height: 1.6; resize: none; background: transparent; box-shadow: none; }
 .qard-app .qard-composer textarea:focus-visible { outline: none; }

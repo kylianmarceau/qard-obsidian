@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { FlashcardGenerationService, type FlashcardRequest } from '../src/cards/generation-service';
-import { readFlashcards, flashcardsSchema } from '../src/cards/generation-schema';
+import { readFlashcards, flashcardBatchSchema, flashcardsSchema } from '../src/cards/generation-schema';
 import { flashcardPrompt } from '../src/cards/generation-prompts';
 import { purposeOf } from '../src/agents/usage-report';
 import type { AgentRunner } from '../src/agents/runner';
@@ -59,7 +59,7 @@ it('restores an interrupted job as an explicit retry, without silently spending 
 });
 it('validates notes, names and empty requests before calling the agent', async () => {
   const { service, run, files } = setup(); await service.load();
-  for (const patch of [{ deck: '' }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
+  for (const patch of [{ deck: 'x'.repeat(201) }, { deck: 'Two\nlines' }, { notes: ['Gone.md'] }, { prompt: '', notes: [] }]) await expect(service.start({ ...request, ...patch })).rejects.toThrow();
   expect(run).not.toHaveBeenCalled(); expect(files).toEqual({});
   expect(flashcardPrompt({ ...request, notes: [] })).toContain('Search the vault'); expect(flashcardPrompt(request)).toContain('Notes/TCP.md');
 });
@@ -110,4 +110,52 @@ it('retries an interrupted legacy request with an AI-chosen count', async () => 
   await service.generate(); expect(service.getSnapshot().batch!.cards).toHaveLength(1);
   expect(run.mock.calls[0]![0].prompt).not.toContain('40');
   expect(JSON.parse(files['Qard/Flashcard drafts.json']).request).not.toHaveProperty('count');
+});
+it('generates from a description alone and persists the AI destination without requiring names in the request', async () => {
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ ...content, deck: 'Computer Networks', topic: 'Congestion control' });
+  const { service, writer, files } = setup(run); await service.load(); await service.start({ prompt: 'Explain TCP congestion control', notes: [] }); await settled(service);
+  expect(run.mock.calls[0]![0].schema).toBe(flashcardBatchSchema); expect(purposeOf(flashcardBatchSchema)).toBe('Writing flashcards');
+  expect(service.getSnapshot().batch?.request).not.toHaveProperty('deck'); expect(service.getSnapshot().batch?.request).not.toHaveProperty('topic');
+  expect(service.getSnapshot().batch?.destination).toEqual({ deck: 'Computer Networks', topic: 'Congestion control' });
+  const restored = setup(undefined, files); await restored.service.load(); expect(restored.service.getSnapshot().batch?.destination).toEqual(service.getSnapshot().batch?.destination);
+  await service.addSelected(); expect(writer.createBatch.mock.calls[0]![0]).toMatchObject({ deck: 'Computer Networks', topic: 'Congestion control' });
+});
+it('retries missing or unusable AI destinations before offering a draft', async () => {
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValueOnce(content).mockResolvedValueOnce({ ...content, deck: 'Networks', topic: 'Transport' });
+  const { service } = setup(run); await service.load(); await service.start({ prompt: 'TCP and UDP', notes: [] }); await settled(service);
+  expect(run).toHaveBeenCalledTimes(2); expect(service.getSnapshot().batch?.destination).toEqual({ deck: 'Networks', topic: 'Transport' });
+});
+it('preserves an incomplete destination edit across reload and validates it only when adding', async () => {
+  const { service, files } = setup(); await service.load(); await service.start(request); await settled(service);
+  service.updateDestination({ deck: '' }); await service.flush();
+  const restored = setup(undefined, files); await restored.service.load(); expect(restored.service.getSnapshot().error).toBeUndefined();
+  await restored.service.addSelected(); expect(restored.writer.createBatch).not.toHaveBeenCalled(); expect(restored.service.getSnapshot().error).toContain('Deck and topic');
+  restored.service.updateDestination({ deck: 'Revision', topic: 'TCP basics' }); await restored.service.addSelected();
+  expect(restored.writer.createBatch.mock.calls[0]![0]).toMatchObject({ deck: 'Revision', topic: 'TCP basics' });
+});
+it('locks the destination before a save attempt so retries cannot create the same batch in another deck', async () => {
+  const { service, writer, files } = setup(); await service.load(); await service.start(request); await settled(service);
+  service.updateDestination({ deck: 'Revision' }); writer.createBatch.mockRejectedValueOnce(new Error('Index failed after write'));
+  await service.addSelected(); service.updateDestination({ deck: 'Another deck' });
+  expect(service.getSnapshot().batch?.destination?.deck).toBe('Revision');
+  const restored = setup(undefined, files); await restored.service.load(); restored.service.updateDestination({ deck: 'Another deck' }); await restored.service.addSelected();
+  expect(restored.writer.createBatch.mock.calls[0]![0]).toMatchObject({ deck: 'Revision' });
+});
+it('restores old drafts with the explicit destination stored only in their request', async () => {
+  const { service, files } = setup(); await service.load(); await service.start(request); await settled(service); await service.addSelected();
+  const batch = JSON.parse(files['Qard/Flashcard drafts.json']!); delete batch.destination; delete batch.destinationLocked;
+  files['Qard/Flashcard drafts.json'] = JSON.stringify(batch);
+  const restored = setup(undefined, files); await restored.service.load();
+  expect(restored.service.getSnapshot().error).toBeUndefined(); expect(restored.service.getSnapshot().batch?.cards.every(c => c.added)).toBe(true);
+});
+it('keeps AI cloze format through generation, draft reload, edits and acceptance', async () => {
+  const run = vi.fn<AgentRunner['run']>().mockResolvedValue({ cards: [{ front: 'TCP provides {{reliable}} delivery.', back: '', source: 'Notes/TCP.md' }] });
+  const { service, files } = setup(run); await service.load(); await service.start({ ...request, format: 'cloze' }); await settled(service);
+  expect(run.mock.calls[0]![0].prompt).toContain('{{answer::short hint}}');
+  const restored = setup(undefined, files); await restored.service.load();
+  const card = restored.service.getSnapshot().batch!.cards[0]!;
+  expect(card.format).toEqual({ type: 'cloze' }); expect(restored.run).not.toHaveBeenCalled();
+  restored.service.updateCard(card.id, { front: 'TCP provides {{ordered::property}} delivery.' });
+  await restored.service.addSelected();
+  expect(restored.writer.createBatch.mock.calls[0]![1][0]).toMatchObject({ format: { type: 'cloze' }, front: 'TCP provides {{ordered::property}} delivery.' });
 });

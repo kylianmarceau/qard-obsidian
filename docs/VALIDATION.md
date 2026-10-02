@@ -39,3 +39,15 @@ The v0.2 production build, typecheck and 59 automated tests pass, including sele
 Added a 240 ms CSS 3D flip in both directions. Both Markdown faces stay mounted to avoid reloading embeds during each reveal. Inactive faces are inert and aria-hidden; reduced-motion preferences remove the transition. Long content scrolls inside a bounded face. No animation timers or listeners are needed.
 
 Production build, TypeScript and all 60 tests pass. The new regression test covers rapid reveal/hide, inactive-face accessibility and immediate rating after reveal.
+
+## Cloze and image occlusion — 2 October 2026
+
+On `feat/visual-and-cloze-cards`, `npm run check` passed strict TypeScript, lint with zero warnings, **264 tests across 35 files**, the production build and release-content verification. Regression checks cover hidden/revealed cloze content and hints, LaTeX braces and code indentation, format round-trips and CRLF, optional explanations, stable identities and concurrent mask edits, format conversion, invalid mask bounds and local attachment validation, pointer drawing in both directions, keyboard mask controls, missing attachments, the reveal/rating flow, and AI cloze generation, draft restoration and acceptance.
+
+A local desktop browser preview verified selecting an image, drawing a mask over a diagram label, saving through the real card writer into an in-memory vault, viewing both faces, and studying and revealing the image card. The cloze study front also showed hints and blanks without answer text. The preview uses mock vault and Markdown services; native Obsidian rendering and mobile devices have not been checked for the new formats. All blanks/masks on a card share one review identity and reveal together. AI mask suggestions and Spaced Repetition cloze import are outside this change.
+
+## Prompt-first AI flashcards — 2 October 2026
+
+On the same branch, `npm run check` passed strict TypeScript, lint with zero warnings, **272 tests across 35 files**, the production build and release-content verification. New checks cover description-only generation with inferred deck/topic names, editable review destinations, folder attachments, stale source handling, invalid AI destinations, draft restoration, legacy requests and destination locking across failed saves and reloads.
+
+A local desktop browser preview compared the real new-test and flashcard composers and confirmed matching placement, sizing and spacing. It then generated cards from a description alone, changed the proposed destination, saved through the real card writer and opened the resulting deck. This preview uses the actual Qard components with an in-memory vault, mocked Markdown rendering and a mocked AI provider; native Obsidian and live AI generation have not been checked for this change.
