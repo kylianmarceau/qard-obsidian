@@ -1,5 +1,6 @@
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
+import { CardContent } from './CardContent';
 import { Markdown } from './Markdown';
 
 export function StudyCard({ card, revealed, services }: { card: QardCard; revealed: boolean; services: QardServices }) {
@@ -8,11 +9,11 @@ export function StudyCard({ card, revealed, services }: { card: QardCard; reveal
   return <div className="qard-study-stage">
     <div className={'qard-study-card' + (revealed ? ' is-revealed' : '')}>
       <article className="qard-study-face qard-study-front" aria-hidden={revealed} inert={revealed}>
-        <div className="qard-study-question"><Markdown text={card.frontMarkdown} path={card.sourceFile} services={services}/></div>
+        <div className="qard-study-question"><CardContent front={card.frontMarkdown} back={card.backMarkdown} format={card.format} revealed={false} path={card.sourceFile} services={services}/></div>
       </article>
       <article className="qard-study-face qard-study-back" aria-hidden={!revealed} inert={!revealed}>
-        <div className="qard-study-question"><Markdown text={card.frontMarkdown} path={card.sourceFile} services={services}/></div>
-        <div className="qard-study-answer"><Markdown text={card.backMarkdown} path={card.sourceFile} services={services}/></div>
+        <div className="qard-study-question"><CardContent front={card.frontMarkdown} back="" format={card.format} revealed path={card.sourceFile} services={services}/></div>
+        {card.backMarkdown && <div className="qard-study-answer"><Markdown text={card.backMarkdown} path={card.sourceFile} services={services}/></div>}
       </article>
     </div>
   </div>;

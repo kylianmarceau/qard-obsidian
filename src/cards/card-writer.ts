@@ -1,9 +1,9 @@
 import { TFile, normalizePath, type App } from 'obsidian';
-import type { QardCard } from './card-types';
+import type { CardFormat, QardCard } from './card-types';
 import type { VaultIndexer } from './indexer';
 import { deleteCardInSource, deleteGroupInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
 import { parseCards } from './parser';
-export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string }
+export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string; format?: CardFormat }
 export function safeFolder(folder: string): string {
   if (/^(?:[\\/]|[A-Za-z]:)/.test(folder) || folder.split(/[\\/]/).some(part => part === '..' || part.startsWith('.'))) throw new Error('Choose a normal vault folder, without hidden folders or parent paths.');
   return normalizePath(folder.trim()).replace(/^\.$/, '');
@@ -34,9 +34,9 @@ export class CardWriter {
     }
     return cards.map(c => resolved.get(c.id)!);
   }
-  async edit(card: QardCard, front: string, back: string) {
+  async edit(card: QardCard, front: string, back: string, format: CardFormat | null | undefined = card.format) {
     this.unique(card); const file = this.file(card.sourceFile), id = card.stable ? card.id : crypto.randomUUID();
-    await this.app.vault.process(file, source => replaceCardInSource(source, card, front, back, id));
+    await this.app.vault.process(file, source => replaceCardInSource(source, card, front, back, id, format));
     await this.index.refresh(file);
     return this.index.getSnapshot().cards.find(c => c.id === id)!;
   }
@@ -55,13 +55,13 @@ export class CardWriter {
     }
   }
   /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
-  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string }[]): Promise<QardCard[]> {
+  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string; format?: CardFormat }[]): Promise<QardCard[]> {
     const deck = target.deck.trim(), topic = target.topic.trim() || 'General', folder = safeFolder(target.folder);
     if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
     if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) throw new Error('Invalid batch ID.');
     if (!cards.length || new Set(cards.map(c => c.id)).size !== cards.length) throw new Error('Choose distinct cards to add.');
     // Validate the whole batch before making any changes.
-    cards.forEach(c => serializeCard(c.id, c.front, c.back));
+    cards.forEach(c => serializeCard(c.id, c.front, c.back, '\n', c.format));
     const slug = deck.replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
     const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
     const append = (source: string) => {
@@ -73,7 +73,7 @@ export class CardWriter {
       const pending = cards.filter(c => !existing.some(old => old.id === c.id));
       if (!pending.length) return source;
       const eol = source.includes('\r\n') ? '\r\n' : '\n';
-      const next = source + eol + `# ${topic}${eol}${eol}` + pending.map(c => serializeCard(c.id, c.front, c.back, eol)).join(eol);
+      const next = source + eol + `# ${topic}${eol}${eol}` + pending.map(c => serializeCard(c.id, c.front, c.back, eol, c.format)).join(eol);
       const parsed = parseCards(next, path).cards;
       if (cards.some(c => parsed.filter(p => p.id === c.id && p.deck === deck && p.topic === topic).length !== 1)) throw new Error('The generated note changed or has an unfinished Markdown block. Reopen its source before adding cards.');
       return next;
@@ -97,7 +97,7 @@ export class CardWriter {
     if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
     const id = crypto.randomUUID();
     // Validate before creating directories or notes.
-    serializeCard(id, draft.front, draft.back);
+    serializeCard(id, draft.front, draft.back, '\n', draft.format);
     let file: TFile | undefined;
     if (draft.sourceFile) {
       const existing = this.file(draft.sourceFile);
@@ -112,7 +112,7 @@ export class CardWriter {
         const eol = source.includes('\r\n') ? '\r\n' : '\n';
         const override: unknown = this.app.metadataCache.getFileCache(file!)?.frontmatter?.['qard-topic'];
         if (typeof override === 'string' && override.trim() !== topic) throw new Error(`This note fixes its topic to “${override}”. Choose that topic or create the card in a new note.`);
-        const next = source + (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) + `# ${topic}${eol}${eol}` + serializeCard(id, draft.front, draft.back, eol);
+        const next = source + (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) + `# ${topic}${eol}${eol}` + serializeCard(id, draft.front, draft.back, eol, draft.format);
         const created = parseCards(next, file!.path).cards.find(c => c.id === id);
         if (!created || created.deck !== deck || created.topic !== topic) throw new Error('This note changed or has an unfinished Markdown block. Fix its source or choose a new note before adding a card.');
         return next;
@@ -126,7 +126,7 @@ export class CardWriter {
       const base = [folder, slug].filter(Boolean).join('/');
       let path = base + '.md', n = 2;
       while (this.app.vault.getAbstractFileByPath(path)) path = `${base} ${n++}.md`;
-      file = await this.app.vault.create(path, `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${serializeCard(id, draft.front, draft.back)}`);
+      file = await this.app.vault.create(path, `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${serializeCard(id, draft.front, draft.back, '\n', draft.format)}`);
     }
     await this.index.refresh(file);
     const card = this.index.getSnapshot().cards.find(c => c.id === id);

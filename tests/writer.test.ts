@@ -23,3 +23,12 @@ it('does not write to a different deck when cached metadata is stale', async () 
   const source = '---\nqard-deck: Changed\n---\n'; const { writer, read } = setup(source);
   await expect(writer.create(draft)).rejects.toThrow('changed'); expect(read()).toBe(source);
 });
+it('creates, edits and converts a cloze card without losing its stable identity or neighbouring prose', async () => {
+  const source = '---\nqard-deck: Networks\n---\n\nOriginal prose.\n'; const { writer, read } = setup(source);
+  const card = await writer.create({ ...draft, front: 'TCP is {{reliable}}.', back: '', format: { type: 'cloze' } });
+  expect(card.format).toEqual({ type: 'cloze' });
+  const edited = await writer.edit(card, 'TCP is {{ordered}}.', 'Transport', { type: 'cloze' });
+  expect(edited.id).toBe(card.id); expect(read().startsWith(source)).toBe(true);
+  const basic = await writer.edit(edited, 'What does TCP guarantee?', 'Ordered delivery', null);
+  expect(basic.id).toBe(card.id); expect(basic.format).toBeUndefined();
+});

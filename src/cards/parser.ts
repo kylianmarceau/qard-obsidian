@@ -1,5 +1,6 @@
 import { parseDocument } from 'yaml';
-import type { ParseResult, QardCard } from './card-types';
+import type { CardFormat, ParseResult, QardCard } from './card-types';
+import { readCardFormat, validateCardFormat } from './card-format';
 
 interface Line { text: string; start: number; end: number }
 export function sourceLines(source: string): Line[] {
@@ -67,11 +68,22 @@ export function parseCards(source: string, path: string, onTopic?: (line: number
     let end = i + 1;
     let insideFence = (match[1] || '').match(fenceStart)?.[1] || '';
     let separator = -1;
+    let format: CardFormat | undefined;
+    let formatError = '';
     const body: string[] = [];
     while (end < lines.length) {
       const content = lines[end]!.text.match(quoted);
       if (!content) break;
       const value = content[1]!;
+      if (!insideFence && end === i + 1 && value.startsWith('<!-- qard-format:')) {
+        try {
+          const metadata = value.match(/^<!-- qard-format: (.*) -->$/);
+          if (!metadata) throw new Error('Invalid card format metadata.');
+          format = readCardFormat(JSON.parse(metadata[1]!));
+        } catch (e) { formatError = (e as Error).message; }
+        end++; continue;
+      }
+      if (end === i + 2 && format?.type === 'occlusion' && value === `![[${format.image}]]`) { end++; continue; }
       if (!insideFence && header.test(lines[end]!.text)) break;
       if (insideFence) { if (closesFence(value, insideFence)) insideFence = ''; }
       else {
@@ -85,7 +97,9 @@ export function parseCards(source: string, path: string, onTopic?: (line: number
     const title = match[1] || '';
     const front = separator >= 0 ? [title, ...body.slice(0, separator)].join('\n').trim() : title.trim();
     const back = (separator >= 0 ? body.slice(separator + 1) : body).join('\n').trim();
-    if (!front || !back || insideFence) {
+    try { validateCardFormat(format, front); } catch (e) { formatError = (e as Error).message; }
+    if (formatError) { issue(i, formatError); i = end - 1; continue; }
+    if (!front || (!back && !format) || insideFence) {
       issue(i, !front ? 'Qard callout needs a question.' : !back ? 'Qard callout needs an answer.' : 'Qard callout has an unclosed code fence.');
       i = end - 1; continue;
     }
@@ -94,12 +108,12 @@ export function parseCards(source: string, path: string, onTopic?: (line: number
     const identity = idLine >= start ? lines[idLine]!.text.match(idComment)?.[1] : undefined;
     const first = identity ? lines[idLine]! : line;
     const finish = lines[end - 1]!.end;
-    const fingerprint = hash(front + '\0' + back);
+    const fingerprint = hash(front + '\0' + back + (format ? '\0' + JSON.stringify(format) : ''));
     const occurrence = occurrences.get(fingerprint) || 0;
     occurrences.set(fingerprint, occurrence + 1);
     const inlineTags = [...(front + '\n' + back).matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]+)/gu)].map(m => m[1]!);
     result.cards.push({ id: identity || `volatile:${path}:${fingerprint}:${occurrence}`, stable: !!identity, deck, topic: topicOverride || topic,
-      frontMarkdown: front, backMarkdown: back, sourceFile: path,
+      frontMarkdown: front, backMarkdown: back, ...(format ? { format } : {}), sourceFile: path,
       sourcePosition: { start: first.start, end: finish, calloutStart: line.start, line: i },
       sourceText: source.slice(first.start, finish), tags: [...new Set([...tags, ...inlineTags])] });
     i = end - 1;
@@ -107,7 +121,7 @@ export function parseCards(source: string, path: string, onTopic?: (line: number
   return result;
 }
 export function sameContent(a: QardCard, b: QardCard) {
-  return a.frontMarkdown === b.frontMarkdown && a.backMarkdown === b.backMarkdown;
+  return a.frontMarkdown === b.frontMarkdown && a.backMarkdown === b.backMarkdown && JSON.stringify(a.format) === JSON.stringify(b.format);
 }
 
 /** Same heading rules as indexing, including code fences and file overrides. */

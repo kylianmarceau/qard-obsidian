@@ -1,3 +1,6 @@
+export interface ImageMask { x: number; y: number; width: number; height: number }
+/** Image coordinates are percentages, independent of display size. */
+export type CardFormat = { type: 'cloze' } | { type: 'occlusion'; image: string; masks: ImageMask[] };
 export interface QardCard {
   /** Persistent ID, or a temporary read-only index key until an ID is assigned. */
   id: string;
@@ -7,6 +10,7 @@ export interface QardCard {
   topic: string;
   frontMarkdown: string;
   backMarkdown: string;
+  format?: CardFormat;
   sourceFile: string;
   sourcePosition: { start: number; end: number; line: number; calloutStart: number };
   sourceText: string;
