@@ -15,6 +15,8 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
   const [confirmExit, setConfirmExit] = useState(false);
   const lock = useRef(false), surface = useRef<HTMLDivElement>(null), mounted = useRef(true), start = useRef(Date.now());
   const card = cards[position];
+  // Study time is split by deck, card by card.
+  useEffect(() => { services.time?.set(services.owner, { activity: 'cards', course: card?.deck }); }, [services, card?.deck]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; services.setFocus(false); }; }, [services]);
   useEffect(() => { services.setFocus(focus); return () => services.setFocus(false); }, [focus, services]);
   useEffect(() => { surface.current?.focus(); }, [position]);
@@ -24,6 +26,8 @@ export function StudyView({ cards, services, exit, repeat }: { cards: QardCard[]
     lock.current = true; setBusy(true); setError('');
     try {
       await services.reviews.review(card.id, rating);
+      // Two lapses on a card made for a mastered objective mark it as slipping.
+      if (rating === 1) void services.learn?.cardLapse(card.id).catch(() => {});
       if (mounted.current) { setResults(old => [...old, { cardId: card.id, rating }]); setPosition(i => i + 1); setRevealed(false); }
     } catch (e) { if (mounted.current) setError((e as Error).message || 'Could not save your review. Try again.'); }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
