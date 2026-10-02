@@ -1,7 +1,7 @@
 import { flashcardsSchema } from '../cards/generation-schema';
 import type { Schema } from '../tests/test-schema';
 import { askSchema, disputeSchema, marksSchema, planSchema, retrySchema, testSchema, wrapupSchema } from '../tests/test-schema';
-import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema } from '../learn/learn-schema';
+import { answerSchema, closeSchema, courseUpdateSchema, figureSchema, mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema } from '../learn/learn-schema';
 import type { Usage } from './usage';
 
 /** Per-day totals, keyed "feature|role|connection|model". */
@@ -14,7 +14,7 @@ const PURPOSES = new Map<Schema, string>([
   [retrySchema, 'Test review'], [askSchema, 'Test review'], [disputeSchema, 'Test review'],
   [objectivesSchema, 'Course mapping'], [courseUpdateSchema, 'Course mapping'], [questionsSchema, 'Writing checks'],
   [probeSchema, 'Lesson planning'], [probeMapSchema, 'Lesson planning'], [mapSchema, 'Lesson planning'], [stepSchema, 'Writing lessons'],
-  [tutorMarkSchema, 'Tutoring'], [answerSchema, 'Tutoring'], [closeSchema, 'Lesson wrap-ups']
+  [tutorMarkSchema, 'Tutoring'], [answerSchema, 'Tutoring'], [closeSchema, 'Lesson wrap-ups'], [figureSchema, 'Figures']
 ]);
 export const purposeOf = (schema: Schema) => PURPOSES.get(schema) ?? 'Other';
 export const usageKey = (purpose: string, role: string, provider: string, model: string) => [purpose, role, provider, model || 'default'].join('|');

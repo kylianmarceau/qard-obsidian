@@ -666,6 +666,28 @@ div.qard-ask-q { cursor: default; }
 .qard-jobs-stuck { color: var(--text-warning, #d9822b); font-size: 11px; }
 .qard-ask-thinking { display: flex; align-items: center; gap: 12px; }
 
+/* Figures the illustrator draws */
+.qard-figure { margin: 16px 0; padding: 0; }
+.qard-figure .qard-markdown img { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: 8px; background: #fff; }
+.qard-figure .qard-markdown p:last-child { margin-bottom: 0; color: var(--qard-muted); font-size: 14px; text-align: center; }
+.qard-figure.is-drawing { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 14px 16px; border: 1px dashed var(--qard-border); border-radius: 8px; }
+.qard-figure-tools { display: flex; justify-content: flex-end; }
+.qard-figure-redraw { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.qard-figure-redraw input { flex: 1; min-width: 0; }
+.qard-lesson-draw { display: flex; justify-content: flex-end; }
+.qard-lesson-draw:empty { display: none; }
+.qard-app button.qard-draw { display: inline-flex; align-items: center; gap: 5px; }
+
+/* Study time */
+.qard-usage-bar .is-cards, .qard-usage-legend .is-cards i { background: var(--qard-blue); }
+.qard-usage-bar .is-lessons, .qard-usage-legend .is-lessons i { background: #8839ef; }
+.qard-usage-bar .is-checks, .qard-usage-legend .is-checks i { background: var(--qard-ok); }
+.qard-usage-bar .is-tests, .qard-usage-legend .is-tests i { background: #fe640b; }
+.qard-usage-bar .is-planning, .qard-usage-legend .is-planning i { background: #04a5e5; }
+.qard-usage-bar .is-browsing, .qard-usage-legend .is-browsing i { background: color-mix(in srgb, var(--qard-muted) 35%, transparent); }
+.qard-time-line { margin: 4px 0 0; }
+.qard-time-line button.qard-text-button { padding: 0; font-size: inherit; }
+
 /* Delete actions remain separate from row navigation and visible on touch screens. */
 .qard-deletable-row { display: flex; align-items: center; gap: 10px; }
 .qard-deletable-row > button { flex: 1; min-width: 0; }

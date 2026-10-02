@@ -18,6 +18,7 @@ export interface NodeHost {
   windows: boolean;
 }
 const TIMEOUT = 10 * 60_000;
+const limit = (ms: number) => ms < 120_000 ? `${Math.round(ms / 1000)} seconds` : `${Math.round(ms / 60_000)} minutes`;
 
 /** Run a process, send `input` on stdin, and resolve with stdout. */
 export function runProcess(host: NodeHost, command: string, args: string[], input: string, options: { cwd: string; path: string; signal?: AbortSignal; timeout?: number }): Promise<string> {
@@ -26,7 +27,7 @@ export function runProcess(host: NodeHost, command: string, args: string[], inpu
     let out = '', err = '', done = false;
     const finish = (fn: () => void) => { if (done) return; done = true; window.clearTimeout(timer); options.signal?.removeEventListener('abort', abort); fn(); };
     const abort = () => { child.kill(); finish(() => reject(new Error('Cancelled.'))); };
-    const timer = window.setTimeout(() => { child.kill(); finish(() => reject(new Error('The agent took longer than 10 minutes and was stopped.'))); }, options.timeout ?? TIMEOUT);
+    const timer = window.setTimeout(() => { child.kill(); finish(() => reject(new Error(`It took longer than ${limit(options.timeout ?? TIMEOUT)} and was stopped.`))); }, options.timeout ?? TIMEOUT);
     options.signal?.addEventListener('abort', abort);
     child.stdout?.on('data', chunk => { out += chunk.toString(); });
     child.stderr?.on('data', chunk => { err += chunk.toString(); });

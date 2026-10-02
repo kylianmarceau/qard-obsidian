@@ -13,11 +13,13 @@ import { topicKey } from './decks/deck-index';
 import { parseCards, topicAtLine } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
-import { createRunner, type UsageEvent } from './agents/create-runner';
+import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
+import { pythonRunner } from './agents/python';
 import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
 import { VaultLearnStorage } from './learn/vault-learn-storage';
 import { isoDay, objectiveLines } from './learn/mastery';
+import { StudyClock } from './time/study-time';
 import { scheduler } from './review/scheduler';
 import { JobClock } from './jobs/job-clock';
 export default class QardPlugin extends Plugin {
@@ -28,6 +30,7 @@ export default class QardPlugin extends Plugin {
   tests!: TestService;
   learn!: LearnService;
   jobs!: JobClock;
+  time!: StudyClock;
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
   async onload() {
@@ -43,9 +46,17 @@ export default class QardPlugin extends Plugin {
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };
     this.jobs = new JobClock(() => this.reviews.getSnapshot().timings, (key, ms) => this.reviews.recordTiming(key, ms), () => settings().agents.roles);
     const timing = (kind: string, ms: number) => this.jobs.record(kind, ms);
+    // Study time counts while a Qard view is in front, Obsidian has focus, and you've been active recently.
+    this.time = new StudyClock(() => Date.now(), () => {
+      const view = this.app.workspace.getActiveViewOfType(QardView);
+      return view && !activeDocument.hidden && activeDocument.hasFocus() ? view : undefined;
+    }, log => this.reviews.recordStudy(log, isoDay(Date.now())));
+    for (const event of ['keydown', 'pointerdown', 'pointermove', 'wheel'] as const) this.registerDomEvent(window, event, () => this.time.input(), { passive: true });
+    this.registerInterval(window.setInterval(() => this.time.tick(), 5000));
+    this.registerInterval(window.setInterval(() => void this.time.flush().catch(() => {}), 60_000));
     this.flashcards = new FlashcardGenerationService(new VaultTestStorage(this.app), () => settings().cardFolder, () => this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(settings().tests.folder.replace(/\/+$/, '') + '/')).map(f => f.path), () => runner('writer'), this.writer, message => new Notice(message, 8000), timing);
     void this.flashcards.load();
-    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing);
+    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing, (() => { const host = nodeHost(); return host && pythonRunner(host); })());
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
       record: (test, attempt) => this.learn.recordTest(test, attempt)
@@ -59,6 +70,7 @@ export default class QardPlugin extends Plugin {
     this.addCommand({ id: 'open-today', name: 'Open today', callback: () => this.show('today') });
     this.addCommand({ id: 'open-learn', name: 'Open courses', callback: () => this.show('learn') });
     this.addCommand({ id: 'open-usage', name: 'Show token usage', callback: () => this.show('usage') });
+    this.addCommand({ id: 'open-study-time', name: 'Show study time', callback: () => this.show('time') });
     this.addCommand({ id: 'teach-this-note', name: 'Teach me this note', checkCallback: checking => {
       const file = this.app.workspace.getActiveFile(); if (!file || file.extension !== 'md') return false;
       if (!checking) void this.teach(file);
@@ -107,7 +119,7 @@ export default class QardPlugin extends Plugin {
     return leaf.view;
   }
   openImport() { new ImportModal(this).open(); }
-  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
+  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'time') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
   async teach(file: TFile) {
     const path = await this.learn.startLesson({ topic: file.basename, notes: [file.path] });
     const view = await this.open(); view.show({ serial: Date.now(), kind: 'lesson', path });
@@ -125,6 +137,7 @@ export default class QardPlugin extends Plugin {
     this.disposed = true;
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
+    void this.time?.flush().catch(() => {});
     this.flashcards?.dispose(); this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
   }
 }

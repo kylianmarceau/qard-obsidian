@@ -10,7 +10,7 @@ import { scoreTone } from '../tests/common';
 export type LearnNav = {
   library: () => void; today: () => void; learn: () => void; mapCourse: (folder?: string) => void;
   course: (path: string, objective?: string) => void; check: (path: string) => void; lesson: (path: string) => void;
-  studyDue: () => void; usage?: () => void;
+  studyDue: () => void; usage?: () => void; time?: () => void;
 };
 /** Re-renders when the learn service changes, and exposes its jobs. */
 export function useLearn(services: QardServices) {

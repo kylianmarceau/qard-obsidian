@@ -2,8 +2,8 @@ import type { Schema } from '../tests/test-schema';
 import type { Usage } from './usage';
 
 export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter';
-/** Tutor replies live and should be fast; the writer and marker favour quality. */
-export type AgentRole = 'tutor' | 'writer' | 'marker';
+/** Tutor replies live and should be fast; the writer and marker favour quality; the illustrator draws figures. */
+export type AgentRole = 'tutor' | 'writer' | 'marker' | 'illustrator';
 /**
  * vault: false when the prompt already holds everything needed, so API runners skip the note tools.
  * effort: how hard to think, where the provider supports it.

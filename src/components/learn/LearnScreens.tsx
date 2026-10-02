@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ChevronRight, FileText, Folder, Plus } from 'lucide-react';
 import { TFolder } from 'obsidian';
 import type { QardServices } from '../../views/services';
+import { StudyTimeLine } from '../usage/StudyTimeView';
 import type { Mastery, Objective } from '../../learn/mastery';
 import { CourseMap, CourseProgress } from './CourseMap';
 import { InlineMarkdown } from '../Markdown';
@@ -48,7 +49,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const nothing = !today.checks.length && !today.cards && !today.lessons.length;
   const open = (item: TodayItem) => item.check ? nav.check(item.check) : undefined;
   return <div className="qard-doc">
-    <header><h1>Today</h1><p className="qard-muted">{nothing ? 'Nothing is due. Map a course or make a test to keep going.' : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. Checks first, then cards.`}</p></header>
+    <header><h1>Today</h1><p className="qard-muted">{nothing ? 'Nothing is due. Map a course or make a test to keep going.' : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. Checks first, then cards.`}</p><StudyTimeLine services={services} days={1} open={nav.time}/></header>
     {today.checks.length > 0 && <section><h2>Checks</h2>{today.checks.map(c => { const writing = job(`${c.mastery}#${c.objective}`, 'check-write'); return <div key={c.mastery + c.objective}>
       <button className="qard-doc-row qard-row-button" disabled={!c.check} onClick={() => open(c)}><span><InlineMarkdown text={c.title} path={c.mastery} services={services}/></span><span className="qard-muted">{c.course}</span><StateChip state={c.state}/>{c.check ? <ChevronRight size={15}/> : <span className="qard-muted">{writing?.error ? '' : 'Writing…'}</span>}</button>
       <JobError job={writing} retry={() => void services.learn.ensureCheck(c.mastery, c.objective)}/>
@@ -68,7 +69,7 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
   const day = isoDay(Date.now());
   const open = lessons.filter(l => !l.finished), recent = lessons.filter(l => l.finished).slice(0, 5);
   return <>
-    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
+    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.time && <button className="qard-text-button" onClick={nav.time}>Study time</button>}{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
     {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}><AgentLabel services={services} role="writer"/></Waiting><DeleteLearnItem services={services} kind="mapping" path={f}/></div>)}
     {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
@@ -148,7 +149,7 @@ export function CourseView({ services, nav, path, objective }: { services: QardS
   const mapActions = { openLesson: (p: string) => nav.lesson(p), teach: (o: Objective) => void teach(services, nav, { mastery: path, objective: o.id, title: o.title }).catch(e => setError((e as Error).message)), check: (o: Objective) => void check(o.id), openNote: (n: string) => void services.app.workspace.openLinkText(n, path, true), busy: (id: string) => busy === id || (!!job(`${path}#${id}`, 'check-write') && !job(`${path}#${id}`, 'check-write')?.error) };
   return <article className="qard-course">
     <header className="qard-course-head">
-      <div><span className="qard-muted">Course</span><h1>{course.course}</h1></div>
+      <div><span className="qard-muted">Course</span><h1>{course.course}</h1><StudyTimeLine services={services} course={course.course} days={30} open={nav.time}/></div>
       <div className="qard-actions">
         <div className="qard-segmented" role="tablist"><button role="tab" aria-selected={view === 'map'} onClick={() => setView('map')}>Map</button><button role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}>List</button></div>
         <button onClick={() => setUpdating(true)}>Update objectives</button>

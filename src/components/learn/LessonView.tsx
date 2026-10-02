@@ -12,6 +12,8 @@ import { AnswerInput, MarkedAnswer, StateChip, TutorHint, answered, relativeDay,
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 import { JobControls } from '../jobs/JobControls';
 import { tidyMermaid } from '../../learn/mermaid';
+import { DrawButton, FigureView } from './FigureView';
+import { firstSentences } from '../../learn/learn-schema';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: LearnNav; lesson: Lesson }) {
@@ -80,8 +82,9 @@ function LessonMapView({ services, path, lesson }: { services: QardServices; pat
   const map = lesson.map!, revising = job(path, 'revise'), busy = !!revising && !revising.error, probe = lesson.probe;
   const where = lesson.notes[0] ?? path;
   return <article className="qard-doc">
-    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1><InlineMarkdown text={map.title} path={where} services={services}/></h1>{probe?.findings && <div className="qard-lesson-findings"><Markdown text={probe.findings} path={where} services={services}/></div>}</header>
-    {probe && probe.questions.length > 0 && <section className="qard-probe-results">{probe.questions.map(q => { const m = probe.marks?.[q.id]; const ok = !!m && m.score >= q.marks; return <div key={q.id} className="qard-doc-row"><span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span><div className="qard-probe-prompt"><Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services}/></div></div>; })}</section>}
+    <header><span className="qard-muted">Lesson plan{lesson.course ? ` · ${lesson.course}` : ''}</span><h1><InlineMarkdown text={map.title} path={where} services={services}/></h1></header>
+    {probe && (probe.findings || probe.questions.length > 0) && <section className="qard-probe-results"><h2>What your answers show</h2>
+      {probe.findings && <div className="qard-doc-body"><Markdown text={firstSentences(probe.findings)} path={where} services={services}/></div>}{probe.questions.map(q => { const m = probe.marks?.[q.id]; const ok = !!m && m.score >= q.marks; return <div key={q.id} className="qard-doc-row"><span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span><div className="qard-probe-prompt"><Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services}/></div></div>; })}</section>}
     <section><h2>Plan</h2><div className="qard-doc-body"><Markdown text={map.plan} path={where} services={services}/></div></section>
     {map.mermaid.trim() && <section className="qard-lesson-map"><Markdown text={'```mermaid\n' + tidyMermaid(map.mermaid) + '\n```'} path={where} services={services}/></section>}
     <section><h2>Steps</h2>{map.steps.map((s, i) => <div key={i} className="qard-doc-section"><span className="qard-muted">{i + 1}</span><div><strong><InlineMarkdown text={s.title} path={where} services={services}/></strong><div className="qard-doc-why"><Markdown text={s.why} path={where} services={services}/></div></div><span/></div>)}</section>
@@ -99,7 +102,7 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
   const { job } = useLearn(services);
   const [retry, setRetry] = useState('');
   const index = lesson.current, step = lesson.steps[index], st = lesson.state[index], plan = lesson.map!.steps[index];
-  const writing = job(path, 'steps'), tutor = job(path, 'tutor', String(index)), retrying = job(path, 'tutor', `${index}-retry`), asking = job(path, 'ask', String(index));
+  const writing = job(path, 'steps'), tutor = job(path, 'tutor', String(index)), retrying = job(path, 'tutor', `${index}-retry`), asking = job(path, 'ask', String(index)), drawing = job(path, 'figure', String(index));
   const running = (j?: { error?: string }) => !!j && !j.error;
   const where = lesson.notes[0] ?? path, last = index === lesson.steps.length - 1;
   useEffect(() => { setRetry(''); }, [index]);
@@ -111,7 +114,10 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
     {!step && writing?.error ? <JobError job={writing} retry={() => void services.learn.writeSteps(path)}/>
       : !step || hold.held ? <WhileYouWait services={services} title="Writing this step…" job={writing} ready={!!step} readyLabel="This step is ready" onEngage={hold.engage} onContinue={hold.release} context={context}
         cancel={() => services.learn.cancel(path, 'steps')} start={() => void services.learn.writeSteps(path)}/> : <>
-      {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/><div className="qard-lesson-connect"><Markdown text={step.connect} path={where} services={services}/></div></section>}
+      {explain && <section className="qard-lesson-explain"><Markdown text={step.explain} path={where} services={services}/>
+        <FigureView services={services} path={where} figure={st?.figure} job={drawing} draw={r => void services.learn.illustrate(path, index, undefined, r)} cancel={() => services.learn.cancel(path, 'figure', String(index))} dismiss={() => services.learn.dismiss(path, 'figure', String(index))}/>
+        <div className="qard-lesson-connect"><Markdown text={step.connect} path={where} services={services}/></div>
+        <div className="qard-lesson-draw"><DrawButton figure={st?.figure} job={drawing} draw={() => void services.learn.illustrate(path, index)}/></div></section>}
       {!st?.mark ? <>
         {step.checkFirst && <p className="qard-label">Try this first. Work it out from what you know.</p>}
         <AnswerInput services={services} question={step.check} answer={st?.answer} locked={running(tutor)} path={where} label={step.checkFirst ? 'Before the explanation' : 'Check'} onChange={patch => services.learn.answerStep(path, patch)}/>
@@ -131,6 +137,9 @@ function LessonSteps({ services, path, lesson, context }: { services: QardServic
       </section>}
       <AskThread key={index} services={services} path={where} items={st?.asks ?? []} busy={running(asking)} error={asking?.error} role="tutor" title="Questions about this step" placeholder="Ask anything about this step…"
         ask={q => void services.learn.ask(path, q)} dismiss={() => services.learn.dismiss(path, 'ask', String(index))} cancel={() => services.learn.cancel(path, 'ask', String(index))}
+        figure={i => { const id = `${index}-ask-${i}`, j = job(path, 'figure', id), f = st?.asks[i]?.figure; return {
+          body: <FigureView services={services} path={where} figure={f} job={j} draw={r => void services.learn.illustrate(path, index, i, r)} cancel={() => services.learn.cancel(path, 'figure', id)} dismiss={() => services.learn.dismiss(path, 'figure', id)}/>,
+          action: <DrawButton figure={f} job={j} draw={() => void services.learn.illustrate(path, index, i)}/> }; }}
         card={lessonCardTarget(services, lesson)} onCard={id => { if (lesson.mastery && lesson.objective) void services.learn.linkCard(id, lesson.mastery, lesson.objective); }}/>
     </>}
     <div className="qard-test-footer">

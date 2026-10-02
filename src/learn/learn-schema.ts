@@ -22,12 +22,13 @@ export const questionsSchema = obj({ questions: arr(questionSchema) });
 export const probeSchema = obj({ questions: arr(questionSchema), note: str('One sentence on what the probe checks, or why none is needed.') });
 const mapProps = { title: str('At most eight words.'), plan: str('Two to four sentences, addressed to the student.'), mermaid: str('A small Mermaid flowchart (graph TD) from starting facts at the top to the goal at the bottom. Put every node label in double quotes, e.g. A["x[[1]] picks one"]. No code fences.'), objective: str('Mastery objective id this lesson teaches, if one fits.'), steps: arr(obj({ title: str(), why: str('One sentence: why this step is needed now.') })) };
 export const mapSchema = obj(mapProps, ['objective']);
-export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps })), findings: str('One or two sentences on what the answers show, addressed to the student.'), map: mapSchema });
+export const probeMapSchema = obj({ marks: arr(obj({ id: str(), ...markProps })), findings: str('One or two sentences, at most 50 words, on what the answers show, addressed to the student.'), map: mapSchema });
 export const stepSchema = obj({
   title: str(), explain: str('Markdown. Establish the idea from what the student already accepts, showing how it could have been discovered.'),
   connect: str('One or two sentences linking it to the previous step and the goal.'), checkFirst: { type: 'boolean' },
-  check: questionSchema, misconceptions: arr(obj({ signs: str('What an answer showing this mistake looks like.'), reteach: str('Markdown: a short re-explanation aimed at this mistake.') }))
-});
+  check: questionSchema, misconceptions: arr(obj({ signs: str('What an answer showing this mistake looks like.'), reteach: str('Markdown: a short re-explanation aimed at this mistake.') })),
+  figure: str('"" for none (the usual case), or a brief for the illustrator: what the figure must show, with the exact functions, parameters or values, and why it helps.')
+}, ['figure']);
 export const tutorMarkSchema = obj({ ...markProps, reply: str('Markdown, at most 80 words, addressed to the student.'), misconception: { type: 'integer', description: 'Index of the anticipated misconception the answer shows, or -1.' } });
 export const answerSchema = obj({ answer: str('Markdown, at most 150 words.') });
 export const closeSchema = obj({
@@ -59,6 +60,31 @@ export function readProbeMap(v: unknown, expected: { id: string; rubric: number 
   ]);
 }
 export const readStep = (v: unknown) => check<LessonStep>(stepSchema, v, s => questionErrors([s.check], 'check'));
+export const figureSchema = obj({
+  kind: oneOf(['python', 'svg']),
+  code: str('For python: a matplotlib script that draws the figure (Qard sets the style and saves it). For svg: the complete SVG document.'),
+  caption: str('One or two sentences: what the figure shows, naming the specific parameters or values. LaTeX in $…$.'),
+  name: str('A descriptive file name: lowercase, hyphens, no dates, e.g. "beta-shapes-by-alpha".'),
+  domain: str('The subject folder, e.g. "statistics". Prefer an existing one.')
+});
+export interface FigureReply { kind: 'python' | 'svg'; code: string; caption: string; name: string; domain: string }
+export const readFigure = (v: unknown, python: boolean) => check<FigureReply>(figureSchema, v, f => f.kind === 'python' && !python ? ['kind must be "svg": Python is not available'] : f.code.trim() ? [] : ['code is empty']);
 export const readTutorMark = (v: unknown, rubric: number) => check<QuestionMark & { reply: string; misconception: number }>(tutorMarkSchema, v, m => m.awarded.length === rubric ? [] : [`awarded needs ${rubric} entries`]);
 export const readAnswer = (v: unknown) => check<{ answer: string }>(answerSchema, v);
 export const readClose = (v: unknown) => check<{ summary: string; cards: { front: string; back: string }[]; noteEdit?: { path: string; heading: string; text: string } }>(closeSchema, v);
+
+/**
+ * The first few sentences of an agent's text, within a word limit. Models sometimes ignore "one or two
+ * sentences" and ramble or repeat; this keeps short fields short. Never splits inside $…$ maths.
+ */
+export function firstSentences(text: string, sentences = 2, maxWords = 60): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  let maths = false, count = 0, end = clean.length;
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean[i]!;
+    if (c === '$' && clean[i - 1] !== '\\') maths = !maths;
+    else if (!maths && /[.!?]/.test(c) && (i === clean.length - 1 || /\s/.test(clean[i + 1]!)) && ++count === sentences) { end = i + 1; break; }
+  }
+  const words = clean.slice(0, end).split(' ');
+  return words.length <= maxWords ? clean.slice(0, end) : `${words.slice(0, maxWords).join(' ').replace(/[,;:—–-]+$/, '')}…`;
+}

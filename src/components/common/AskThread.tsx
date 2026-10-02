@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentRole } from '../../agents/runner';
@@ -16,11 +16,13 @@ const preview = (text: string) => text.replace(/```[\s\S]*?```/g, ' ').replace(/
  * answer runs full width with an accent bar. Only the latest exchange is open; older ones fold to one line and open
  * on click. A question shows the moment it is sent, with "Thinking…" and who is answering; failures stay on its row.
  */
-export function AskThread({ services, path, items, busy, error, role, placeholder, ask, dismiss, cancel, card, onCard, title = 'Questions' }: {
+export function AskThread({ services, path, items, busy, error, role, placeholder, ask, dismiss, cancel, card, onCard, figure, title = 'Questions' }: {
   services: QardServices; path: string; items: AskItem[]; busy: boolean; error?: string; role: AgentRole; placeholder: string;
   ask: (question: string) => void; dismiss: () => void; cancel?: () => void;
   /** Where "Make card" puts a card; onCard receives the new card's id (to link it to an objective). */
   card?: CardTarget; onCard?: (cardId: string) => void; title?: string;
+  /** A figure under an answer (body) and its "Draw this" button (action), where answers can be illustrated. */
+  figure?: (index: number) => { body: ReactNode; action: ReactNode };
 }) {
   const [text, setText] = useState(''), [pending, setPending] = useState<string>(), [open, setOpen] = useState<Record<number, boolean>>({});
   const [editing, setEditing] = useState<number>(), [added, setAdded] = useState<Set<number>>(new Set()), [copied, setCopied] = useState<number>();
@@ -38,9 +40,11 @@ export function AskThread({ services, path, items, busy, error, role, placeholde
         <button className="qard-ask-q" aria-expanded="true" onClick={() => setOpen({ ...open, [i]: false })}>{item.q}</button>
         <div className="qard-ask-a">
           <Markdown text={item.a} path={path} services={services}/>
+          {figure?.(i).body}
           <div className="qard-ask-tools">
             <AgentLabel services={services} role={role}/>
             <span className="qard-spacer"/>
+            {figure?.(i).action}
             {card && (added.has(i) ? <span className="is-full qard-small"><CheckIcon size={13}/> Card added</span> : <button className="qard-text-button" onClick={() => setEditing(editing === i ? undefined : i)}>Make card</button>)}
             <button className="qard-text-button" aria-label="Copy answer" onClick={() => { void navigator.clipboard?.writeText(item.a).then(() => { setCopied(i); window.setTimeout(() => setCopied(undefined), 1500); }); }}>{copied === i ? <><CheckIcon size={13}/> Copied</> : <><Copy size={13}/> Copy</>}</button>
           </div>

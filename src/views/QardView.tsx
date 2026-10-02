@@ -19,7 +19,7 @@ export class QardView extends ItemView {
     this.contentEl.empty(); this.contentEl.addClass('qard-view-content');
     this.home = this.contentEl;
     this.host = this.contentEl.createDiv({ cls: 'qard-root' });
-    this.services = { app: this.app, owner: this, host: this.host, index: this.plugin.index, writer: this.plugin.writer, reviews: this.plugin.reviews, tests: this.plugin.tests, learn: this.plugin.learn, jobs: this.plugin.jobs, flashcards: this.plugin.flashcards,
+    this.services = { app: this.app, owner: this, host: this.host, index: this.plugin.index, writer: this.plugin.writer, reviews: this.plugin.reviews, tests: this.plugin.tests, learn: this.plugin.learn, jobs: this.plugin.jobs, flashcards: this.plugin.flashcards, time: this.plugin.time,
       setFocus: enabled => this.setFocus(enabled), isActive: () => this.app.workspace.getActiveViewOfType(QardView) === this,
       openSource: card => this.plugin.openSource(card) };
     this.root = createRoot(this.host); this.render();
@@ -39,6 +39,7 @@ export class QardView extends ItemView {
     }
   }
   release() {
+    this.plugin.time?.set(this, undefined);
     this.setFocus(false); this.root?.unmount(); this.root = undefined;
     this.host?.remove(); this.host = undefined;
     this.contentEl.removeClass('qard-view-content');

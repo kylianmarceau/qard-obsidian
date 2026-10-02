@@ -12,7 +12,7 @@ const EMPTY_FLASHCARDS: GenerationSnapshot = { saving: false, loading: false };
 const noSubscribe = () => () => {};
 const noSnapshot = () => EMPTY_FLASHCARDS;
 const TEST_LABELS: Record<string, string> = { plan: 'Planning test', generate: 'Writing test', mark: 'Marking test', wrapup: 'Wrapping up test' };
-const LEARN_LABELS: Record<string, string> = { probe: 'Preparing lesson', map: 'Planning lesson', steps: 'Writing lesson steps', close: 'Wrapping up lesson', 'map-course': 'Mapping course', 'check-write': 'Writing check' };
+const LEARN_LABELS: Record<string, string> = { probe: 'Preparing lesson', map: 'Planning lesson', steps: 'Writing lesson steps', close: 'Wrapping up lesson', 'map-course': 'Mapping course', 'check-write': 'Writing check', figure: 'Drawing a figure' };
 const name = (path: string) => path.split('/').pop()!.replace(/\.(md|json)$/, '').replace(/ mastery$/i, '');
 
 /** The jobs worth showing: the long ones. Quick tutor replies and inline follow-ups are left out. */

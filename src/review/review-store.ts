@@ -2,11 +2,12 @@ import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/s
 import { scheduler, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 import { addToLog, type UsageLog } from '../agents/usage-report';
 import type { Usage } from '../agents/usage';
+import { addStudy, type StudyLog } from '../time/study-time';
 /** A card made for a mastery objective; lapses count Again ratings since the objective was last marked. */
 export interface CardLink { mastery: string; objective: string; lapses: number }
-export interface PluginData { version: 1; settings: QardSettings; states: Record<string, ReviewState>; history: ReviewEvent[]; links: Record<string, CardLink>; timings: Record<string, number[]>; usage: UsageLog }
+export interface PluginData { version: 1; settings: QardSettings; states: Record<string, ReviewState>; history: ReviewEvent[]; links: Record<string, CardLink>; timings: Record<string, number[]>; usage: UsageLog; study: StudyLog }
 export class ReviewStore {
-  private data: PluginData = { version: 1, settings: DEFAULT_SETTINGS, states: Object.create(null) as Record<string, ReviewState>, history: [], links: Object.create(null) as Record<string, CardLink>, timings: {}, usage: {} };
+  private data: PluginData = { version: 1, settings: DEFAULT_SETTINGS, states: Object.create(null) as Record<string, ReviewState>, history: [], links: Object.create(null) as Record<string, CardLink>, timings: {}, usage: {}, study: {} };
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
   constructor(private persist: (data: PluginData) => Promise<void>) {}
@@ -26,7 +27,13 @@ export class ReviewStore {
     for (const [k, list] of Object.entries(value.timings || {})) if (Array.isArray(list)) timings[k] = list.filter(n => Number.isFinite(n) && n > 0).slice(-9);
     const usage: UsageLog = {};
     for (const [day, entries] of Object.entries(value.usage || {})) if (/^\d{4}-\d{2}-\d{2}$/.test(day) && entries && typeof entries === 'object') usage[day] = entries;
-    this.data = { version: 1, settings: readSettings(value.settings), states, history, links, timings, usage };
+    const study: StudyLog = {};
+    for (const [day, entries] of Object.entries(value.study || {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !entries || typeof entries !== 'object') continue;
+      const valid = Object.entries(entries).filter(([k, s]) => typeof k === 'string' && Number.isFinite(s) && s > 0);
+      if (valid.length) study[day] = Object.fromEntries(valid);
+    }
+    this.data = { version: 1, settings: readSettings(value.settings), states, history, links, timings, usage, study };
   }
   getSnapshot = () => this.data;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -71,6 +78,9 @@ export class ReviewStore {
   /** Adds one agent run's tokens to the day's totals. */
   recordUsage(day: string, key: string, usage: Usage) { return this.change(data => ({ ...data, usage: addToLog(data.usage, day, key, usage) })); }
   resetUsage() { return this.change(data => ({ ...data, usage: {} })); }
+  /** Adds counted study time. */
+  recordStudy(add: StudyLog, today: string) { return this.change(data => ({ ...data, study: addStudy(data.study, add, today) })); }
+  resetStudy() { return this.change(data => ({ ...data, study: {} })); }
   flush() { return this.queue; }
   dispose() { this.listeners.clear(); }
 }
