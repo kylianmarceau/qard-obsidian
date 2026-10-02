@@ -6,10 +6,11 @@ import type { ReviewStore } from '../review/review-store';
 import type { Selection } from '../review/session';
 import type { TestService } from '../tests/test-service';
 import type { LearnService } from '../learn/learn-service';
+import type { FlashcardGenerationService } from '../cards/generation-service';
 import type { JobClock } from '../jobs/job-clock';
 import type { StudyClock } from '../time/study-time';
 export interface QardServices {
-  app: App; owner: Component; index: VaultIndexer; writer: CardWriter; reviews: ReviewStore; tests: TestService; learn: LearnService; jobs?: JobClock; time?: StudyClock;
+  app: App; owner: Component; index: VaultIndexer; writer: CardWriter; reviews: ReviewStore; tests: TestService; learn: LearnService; jobs?: JobClock; flashcards?: FlashcardGenerationService; time?: StudyClock;
   host: HTMLElement; setFocus: (enabled: boolean) => void; isActive: () => boolean;
   openSource: (card: QardCard) => Promise<void>;
 }

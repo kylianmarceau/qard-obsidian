@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Component } from 'obsidian';
 import { ReviewAnswers } from '../src/components/tests/ReviewAnswers';
+import { DeleteTest } from '../src/components/tests/DeleteTest';
 import { TakeTest } from '../src/components/tests/TakeTest';
 import { TestService, type TestStorage } from '../src/tests/test-service';
 import { ReviewStore } from '../src/review/review-store';
@@ -26,7 +27,7 @@ const nav = { library: vi.fn(), tests: vi.fn(), newTest: vi.fn(), plan: vi.fn(),
 beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   files = { 'Qard/Tests/t/test.json': JSON.stringify(TEST), 'Qard/Tests/t/attempt.json': JSON.stringify(ATTEMPT) };
-  const storage: TestStorage = { folders: async () => ['Qard/Tests/t'], read: async p => files[p] ?? null, write: async (p, t) => { files[p] = t; }, exists: p => p in files };
+  const storage: TestStorage = { trash: async folder => { for (const p of Object.keys(files)) if (p.startsWith(folder + '/')) delete files[p]; }, folders: async () => ['Qard/Tests/t'], read: async p => files[p] ?? null, write: async (p, t) => { files[p] = t; }, exists: p => p in files };
   const reviews = new ReviewStore(async () => {});
   services = { host, owner: new Component(), reviews, index: new CardIndex(), isActive: () => true, setFocus: vi.fn(), openSource: vi.fn(),
     tests: new TestService(storage, () => ({ ...DEFAULT_TEST_SETTINGS, ...reviews.getSnapshot().settings.tests }), () => ({ name: 'x', run: () => Promise.reject(new Error('offline')) })),
@@ -66,4 +67,22 @@ it('takes a test: answers autosave and a section can be submitted', async () => 
   expect(nav.results).toHaveBeenCalledWith('Qard/Tests/t');
   await act(async () => { await services.tests.flush(); });
   expect(JSON.parse(files['Qard/Tests/t/attempt.json']!).marks.q2.score).toBe(1);
+});
+
+it('deletes a selected test with one click and returns to the test list', async () => {
+  await services.tests.load('Qard/Tests/t');
+  const deleted = vi.fn();
+  await act(async () => root.render(<DeleteTest services={services} folder="Qard/Tests/t" deleted={deleted}/>));
+  expect(host.querySelector('[aria-label="Delete test"]')).not.toBeNull();
+  await click(host.querySelector('[aria-label="Delete test"]'));
+  expect(deleted).toHaveBeenCalledOnce(); expect(services.tests.get('Qard/Tests/t')).toBeUndefined();
+  expect(Object.keys(files).some(p => p.startsWith('Qard/Tests/t/'))).toBe(false);
+});
+it('shows a deletion error and leaves the user on the selected test so they can retry', async () => {
+  const remove = vi.spyOn(services.tests, 'remove').mockRejectedValueOnce(new Error('Could not move test to trash'));
+  const deleted = vi.fn(); await act(async () => root.render(<DeleteTest services={services} folder="Qard/Tests/t" deleted={deleted}/>));
+  await click(host.querySelector('[aria-label="Delete test"]')); expect(deleted).not.toHaveBeenCalled();
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('Could not move test to trash');
+  expect((host.querySelector('[aria-label="Delete test"]') as HTMLButtonElement).disabled).toBe(false);
+  remove.mockResolvedValueOnce(undefined); await click(host.querySelector('[aria-label="Delete test"]')); expect(deleted).toHaveBeenCalledOnce();
 });

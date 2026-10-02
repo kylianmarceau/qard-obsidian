@@ -1,10 +1,10 @@
 import { useState, useId, type SyntheticEvent } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { CardDraft } from '../cards/card-writer';
 import type { QardServices } from '../views/services';
 import { Markdown } from './Markdown';
-export function CardEditor({ services, card, initial, cancel, saved, compact = false }: { services: QardServices; card?: QardCard; initial?: Partial<CardDraft>; cancel: () => void; saved: (card: QardCard) => void; compact?: boolean }) {
+export function CardEditor({ services, card, initial, cancel, saved, compact = false, generate }: { services: QardServices; card?: QardCard; initial?: Partial<CardDraft>; cancel: () => void; saved: (card: QardCard) => void; compact?: boolean; generate?: (draft: Partial<CardDraft>) => void }) {
   const [front, setFront] = useState(card?.frontMarkdown || initial?.front || ''), [back, setBack] = useState(card?.backMarkdown || initial?.back || '');
   const [deck, setDeck] = useState(card?.deck || initial?.deck || ''), [topic, setTopic] = useState(card?.topic || initial?.topic || 'General');
   const [preview, setPreview] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -16,7 +16,7 @@ export function CardEditor({ services, card, initial, cancel, saved, compact = f
       saved(result);
     } catch (e) { setError((e as Error).message); setBusy(false); }
   }
-  return <div className={'qard-editor ' + (compact ? 'qard-editor-compact' : '')}><div className="qard-heading"><h1>{card ? 'Edit card' : 'New card'}</h1></div>
+  return <div className={'qard-editor ' + (compact ? 'qard-editor-compact' : '')}><div className="qard-heading"><h1>{card ? 'Edit card' : 'New card'}</h1>{!card && generate && <button disabled={busy} type="button" onClick={() => generate({ deck, topic, sourceFile: initial?.sourceFile })}><Sparkles size={16}/>Generate with AI</button>}</div>
     <form onSubmit={e => void submit(e)}><fieldset disabled={busy}>
       <div className="qard-editor-meta"><label>Deck<input required value={deck} readOnly={!!card} onChange={e => setDeck(e.target.value)} list={id + '-decks'} placeholder="e.g. Computer Networks" maxLength={200}/></label><datalist id={id + '-decks'}>{services.index.getSnapshot().decks.map(d => <option key={d.name} value={d.name}/>)}</datalist><label>Topic<input required value={topic} readOnly={!!card} onChange={e => setTopic(e.target.value)} placeholder="e.g. Transport Layer" maxLength={200}/></label></div>
       {card && <p className="qard-muted">To change deck or topic, edit the source note.</p>}

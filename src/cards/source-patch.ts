@@ -43,3 +43,12 @@ export function deleteCardInSource(source: string, original: QardCard): string {
   const current = locateCard(source, original);
   return source.slice(0, current.sourcePosition.start) + source.slice(current.sourcePosition.end);
 }
+
+/** Remove a deck/topic's current callouts by range; preserve all other note content. */
+export function deleteGroupInSource(source: string, path: string, deck: string, topic?: string): string {
+  const cards = parseCards(source, path).cards.filter(c => c.deck === deck && (topic === undefined || c.topic === topic));
+  for (const card of cards.sort((a, b) => b.sourcePosition.start - a.sourcePosition.start)) {
+    source = source.slice(0, card.sourcePosition.start) + source.slice(card.sourcePosition.end);
+  }
+  return source;
+}

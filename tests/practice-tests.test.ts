@@ -111,6 +111,7 @@ describe('Claude Code runner', () => {
 function memory(files: Record<string, string> = {}): TestStorage & { files: Record<string, string> } {
   return {
     files,
+    trash: async folder => { for (const p of Object.keys(files)) if (p.startsWith(folder + '/')) delete files[p]; },
     folders: async root => [...new Set(Object.keys(files).filter(p => p.startsWith(root + '/') && p.split('/').length === root.split('/').length + 2).map(p => p.split('/').slice(0, -1).join('/')))],
     read: async p => files[p] ?? null,
     write: async (p, t) => { files[p] = t; },
@@ -131,6 +132,21 @@ describe('practice test lifecycle', () => {
     const storage = memory(files), runner = new Script(replies);
     return { storage, runner, tests: new TestService(storage, () => ({ ...DEFAULT_TEST_SETTINGS, ...settings }), () => runner, () => new Date(2026, 8, 29).getTime()) };
   }
+
+  it('persists folder attachments and the full note snapshot through planning and generation', async () => {
+    const notes = Array.from({ length: 10 }, (_, i) => `Courses/AI/Lecture ${i + 1}.md`);
+    const input = { prompt: '', decks: [], notes, sources: notes, folders: ['Courses/AI'] };
+    const { storage, runner, tests } = service([() => PLAN, () => TEST]);
+    const folder = await tests.plan(input); await until(() => !!tests.get(folder)?.plan);
+    expect(JSON.parse(storage.files[`${folder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+    for (const note of notes) expect(runner.prompts[0]).toContain(note);
+    await tests.generate({ folder }); await until(() => !!tests.get(folder)?.test);
+    expect(JSON.parse(storage.files[`${folder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+    const direct = service([() => TEST]);
+    const directFolder = await direct.tests.generate({ request: input }); await until(() => !!direct.tests.get(directFolder)?.test);
+    for (const note of notes) expect(direct.runner.prompts[0]).toContain(note);
+    expect(JSON.parse(direct.storage.files[`${directFolder}/request.json`]!)).toMatchObject({ folders: ['Courses/AI'], notes, sources: notes });
+  });
 
   it('plans, revises, writes, marks per section, and wraps up with a profile', async () => {
     const { storage, runner, tests } = service([
@@ -259,4 +275,56 @@ it('shows agents the option a student picked in multiple choice, not a blank ans
   expect(block).toContain('A. Forward\nB. Viterbi (correct)');
   expect(block).toContain('<student_answer confidence="unsure">Picked A. Forward (wrong)</student_answer>');
   expect(questionBlock(mcq, undefined)).toContain('(blank)');
+});
+
+describe('deleting one practice test', () => {
+  const folder = 'Qard/Tests/delete-me';
+  const request = { prompt: 'HMM', decks: [], notes: [], sources: [] };
+  const saved = () => ({ [`${folder}/test.json`]: JSON.stringify({ version: 1, createdAt: 1, ...TEST }), [`${folder}/request.json`]: JSON.stringify(request), 'Notes/HMM.md': 'Keep the source.', 'Qard/Tests/_profile.md': 'Keep the profile.', 'Qard/Tests/other/test.json': JSON.stringify({ version: 1, createdAt: 1, ...TEST }) });
+  const setup = (storage = memory(saved()), runner: AgentRunner = { name: 'unused', run: vi.fn().mockRejectedValue(new Error('unused')) }) => ({ storage, tests: new TestService(storage, () => DEFAULT_TEST_SETTINGS, () => runner) });
+  it('moves only the selected test to trash, clears cached data and pending answer saves', async () => {
+    const { storage, tests } = setup(); const trash = vi.spyOn(storage, 'trash');
+    await tests.load(folder); tests.answer(folder, 'q1', { text: 'Latest answer' });
+    await tests.remove(folder); await tests.flush();
+    expect(trash).toHaveBeenCalledWith(folder); expect(tests.get(folder)).toBeUndefined(); expect(tests.jobsFor(folder)).toEqual([]);
+    expect(Object.keys(storage.files).some(p => p.startsWith(folder + '/'))).toBe(false);
+    expect(storage.files['Notes/HMM.md']).toBe('Keep the source.'); expect(storage.files['Qard/Tests/_profile.md']).toBe('Keep the profile.');
+    expect((await tests.list()).map(t => t.folder)).toEqual(['Qard/Tests/other']);
+    await expect(tests.load(folder)).rejects.toThrow('deleted'); tests.answer(folder, 'q1', { text: 'Stale event' }); await tests.flush();
+    expect(Object.keys(storage.files).some(p => p.startsWith(folder + '/'))).toBe(false);
+  });
+  it('stops generation and ignores a late reply without resurrecting the deleted folder', async () => {
+    let reply!: (value: unknown) => void;
+    const run = vi.fn<AgentRunner['run']>().mockImplementation(() => new Promise(resolve => { reply = resolve; }));
+    const storage = memory(), notify = vi.fn(), tests = new TestService(storage, () => DEFAULT_TEST_SETTINGS, () => ({ name: 'uninterruptible', run }), undefined, undefined, notify);
+    const created = await tests.generate({ request }); await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
+    const signal = run.mock.calls[0]![0].signal;
+    await tests.remove(created); expect(signal?.aborted).toBe(true); expect(tests.jobsFor(created)).toEqual([]);
+    reply(TEST); await settle(); await tests.flush();
+    expect(storage.files).toEqual({}); expect(tests.get(created)).toBeUndefined(); expect(tests.jobsFor(created)).toEqual([]);
+    expect(notify).toHaveBeenCalledOnce(); expect(notify).toHaveBeenCalledWith('Test moved to trash.');
+    const next = await tests.generate({ request }); expect(next).not.toBe(created); tests.cancel(next, 'generate');
+  });
+  it('waits for an in-flight write before trashing its folder', async () => {
+    const { storage, tests } = setup(); await tests.load(folder);
+    let finish!: () => void;
+    const write = storage.write, events: string[] = [];
+    vi.spyOn(storage, 'write').mockImplementation(async (p, text) => { await new Promise<void>(resolve => { finish = resolve; }); await write(p, text); events.push('write'); });
+    const trash = storage.trash; vi.spyOn(storage, 'trash').mockImplementation(async f => { events.push('trash'); await trash(f); });
+    tests.answer(folder, 'q1', { text: 'Answer' }); const flushing = tests.flush(); await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    const deleting = tests.remove(folder); await settle(); expect(events).toEqual([]); finish(); await Promise.all([flushing, deleting]);
+    expect(events).toEqual(['write', 'trash']); expect(Object.keys(storage.files).some(p => p.startsWith(folder + '/'))).toBe(false);
+  });
+  it('keeps the test and latest answers accessible if moving to trash fails', async () => {
+    const { storage, tests } = setup(); await tests.load(folder); tests.answer(folder, 'q1', { text: 'Latest answer' });
+    vi.spyOn(storage, 'trash').mockRejectedValueOnce(new Error('Permission denied'));
+    await expect(tests.remove(folder)).rejects.toThrow('Permission denied');
+    expect(tests.get(folder)).toBeDefined(); expect(JSON.parse(storage.files[`${folder}/attempt.json`]!).answers.q1.text).toBe('Latest answer');
+    await tests.remove(folder); expect(tests.get(folder)).toBeUndefined();
+  });
+  it('rejects deleting the test root, source notes, parent paths or nested folders', async () => {
+    const { storage, tests } = setup(); const trash = vi.spyOn(storage, 'trash');
+    for (const path of ['Qard/Tests', 'Notes/HMM.md', 'Qard/Tests/..', 'Qard/Tests/../Notes', 'Qard/Tests/a/nested', '/Qard/Tests/a']) await expect(tests.remove(path)).rejects.toThrow('specific test folder');
+    expect(trash).not.toHaveBeenCalled(); expect(storage.files['Notes/HMM.md']).toBe('Keep the source.');
+  });
 });

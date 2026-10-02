@@ -46,6 +46,8 @@
 .qard-app fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .qard-main { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 .qard-topbar { padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qard-topbar-actions, .qard-test-delete { display: flex; align-items: center; gap: 12px; }
+.qard-test-delete .qard-error { font-size: 12px; max-width: 280px; }
 .qard-breadcrumb { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--qard-muted); font-size: 12px; }
 .qard-breadcrumb button { border: 0; padding: 3px 0; color: var(--qard-muted); font-size: 12px; text-align: left; }
 .qard-breadcrumb > span, .qard-breadcrumb button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -126,6 +128,14 @@
 .qard-selection-modal { width: min(640px, 95vw); }
 .qard-selection-modal .qard-root, .qard-selection-modal .qard-app { height: auto; }
 .qard-editor-compact .qard-heading { display: none; }
+.qard-generate input[type="number"] { max-width: 120px; }
+.qard-generate .qard-composer { margin-top: 20px; }
+.qard-generation-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.qard-generation-card { border: 1px solid var(--qard-border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.qard-generation-card.is-skipped { opacity: .6; }
+.qard-generation-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.qard-generation-card-head button { display: flex; align-items: center; gap: 8px; }
+.qard-generation-card > .qard-link { display: inline-flex; gap: 6px; align-items: center; overflow-wrap: anywhere; text-align: left; }
 .qard-study-container { min-height: 100%; }
 .qard-study { outline: none; min-height: 100%; padding: 20px 28px 40px; }
 .qard-study-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--qard-muted); }
@@ -237,6 +247,11 @@ body.qard-focus-active .workspace-ribbon, body.qard-focus-active .status-bar { v
 .qard-app button.qard-popover-item { display: flex; width: 100%; justify-content: flex-start; gap: 10px; border: 0; min-height: 36px; text-align: left; }
 .qard-popover-item span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qard-popover-item small { color: var(--qard-muted); font-size: 11px; }
+.qard-folder-chip { max-width: 100%; }
+.qard-folder-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qard-folder-chip small, .qard-folder-picker small { flex-shrink: 0; }
+.qard-folder-picker > p { padding: 8px; }
+.qard-folder-picker .qard-popover-item span { white-space: normal; overflow-wrap: anywhere; }
 .qard-hint { padding: 0 4px; font-size: 13px; }
 
 /* Plan */
@@ -672,3 +687,14 @@ div.qard-ask-q { cursor: default; }
 .qard-usage-bar .is-browsing, .qard-usage-legend .is-browsing i { background: color-mix(in srgb, var(--qard-muted) 35%, transparent); }
 .qard-time-line { margin: 4px 0 0; }
 .qard-time-line button.qard-text-button { padding: 0; font-size: inherit; }
+
+/* Delete actions remain separate from row navigation and visible on touch screens. */
+.qard-deletable-row { display: flex; align-items: center; gap: 10px; }
+.qard-deletable-row > button { flex: 1; min-width: 0; }
+.qard-deletable-row > .qard-deck { width: auto; }
+.qard-delete-item { flex-shrink: 0; }
+.qard-delete-dialog::backdrop { background: #0008; }
+.qard-delete-dialog { width: min(460px, calc(100% - 48px)); color: var(--qard-text); background: var(--qard-bg); border: 1px solid var(--qard-border); border-radius: 12px; padding: 24px; box-shadow: 0 12px 48px #0005; }
+.qard-delete-dialog h2 { margin-top: 0; }
+.qard-delete-dialog p { line-height: 1.6; margin-top: 12px; }
+.qard-delete-dialog .qard-actions { justify-content: flex-end; margin-top: 20px; }

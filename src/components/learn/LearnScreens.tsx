@@ -1,3 +1,4 @@
+import { DeleteLearnItem } from './DeleteLearnItem';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ChevronRight, FileText, Folder, Plus } from 'lucide-react';
 import { TFolder } from 'obsidian';
@@ -70,22 +71,22 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
   return <>
     <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.time && <button className="qard-text-button" onClick={nav.time}>Study time</button>}{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
-    {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}><AgentLabel services={services} role="writer"/></Waiting></div>)}
+    {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}><AgentLabel services={services} role="writer"/></Waiting><DeleteLearnItem services={services} kind="mapping" path={f}/></div>)}
     {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
       <button className="qard-text-button" onClick={() => void (f.kind === 'map' ? services.learn.mapCourse(f.target, f.request) : services.learn.updateCourse(f.target, f.request))}>Try again</button>
-      <button className="qard-text-button" onClick={() => void services.learn.dismissFailure(f.kind, f.target)}>Dismiss</button></div>)}
-    {pending?.proposals.map(p => <button key={p.folder} className="qard-resume" onClick={() => nav.mapCourse(p.folder)}><span className="qard-muted">Ready to review</span><strong>{p.course} · {plural(p.objectives.length, 'objective')}</strong><ChevronRight size={16}/></button>)}
+      <button className="qard-text-button" onClick={() => void services.learn.dismissFailure(f.kind, f.target)}>Dismiss</button>{f.kind === 'map' && <DeleteLearnItem services={services} kind="mapping" path={f.target}/>}</div>)}
+    {pending?.proposals.map(p => <div key={p.folder} className="qard-deletable-row"><button className="qard-resume" onClick={() => nav.mapCourse(p.folder)}><span className="qard-muted">Ready to review</span><strong>{p.course} · {plural(p.objectives.length, 'objective')}</strong><ChevronRight size={16}/></button><DeleteLearnItem services={services} kind="mapping" path={p.folder}/></div>)}
     {pending?.updates.map(u => <button key={u.mastery} className="qard-resume" onClick={() => nav.course(u.mastery)}><span className="qard-muted">Update ready</span><strong>{u.course}</strong><ChevronRight size={16}/></button>)}
-    {open.map(l => <button key={l.path} className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong><InlineMarkdown text={l.title} path={l.path} services={services}/></strong>{l.course && <span className="qard-muted">{l.course}</span>}<ChevronRight size={16}/></button>)}
+    {open.map(l => <div key={l.path} className="qard-deletable-row"><button className="qard-resume" onClick={() => nav.lesson(l.path)}><span className="qard-muted">Continue lesson</span><strong><InlineMarkdown text={l.title} path={l.path} services={services}/></strong>{l.course && <span className="qard-muted">{l.course}</span>}<ChevronRight size={16}/></button><DeleteLearnItem services={services} kind="lesson" path={l.path}/></div>)}
     <div className="qard-deck-list">{courses?.map(c => {
       const mastered = c.objectives.filter(o => o.state === 'mastered').length, due = c.objectives.filter(o => o.state !== 'new' && o.due && o.due <= day).length;
-      return <button key={c.path} className="qard-deck qard-test-row" onClick={() => nav.course(c.path)}>
+      return <div key={c.path} className="qard-deletable-row"><button className="qard-deck qard-test-row" onClick={() => nav.course(c.path)}>
         <span className="qard-deck-name"><strong>{c.course}</strong><small>{mastered} of {plural(c.objectives.length, 'objective')} mastered</small></span>
         <span className="qard-test-status">{due ? `${due} due` : ''}</span><ChevronRight size={17}/>
-      </button>;
+      </button><DeleteLearnItem services={services} kind="course" path={c.path}/></div>;
     })}</div>
     {courses && !courses.length && <div className="qard-empty"><p>No courses yet.</p><p className="qard-muted">Map a course folder into objectives. Qard keeps one mastery file per course and uses it to choose what to teach, check and test.</p><button onClick={() => nav.mapCourse()}>Map a course</button></div>}
-    {recent.length > 0 && <section className="qard-learn-recent"><div className="qard-label">Recent lessons</div>{recent.map(l => <button key={l.path} className="qard-doc-row qard-row-button" onClick={() => nav.lesson(l.path)}><FileText size={14}/><span><InlineMarkdown text={l.title} path={l.path} services={services}/></span><span className="qard-muted">{new Date(l.created).toLocaleDateString()}</span></button>)}</section>}
+    {recent.length > 0 && <section className="qard-learn-recent"><div className="qard-label">Recent lessons</div>{recent.map(l => <div key={l.path} className="qard-deletable-row"><button className="qard-doc-row qard-row-button" onClick={() => nav.lesson(l.path)}><FileText size={14}/><span><InlineMarkdown text={l.title} path={l.path} services={services}/></span><span className="qard-muted">{new Date(l.created).toLocaleDateString()}</span></button><DeleteLearnItem services={services} kind="lesson" path={l.path}/></div>)}</section>}
   </>;
 }
 
@@ -100,10 +101,10 @@ export function MapCourse({ services, nav, initialFolder }: { services: QardServ
   }, [services, query]);
   const mapping = folder ? job(folder, 'map-course') : undefined, proposal = folder ? services.learn.proposal(folder) : undefined;
   useEffect(() => { if (proposal && !keep) setKeep(proposal.objectives.map(o => o.id)); }, [proposal, keep]);
-  if (folder && ((mapping && !mapping.error) || hold.held)) return <WhileYouWait services={services} title={`Mapping ${folder.split('/').pop()}…`} detail="The writer is reading the course notes; the objectives wait under Learn for you to review." job={mapping}
-    ready={!!proposal} readyLabel="The objectives are ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }} cancel={() => services.learn.cancel(folder, 'map-course')}/>;
+  if (folder && ((mapping && !mapping.error) || hold.held)) return <><div className="qard-actions"><DeleteLearnItem services={services} kind="mapping" path={folder} deleted={nav.learn}/></div><WhileYouWait services={services} title={`Mapping ${folder.split('/').pop()}…`} detail="The writer is reading the course notes; the objectives wait under Learn for you to review." job={mapping}
+    ready={!!proposal} readyLabel="The objectives are ready to review" onEngage={hold.engage} onContinue={hold.release} context={{ kind: 'mapping' }} cancel={() => services.learn.cancel(folder, 'map-course')}/></>;
   if (folder && proposal && keep) return <article className="qard-doc">
-    <header><span className="qard-muted">Proposed objectives</span><h1>{proposal.course}</h1><p className="qard-muted">{proposal.objectives.length} objectives from {folder}. Untick any you don't need; you can edit the file later.</p></header>
+    <div className="qard-actions"><DeleteLearnItem services={services} kind="mapping" path={folder} deleted={nav.learn}/></div><header><span className="qard-muted">Proposed objectives</span><h1>{proposal.course}</h1><p className="qard-muted">{proposal.objectives.length} objectives from {folder}. Untick any you don't need; you can edit the file later.</p></header>
     <section>{proposal.objectives.map(o => <button key={o.id} className="qard-doc-row qard-row-button" aria-pressed={keep.includes(o.id)} onClick={() => setKeep(keep.includes(o.id) ? keep.filter(x => x !== o.id) : [...keep, o.id])}><Check on={keep.includes(o.id)}/><span><InlineMarkdown text={o.title} path={folder} services={services}/></span><span className="qard-muted">{o.notes.slice(0, 2).join(', ')}</span><StateChip state={o.state}/></button>)}</section>
     {error && <p className="qard-error" role="alert">{error}</p>}
     <div className="qard-doc-footer is-end"><button className="qard-text-button" onClick={() => { void services.learn.discardProposal(folder); setKeep(undefined); }}>Start over</button><button className="qard-primary" disabled={!keep.length} onClick={() => void services.learn.acceptCourse(folder, keep).then(nav.course, e => setError((e as Error).message))}>Create mastery file<ArrowRight size={15}/></button></div>
@@ -117,7 +118,7 @@ export function MapCourse({ services, nav, initialFolder }: { services: QardServ
       {folder && <textarea aria-label="Anything to add" rows={2} placeholder="Optional, e.g. focus on the A1 syllabus" value={request} onChange={e => setRequest(e.target.value)}/>}
       <div className="qard-composer-bar"><span className="qard-muted qard-small">The writer lists the objectives it finds. Nothing is saved until you accept.</span><button className="qard-primary" disabled={!folder} onClick={() => { setKeep(undefined); void services.learn.mapCourse(folder!, request); }}>Map course<ArrowRight size={15}/></button></div>
     </div>
-    {folder && <JobError job={mapping} retry={() => void services.learn.mapCourse(folder, request)}/>}
+    {folder && <><JobError job={mapping} retry={() => void services.learn.mapCourse(folder, request)}/>{mapping?.error && <DeleteLearnItem services={services} kind="mapping" path={folder} deleted={nav.learn}/>}</>}
   </div>;
 }
 

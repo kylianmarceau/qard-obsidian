@@ -1,6 +1,7 @@
 import { Plugin, addIcon, Notice, MarkdownView, TFile } from 'obsidian';
 import { QardView, VIEW_TYPE } from './views/QardView';
 import { VaultIndexer } from './cards/indexer';
+import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
 import { QardSettingsTab } from './settings/SettingsTab';
@@ -24,6 +25,7 @@ import { JobClock } from './jobs/job-clock';
 export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
   writer!: CardWriter;
+  flashcards!: FlashcardGenerationService;
   reviews!: ReviewStore;
   tests!: TestService;
   learn!: LearnService;
@@ -52,6 +54,8 @@ export default class QardPlugin extends Plugin {
     for (const event of ['keydown', 'pointerdown', 'pointermove', 'wheel'] as const) this.registerDomEvent(window, event, () => this.time.input(), { passive: true });
     this.registerInterval(window.setInterval(() => this.time.tick(), 5000));
     this.registerInterval(window.setInterval(() => void this.time.flush().catch(() => {}), 60_000));
+    this.flashcards = new FlashcardGenerationService(new VaultTestStorage(this.app), () => settings().cardFolder, () => this.app.vault.getMarkdownFiles().filter(f => !f.path.startsWith(settings().tests.folder.replace(/\/+$/, '') + '/')).map(f => f.path), () => runner('writer'), this.writer, message => new Notice(message, 8000), timing);
+    void this.flashcards.load();
     this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing, (() => { const host = nodeHost(); return host && pythonRunner(host); })());
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
@@ -134,6 +138,6 @@ export default class QardPlugin extends Plugin {
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
     void this.time?.flush().catch(() => {});
-    this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
+    this.flashcards?.dispose(); this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
   }
 }
