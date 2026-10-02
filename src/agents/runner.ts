@@ -1,5 +1,6 @@
 import type { Schema } from '../tests/test-schema';
 import type { Usage } from './usage';
+import { clip, debug, errorText } from '../debug/debug-log';
 
 export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter';
 /** Tutor replies live and should be fast; the writer and marker favour quality; the illustrator draws figures. */
@@ -32,6 +33,7 @@ export async function runValidated<T>(runner: AgentRunner, task: AgentTask, read
   const first = await runner.run(task);
   try { return read(first); }
   catch (error) {
+    debug.log('agent', 'reply rejected, retrying once', { error: errorText(error), reply: clip(JSON.stringify(first) ?? '') });
     if (task.signal?.aborted) throw new Error(CANCELLED);
     const again = await runner.run({ ...task, prompt: `${task.prompt}\n\nYour previous reply was rejected: ${(error as Error).message}\nPrevious reply:\n${JSON.stringify(first).slice(0, 20000)}\nReturn a corrected reply.` });
     return read(again);
@@ -47,7 +49,7 @@ export function deadline<T>(work: Promise<T>, signal?: AbortSignal, ms = REQUEST
   return new Promise<T>((resolve, reject) => {
     const done = () => { window.clearTimeout(timer); signal?.removeEventListener('abort', abort); };
     const abort = () => { done(); reject(new Error(CANCELLED)); };
-    const timer = window.setTimeout(() => { done(); reject(new Error(`${what} didn't reply within ${Math.round(ms / 60_000)} minutes, so Qard stopped waiting.`)); }, ms);
+    const timer = window.setTimeout(() => { done(); debug.log('agent', 'request timed out', { what, ms }); reject(new Error(`${what} didn't reply within ${Math.round(ms / 60_000)} minutes, so Qard stopped waiting.`)); }, ms);
     signal?.addEventListener('abort', abort);
     work.then(value => { done(); resolve(value); }, (error: unknown) => { done(); reject(error instanceof Error ? error : new Error(String(error))); });
   });

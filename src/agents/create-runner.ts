@@ -1,3 +1,4 @@
+import { debug, errorText } from '../debug/debug-log';
 import { FileSystemAdapter, Platform, TFile, type App } from 'obsidian';
 import type { QardSettings } from '../settings/settings';
 import type { AgentProvider, AgentRole, AgentRunner } from './runner';
@@ -41,8 +42,25 @@ export function defaultModel(provider: AgentProvider, role: AgentRole) {
 export interface UsageEvent { purpose: string; role: AgentRole; provider: AgentProvider; model: string; usage: Usage }
 /** Reports every run's token usage with what it was for and which connection and model ran it. */
 function tracked(runner: AgentRunner, role: AgentRole, provider: AgentProvider, model: string, record?: (e: UsageEvent) => void): AgentRunner {
-  if (!record) return runner;
-  return { name: runner.name, run: task => runner.run({ ...task, onUsage: usage => { record({ purpose: purposeOf(task.schema), role, provider, model: usage.model ?? model, usage }); task.onUsage?.(usage); } }) };
+  return { name: runner.name, run: async task => {
+    const purpose = purposeOf(task.schema);
+    // Every run is logged for debugging: who ran it, how big the prompt was, how long it took and how it ended.
+    const span = debug.span('agent', 'run', { purpose, role, provider, model, promptChars: task.prompt.length, vault: task.vault !== false, effort: task.effort });
+    const onAbort = () => span.note('cancel requested');
+    task.signal?.addEventListener('abort', onAbort);
+    let usage: Usage | undefined;
+    try {
+      const reply = await runner.run({ ...task, onUsage: u => { usage = u; record?.({ purpose, role, provider, model: u.model ?? model, usage: u }); task.onUsage?.(u); } });
+      const text = JSON.stringify(reply) ?? '';
+      span.end({ replyChars: text.length, tokensIn: usage?.input, tokensOut: usage?.output });
+      debug.saveRun(`${purpose}-${role}`, { purpose, role, provider, model, prompt: task.prompt, schema: task.schema, reply, usage });
+      return reply;
+    } catch (error) {
+      span.fail(error, { tokensIn: usage?.input, tokensOut: usage?.output });
+      debug.saveRun(`${purpose}-${role}-failed`, { purpose, role, provider, model, prompt: task.prompt, schema: task.schema, error: errorText(error), usage });
+      throw error;
+    } finally { task.signal?.removeEventListener('abort', onAbort); }
+  } };
 }
 
 export function createRunner(app: App, settings: QardSettings, role: AgentRole, record?: (e: UsageEvent) => void): AgentRunner {

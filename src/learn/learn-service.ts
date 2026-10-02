@@ -2,6 +2,7 @@ import type { QardSettings } from '../settings/settings';
 import { tidyMermaid } from './mermaid';
 import { cleanSvg, figureDomain, figureMarkdown, figureName, type Figure } from './figures';
 import type { PythonRunner } from '../agents/python';
+import { debug } from '../debug/debug-log';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
@@ -89,10 +90,11 @@ export class LearnService {
   /** Stops a running job; it shows as cancelled, with the usual Try again. */
   cancel(target: string, kind: LearnJobKind, id = '') { this.controllers.get(key(target, kind, id))?.abort(); }
   private async track<T>(target: string, kind: LearnJobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
-    if (this.isRemoved(target)) return undefined;
+    if (this.isRemoved(target)) { debug.log('job', 'skipped: target was deleted', { target, kind }); return undefined; }
     const k = key(target, kind, id);
-    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    const startedAt = this.now(), controller = new AbortController();
+    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) { debug.log('job', 'already running, not started again', { key: k }); return undefined; }
+    const startedAt = this.now(), controller = new AbortController(), span = debug.span('job', kind, { key: k });
+    controller.signal.addEventListener('abort', () => span.fail('cancelled'));
     this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
@@ -102,8 +104,10 @@ export class LearnService {
       const result = await Promise.race([running, cancelled]);
       const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed && this.controllers.get(k) === controller) this.publish(jobs);
       this.timing(kind, this.now() - startedAt);
+      span.end();
       return result;
     } catch (error) {
+      span.fail(error);
       if (!this.disposed && this.controllers.get(k) === controller) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
       return undefined;
     } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
@@ -517,6 +521,7 @@ export class LearnService {
   /** Opens a lesson and picks up any work a reload interrupted: the probe, the plan, unwritten steps or the wrap-up. */
   async openLesson(path: string) {
     const l = await this.loadLesson(path);
+    debug.log('lesson', 'open', { path, stage: l.finishedAt ? (l.close ? 'closed' : 'closing') : !l.probe ? 'probe' : l.probe.submitted && !l.map ? 'planning' : !l.map ? 'answering probe' : !l.accepted ? 'reviewing plan' : 'teaching', steps: l.steps.map(s => !!s), current: l.current, jobs: Object.keys(this.snapshot.jobs).filter(k => k.startsWith(`${path}|`)) });
     if (l.finishedAt) { if (!l.close) void this.close(path); }
     else if (!l.probe) void this.probe(path);
     else if (l.probe.submitted && !l.map) void this.submitProbe(path);
@@ -588,6 +593,7 @@ export class LearnService {
       for (const q of probe.questions) { const a = probe.answers[q.id]; if (a?.unknown) marks[q.id] = markUnknown(q); else if (q.type === 'mcq') marks[q.id] = markChoice(q, a); }
       lesson = { ...lesson, probe: { ...probe, submitted: true, marks } }; await this.setLesson(path, lesson);
       const { m, o, sources } = await this.context(lesson);
+      debug.log('lesson', 'context ready', { path, course: m?.course, objective: o?.id, sourceChars: sources?.length ?? 0 });
       const typed = probe.questions.filter(q => !marks[q.id]);
       const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: probeMapPrompt(lesson, m, o, sources), schema: probeMapSchema, effort: 'low', vault: !sources }, v => readProbeMap(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
       for (const q of typed) { const found = result.marks.find(x => x.id === q.id)!; marks[q.id] = scoreQuestion(q, found); }
@@ -725,6 +731,7 @@ export class LearnService {
         await this.storage.write(path, svg);
         return { path, caption: reply.caption.trim(), brief };
       } catch (error) {
+        debug.log('figure', 'attempt failed', { attempt, kind: reply.kind, error: (error as Error).message });
         if (signal.aborted || attempt >= 1) throw error;
         prompt = `${prompt}\n\nYour previous figure failed: ${(error as Error).message}\n<previous kind="${reply.kind}">\n${reply.code.slice(0, 20000)}\n</previous>\nFix it.`;
       }

@@ -1,4 +1,5 @@
 import type { TestSettings } from '../settings/settings';
+import { debug } from '../debug/debug-log';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { askPrompt, disputePrompt, generatePrompt, markPrompt, planPrompt, retryPrompt, revisePrompt, wrapupPrompt, type TestDefaults } from './test-prompts';
 import { askSchema, disputeSchema, marksSchema, planSchema, readAsk, readDispute, readMarks, readPlan, readRetry, readTest, readWrapup, retrySchema, testSchema, wrapupSchema } from './test-schema';
@@ -93,8 +94,9 @@ export class TestService {
   private async track<T>(folder: string, kind: JobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
     if (this.removed.has(folder)) return undefined;
     const k = key(folder, kind, id);
-    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    const startedAt = this.now(), controller = new AbortController();
+    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) { debug.log('job', 'already running, not started again', { key: k }); return undefined; }
+    const startedAt = this.now(), controller = new AbortController(), span = debug.span('job', kind, { key: k });
+    controller.signal.addEventListener('abort', () => span.fail('cancelled'));
     this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
@@ -106,6 +108,7 @@ export class TestService {
       if (!this.removed.has(folder)) this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
+      span.fail(error);
       if (!this.disposed && !this.removed.has(folder)) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
       return undefined;
     } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
