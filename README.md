@@ -1,5 +1,7 @@
 # Qard for Obsidian
 
+<a href="https://buymeacoffee.com/kylianmarceau"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="350" height="80"></a>
+
 **Your learning, in focus.** Flashcards, practice tests and guided learning from your Obsidian notes.
 
 - **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic, with optional FSRS spaced repetition.
