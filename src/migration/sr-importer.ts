@@ -2,6 +2,7 @@ import { TFile, normalizePath, type App } from 'obsidian';
 import type { VaultIndexer } from '../cards/indexer';
 import type { ReviewStore } from '../review/review-store';
 import { DEFAULT_SR_SETTINGS, convertSrNote, readSrSettings, scanSrNote, type SrNote, type SrSettings } from './sr-parser';
+import { studyNotes } from '../vault-access';
 
 export const SR_PLUGIN_ID = 'obsidian-spaced-repetition';
 export interface ScannedNote extends SrNote { scheduled: number; copyOf?: string }
@@ -16,7 +17,7 @@ export async function loadSrSettings(app: App): Promise<SrSettings> {
 
 export async function scanVault(app: App, settings: SrSettings): Promise<ScannedNote[]> {
   const notes: ScannedNote[] = [], seen = new Map<string, string>();
-  const files = app.vault.getMarkdownFiles().sort((a, b) => a.path.localeCompare(b.path));
+  const files = studyNotes(app).sort((a, b) => a.path.localeCompare(b.path));
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!, source = await app.vault.cachedRead(file);
     if (settings.foldersToDecks || settings.tags.some(tag => source.includes(tag))) {

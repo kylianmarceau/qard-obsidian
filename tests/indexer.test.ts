@@ -11,6 +11,18 @@ function setup() {
   return { index: new VaultIndexer(app, plugin), file, read, handlers, plugin };
 }
 afterEach(() => vi.useRealTimers());
+it('never reads hidden notes during startup or file events', async () => {
+  vi.useFakeTimers();
+  const { index, file, read, handlers } = setup();
+  file.path = '.private/secret.md';
+  await index.start();
+  expect(read).not.toHaveBeenCalled();
+  handlers.create!(file); handlers.modify!(file);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(read).not.toHaveBeenCalled();
+  expect(index.getSnapshot().cards).toHaveLength(0);
+  index.dispose();
+});
 it.each([{ paths: [] }, { paths: ['Notes.md'] }])('starts without decks when the vault has no Qard cards: $paths', async ({ paths }) => {
   const files = paths.map(path => new (TFile as unknown as new (p: string) => TFile)(path));
   const write = vi.fn(() => { throw new Error('Indexing must not create or modify notes'); });

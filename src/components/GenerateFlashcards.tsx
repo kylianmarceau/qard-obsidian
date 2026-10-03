@@ -1,3 +1,4 @@
+import { studyNotes } from '../vault-access';
 import { useId, useMemo, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import type { CardDraft } from '../cards/card-writer';
@@ -20,7 +21,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
   const [open, setOpen] = useState<'notes' | 'folders' | null>(null), [query, setQuery] = useState(''), [starting, setStarting] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState(false);
   const id = useId(), excluded = services.reviews.getSnapshot().settings.tests.folder;
   const files = useMemo(() => {
-    const all = services.app.vault.getMarkdownFiles(), allowed = new Set(testNotePaths(all.map(f => f.path), excluded));
+    const all = studyNotes(services.app), allowed = new Set(testNotePaths(all.map(f => f.path), excluded));
     return all.filter(f => allowed.has(f.path));
   }, [services, excluded, index.revision]);
   const paths = useMemo(() => files.map(f => f.path), [files]);
@@ -31,7 +32,7 @@ export function GenerateFlashcards({ services, initial, back, openDeck }: { serv
     if (starting) return;
     setStarting(true); setError('');
     try {
-      const latest = testNotePaths(services.app.vault.getMarkdownFiles().map(f => f.path), excluded);
+      const latest = testNotePaths(studyNotes(services.app).map(f => f.path), excluded);
       const selected = resolveTestNotes(latest, notes, folders);
       if (!prompt.trim() && !selected.length) throw new Error('The selected sources no longer contain any Markdown notes. Choose another source or describe the cards.');
       await service.start({ ...context, prompt, notes: selected, ...(folders.length ? { folders } : {}) });

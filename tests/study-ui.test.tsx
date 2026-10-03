@@ -73,12 +73,14 @@ it('previews FSRS intervals after reveal without rating the card and hides them 
   expect(host.querySelectorAll('.qard-rating-interval')).toHaveLength(0);
   await key(' ');
   expect(host.querySelectorAll('.qard-rating-interval')).toHaveLength(4);
+  expect(host.querySelectorAll('.qard-rating.with-interval')).toHaveLength(4);
   expect(host.querySelector('[aria-label="Next review in 1 min"]')).not.toBeNull();
   expect(host.querySelector('[aria-label="Next review in 10 min"]')).not.toBeNull();
   expect(host.querySelector('.qard-rating-2')?.getAttribute('title')).toBe('I recalled it with effort');
   expect(services.reviews.getSnapshot().history).toHaveLength(0);
   await act(async () => services.reviews.saveSettings({ ...services.reviews.getSnapshot().settings, scheduling: false }));
   expect(host.querySelectorAll('.qard-rating-interval')).toHaveLength(0);
+  expect(host.querySelectorAll('.qard-rating.with-interval')).toHaveLength(0);
   await key('3');
   expect(host.textContent).toContain('Session complete');
   expect(services.reviews.getSnapshot().states.first!.fsrs).toBeDefined();

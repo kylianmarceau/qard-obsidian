@@ -1,5 +1,6 @@
 import { TFile, TFolder, normalizePath, type App } from 'obsidian';
 import type { LearnStorage } from './learn-service';
+import { isStudyNote, studyNotes } from '../vault-access';
 
 /** Mastery files, checks and lessons through the Vault API, so sync and file explorers see every change. */
 export class VaultLearnStorage implements LearnStorage {
@@ -23,11 +24,11 @@ export class VaultLearnStorage implements LearnStorage {
     const root = this.app.vault.getAbstractFileByPath(normalizePath(folder));
     if (!(root instanceof TFolder)) return [];
     const found: string[] = [];
-    const walk = (f: TFolder) => { for (const c of f.children) { if (c instanceof TFolder) walk(c); else if (c instanceof TFile && c.extension === extension) found.push(c.path); } };
+    const walk = (f: TFolder) => { for (const c of f.children) { if (c instanceof TFolder) walk(c); else if (c instanceof TFile && c.extension === extension && (extension !== 'md' || isStudyNote(c.path))) found.push(c.path); } };
     walk(root);
     return found.sort();
   }
-  masteryFiles() { return this.app.vault.getMarkdownFiles().filter(f => this.app.metadataCache.getFileCache(f)?.frontmatter?.['qard-mastery'] !== undefined).map(f => f.path); }
+  masteryFiles() { return studyNotes(this.app).filter(f => this.app.metadataCache.getFileCache(f)?.frontmatter?.['qard-mastery'] !== undefined).map(f => f.path); }
   async remove(path: string) { const f = this.file(path); if (f) await this.app.fileManager.trashFile(f); }
   modified(path: string) { return this.file(path)?.stat.mtime; }
   resolve(link: string, from: string) {

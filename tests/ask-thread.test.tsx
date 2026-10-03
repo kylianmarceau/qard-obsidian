@@ -22,6 +22,30 @@ const buttons = (text: string) => [...host.querySelectorAll('button')].filter(b 
 const type = async (value: string) => { await act(async () => { const t = host.querySelector('.qard-ask-input textarea') as HTMLTextAreaElement; t.value = value; t.dispatchEvent(new Event('input', { bubbles: true })); }); };
 const key = async (init: KeyboardEventInit) => { await act(async () => { host.querySelector('.qard-ask-input textarea')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })); }); };
 
+it('selects the exact Markdown answer for manual copying without touching the clipboard', async () => {
+  const read = vi.fn(), write = vi.fn();
+  const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { readText: read, writeText: write } });
+  try {
+    const answer = '**Answer**\n\nSecond line.';
+    await act(async () => { root.render(<AskThread services={services} path="Notes.md" items={[{ q: 'Why?', a: answer }]} busy={false} role="tutor" placeholder="Ask anything" ask={vi.fn()} dismiss={vi.fn()}/>); });
+    expect(host.querySelector('[aria-label="Answer to copy"]')).toBeNull();
+    await click(host.querySelector('[aria-label="Select answer to copy"]'));
+    const selection = host.querySelector('[aria-label="Answer to copy"]') as HTMLTextAreaElement;
+    expect(selection.value).toBe(answer);
+    expect(selection.readOnly).toBe(true);
+    expect(document.activeElement).toBe(selection);
+    expect([selection.selectionStart, selection.selectionEnd]).toEqual([0, answer.length]);
+    expect(read).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+    await click(host.querySelector('[aria-label="Select answer to copy"]'));
+    expect(host.querySelector('[aria-label="Answer to copy"]')).toBeNull();
+  } finally {
+    if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
 it('folds older answers, shows a question as soon as it is sent, and handles failures', async () => {
   let items: AskItem[] = [{ q: 'Why Dirichlet?', a: 'It produces **proportions** that sum to 1.' }, { q: 'Same α for every topic?', a: 'No, but symmetric α is the default.' }];
   let busy = false, error: string | undefined;

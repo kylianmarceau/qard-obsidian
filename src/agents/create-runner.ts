@@ -6,6 +6,7 @@ import { purposeOf } from './usage-report';
 import { AnthropicRunner, DEFAULT_API_MODEL, FAST_API_MODEL } from './api-runner';
 import { OpenRouterRunner } from './openrouter-runner';
 import { ClaudeCodeRunner, CodexRunner, findBinary, type NodeHost } from './cli-runner';
+import { isStudyNote, studyNotes } from '../vault-access';
 
 export const API_KEY_SECRET = 'qard-anthropic-api-key';
 export const OPENROUTER_KEY_SECRET = 'qard-openrouter-api-key';
@@ -50,7 +51,7 @@ export function createRunner(app: App, settings: QardSettings, role: AgentRole, 
   return tracked(buildRunner(app, settings, role, provider, model), role, provider, model, record);
 }
 function buildRunner(app: App, settings: QardSettings, role: AgentRole, provider: AgentProvider, model: string): AgentRunner {
-  const reader = { paths: () => app.vault.getMarkdownFiles().map(f => f.path), read: (p: string) => { const f = app.vault.getAbstractFileByPath(p); return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve(''); } };
+  const reader = { paths: () => studyNotes(app, [settings.tests.folder]).map(f => f.path), read: (p: string) => { if (!isStudyNote(p, [settings.tests.folder])) return Promise.resolve(''); const f = app.vault.getAbstractFileByPath(p); return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve(''); } };
   // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
   const exclude = [settings.tests.folder.replace(/\/+$/, '')];
   if (provider === 'anthropic') return new AnthropicRunner(reader, () => readSecret(app, API_KEY_SECRET), model, exclude);

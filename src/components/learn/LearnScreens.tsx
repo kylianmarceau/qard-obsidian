@@ -1,7 +1,8 @@
 import { DeleteLearnItem } from './DeleteLearnItem';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, ChevronRight, FileText, Folder, Plus } from 'lucide-react';
-import { TFolder } from 'obsidian';
+import { studyNotes } from '../../vault-access';
+import { testFolders } from '../../tests/test-sources';
 import type { QardServices } from '../../views/services';
 import type { Mastery, Objective } from '../../learn/mastery';
 import { CourseMap, CourseProgress } from './CourseMap';
@@ -96,7 +97,7 @@ export function MapCourse({ services, nav, initialFolder }: { services: QardServ
   const [keep, setKeep] = useState<string[]>(), [error, setError] = useState('');
   const folders = useMemo(() => {
     const q = query.toLowerCase().trim();
-    return services.app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder && !!f.path && f.path !== '/' && !f.path.split('/').some(p => p.startsWith('.')) && (!q || f.path.toLowerCase().includes(q))).map(f => f.path).sort().slice(0, 8);
+    return testFolders(studyNotes(services.app, [services.reviews.getSnapshot().settings.tests.folder]).map(f => f.path)).map(f => f.path).filter(path => !q || path.toLowerCase().includes(q)).slice(0, 8);
   }, [services, query]);
   const mapping = folder ? job(folder, 'map-course') : undefined, proposal = folder ? services.learn.proposal(folder) : undefined;
   useEffect(() => { if (proposal && !keep) setKeep(proposal.objectives.map(o => o.id)); }, [proposal, keep]);

@@ -36,7 +36,7 @@ beforeEach(() => {
   const run = vi.fn(async (task: AgentTask): Promise<unknown> => task.schema === marksSchema ? { questions: [{ id: 'c2', score: 2, awarded: [true, false], annotations: [{ quote: 'grows', kind: 'correct', note: 'Yes.' }], mistake: 'incomplete', feedback: 'Half there.' }] } : new Promise(() => {}));
   const learn = new LearnService(storage, () => readSettings({}), () => ({ name: 'x', run }), { get: () => undefined, set: async () => {} }, () => 3);
   services = { host, owner: new Component(), learn, index: { getSnapshot: () => ({ cards: [] }) }, reviews: { getSnapshot: () => ({ settings: readSettings({}) }) }, isActive: () => true,
-    app: { workspace: { on: vi.fn(), offref: vi.fn(), openLinkText: vi.fn() }, vault: { getAllLoadedFiles: () => [] } } } as unknown as QardServices;
+    app: { workspace: { on: vi.fn(), offref: vi.fn(), openLinkText: vi.fn() }, vault: { getMarkdownFiles: () => [] } } } as unknown as QardServices;
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 0)); });
@@ -102,6 +102,7 @@ it('the course map opens on topics, drills into one, and routes across topics', 
   const panel = host.querySelector('.qard-map-panel')!;
   expect(panel.querySelector('h3')?.textContent).toBe('List the LDA generative process');
   expect(panel.textContent).toContain('Builds on');
+  expect(host.querySelector('.qard-map-frame')?.classList.contains('is-panel-open')).toBe(true);
   await click(buttons('Route here')[0]);
   expect([...host.querySelectorAll('.qard-map-route button')].map(b => b.textContent)).toEqual(['1List the LDA generative process']);
   // A prerequisite in another topic opens that topic.
@@ -109,6 +110,7 @@ it('the course map opens on topics, drills into one, and routes across topics', 
   expect(host.querySelector('.qard-map-crumb')?.textContent).toBe('Text mining');
   await click(buttons('Topics')[0]);
   expect(host.querySelectorAll('.qard-topic-node')).toHaveLength(3);
+  expect(host.querySelector('.qard-map-frame')?.classList.contains('is-panel-open')).toBe(false);
   await click(buttons('List')[0]);
   expect(host.querySelectorAll('.qard-objective')).toHaveLength(4);
 });

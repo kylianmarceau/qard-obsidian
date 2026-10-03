@@ -1,6 +1,6 @@
 {
   "name": "qard-obsidian",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
   "type": "module",
   "description": "The study layer for your Obsidian vault.",
@@ -10,9 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:release",
+    "check": "npm run typecheck && npm run lint && npm run lint:css && npm test && npm run build && npm run check:release",
     "test-vault": "node scripts/prepare-test-vault.mjs",
     "lint": "eslint src --max-warnings 0",
+    "lint:css": "stylelint styles.css --max-warnings 0",
     "check:release": "node scripts/check-release.mjs"
   },
   "dependencies": {
@@ -35,6 +36,8 @@
     "jsdom": "^26.1.0",
     "obsidian": "latest",
     "preact-render-to-string": "6.7.0",
+    "stylelint": "17.16.0",
+    "stylelint-config-obsidianmd": "0.1.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "8.71.0",
     "vitest": "4.1.11"

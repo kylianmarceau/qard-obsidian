@@ -35,6 +35,8 @@ For AI features, open **Settings → Qard → AI connections**, connect Claude C
 
 Manual flashcard study works without AI or a network connection. AI features let your chosen provider read relevant vault notes. Qard checks its replies and saves accepted content; cards and study progress stay in your vault. API keys use Obsidian’s secure storage (requires Obsidian 1.11.4+).
 
+Qard discovers flashcards and source notes across ordinary Markdown files, skipping hidden notes and folders. It does not access the system clipboard; **Select answer** lets you copy with your device’s usual controls. [Community review details](https://github.com/kylianmarceau/qard-obsidian/blob/main/docs/REVIEW_NOTES.md).
+
 [Full guide and development instructions](https://github.com/kylianmarceau/qard-obsidian/blob/main/docs/GUIDE.md) · [Report an issue](https://github.com/kylianmarceau/qard-obsidian/issues) · [Support Qard](https://buymeacoffee.com/kylianmarceau)
 
 [MIT license](https://github.com/kylianmarceau/qard-obsidian/blob/main/LICENSE)

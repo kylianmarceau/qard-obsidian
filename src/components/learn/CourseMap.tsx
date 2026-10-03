@@ -261,7 +261,7 @@ export function CourseMap({ course, actions, filter, today = isoDay(Date.now()),
   const topicName = (key: string) => topics.find(t => t.key === key)?.name ?? key;
   const routeCount = (t: Topic) => route ? t.ids.filter(id => route.includes(id)).length : 0;
 
-  return <div className={'qard-map-frame' + (expanded ? ' is-expanded' : '')} ref={box} tabIndex={0} onKeyDown={onKey} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} aria-label={`${course.course} course map. Arrow keys move, Enter opens a topic, / searches, Escape goes back.`}>
+  return <div className={'qard-map-frame' + (expanded ? ' is-expanded' : '') + (chosen && !atTopics ? ' is-panel-open' : '')} ref={box} tabIndex={0} onKeyDown={onKey} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} aria-label={`${course.course} course map. Arrow keys move, Enter opens a topic, / searches, Escape goes back.`}>
     <svg className="qard-map" width="100%" height="100%" role="group" aria-label={atTopics ? `${course.course} topics` : `${current?.name ?? course.course} objectives`}>
       <defs>
         <marker id="qard-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" className="qard-arrow-head"/></marker>

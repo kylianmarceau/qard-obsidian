@@ -14,4 +14,5 @@ for (const file of ['main.js', 'manifest.json', 'styles.css']) {
 const bundle = await readFile('main.js', 'utf8');
 assert.doesNotMatch(bundle, /createElement\(\s*["']script["']/i, 'Release must not include dynamic script loaders');
 assert.doesNotMatch(bundle, /example-tcp|example-bayes|example-binary-search/, 'Release must not include demo cards');
+assert.doesNotMatch(bundle, /(?:navigator\.)?clipboard\s*(?:\?\.|\.|\[)/, 'Release must not access the system clipboard');
 console.log(`Verified release ${manifest.version}: matching metadata, three install files, no script loaders or demo cards.`);

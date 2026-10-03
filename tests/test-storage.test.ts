@@ -5,8 +5,16 @@ vi.mock('obsidian', async importOriginal => {
 });
 import { TFile, TFolder, type App } from 'obsidian';
 import { VaultTestStorage } from '../src/tests/vault-storage';
+import { VaultLearnStorage } from '../src/learn/vault-learn-storage';
 const file = (path: string) => Object.assign(new (TFile as unknown as new (p: string) => TFile)(path), { name: path.split('/').pop()! });
 const folder = (path: string, children: TFile[]) => new (TFolder as unknown as new (p: string, c: TFile[]) => TFolder)(path, children);
+it('course source discovery skips hidden Markdown while preserving nested ordinary notes', () => {
+  const course = folder('Course', [file('Course/Overview.md'), file('Course/Topics/TCP.md'), file('Course/.private/Secret.md'), file('Course/.hidden.md')]);
+  const read = vi.fn();
+  const app = { vault: { getAbstractFileByPath: () => course, read } } as unknown as App;
+  expect(new VaultLearnStorage(app).files('Course', 'md')).toEqual(['Course/Overview.md', 'Course/Topics/TCP.md']);
+  expect(read).not.toHaveBeenCalled();
+});
 it('uses Obsidian file-manager trash for the selected test folder', async () => {
   const selected = folder('Qard/Tests/t', [file('Qard/Tests/t/test.json'), file('Qard/Tests/t/attempt.json')]);
   const trashFile = vi.fn().mockResolvedValue(undefined);

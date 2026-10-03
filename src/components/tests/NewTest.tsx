@@ -1,3 +1,4 @@
+import { studyNotes } from '../../vault-access';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import { folderNotes, resolveTestNotes, testFolders, testNotePaths } from '../../tests/test-sources';
@@ -13,7 +14,7 @@ export function NewTest({ services, nav, initialPrompt }: { services: QardServic
   const [folders, setFolders] = useState<string[]>([]);
   const [open, setOpen] = useState<'decks' | 'notes' | 'folders' | null>(null), [query, setQuery] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const files = useMemo(() => {
-    const candidates = services.app.vault.getMarkdownFiles();
+    const candidates = studyNotes(services.app);
     const allowed = new Set(testNotePaths(candidates.map(f => f.path), settings.folder));
     return candidates.filter(f => allowed.has(f.path));
   }, [services, settings.folder, index.revision]);
@@ -34,7 +35,7 @@ export function NewTest({ services, nav, initialPrompt }: { services: QardServic
     if (busy) return;
     setBusy(true); setError('');
     const deckFiles = index.decks.filter(d => chosenDecks.includes(d.name)).flatMap(d => d.files);
-    const latest = testNotePaths(services.app.vault.getMarkdownFiles().map(f => f.path), settings.folder);
+    const latest = testNotePaths(studyNotes(services.app).map(f => f.path), settings.folder);
     const selected = resolveTestNotes(latest, notes, folders);
     const request = { prompt: prompt.trim(), decks: chosenDecks, notes: selected, ...(folders.length ? { folders } : {}), sources: [...new Set([...deckFiles, ...selected])] };
     try {

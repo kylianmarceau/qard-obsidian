@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentRole } from '../../agents/runner';
@@ -23,7 +23,7 @@ export function AskThread({ services, path, items, busy, error, role, placeholde
   card?: CardTarget; onCard?: (cardId: string) => void; title?: string;
 }) {
   const [text, setText] = useState(''), [pending, setPending] = useState<string>(), [open, setOpen] = useState<Record<number, boolean>>({});
-  const [editing, setEditing] = useState<number>(), [added, setAdded] = useState<Set<number>>(new Set()), [copied, setCopied] = useState<number>();
+  const [editing, setEditing] = useState<number>(), [added, setAdded] = useState<Set<number>>(new Set()), [selecting, setSelecting] = useState<number>();
   // The answer has arrived once the list grows; the pending question then becomes part of it.
   useEffect(() => { setPending(undefined); setOpen({}); }, [items.length]);
   const isOpen = (i: number) => open[i] ?? (i === items.length - 1 && !pending);
@@ -42,8 +42,9 @@ export function AskThread({ services, path, items, busy, error, role, placeholde
             <AgentLabel services={services} role={role}/>
             <span className="qard-spacer"/>
             {card && (added.has(i) ? <span className="is-full qard-small"><CheckIcon size={13}/> Card added</span> : <button className="qard-text-button" onClick={() => setEditing(editing === i ? undefined : i)}>Make card</button>)}
-            <button className="qard-text-button" aria-label="Copy answer" onClick={() => { void navigator.clipboard?.writeText(item.a).then(() => { setCopied(i); window.setTimeout(() => setCopied(undefined), 1500); }); }}>{copied === i ? <><CheckIcon size={13}/> Copied</> : <><Copy size={13}/> Copy</>}</button>
+            <button className="qard-text-button" aria-label="Select answer to copy" aria-expanded={selecting === i} onClick={() => setSelecting(selecting === i ? undefined : i)}><Copy size={13}/>Select answer</button>
           </div>
+          {selecting === i && <AnswerSelection text={item.a}/>}
           {card && editing === i && <MakeCard services={services} item={item} target={card} done={id => { setAdded(new Set(added).add(i)); setEditing(undefined); if (id) onCard?.(id); }} cancel={() => setEditing(undefined)}/>}
         </div>
       </div> : <button key={i} className="qard-ask-item is-folded" aria-expanded="false" onClick={() => setOpen({ ...open, [i]: true })}>
@@ -61,6 +62,15 @@ export function AskThread({ services, path, items, busy, error, role, placeholde
       <button type="submit" className="qard-primary" disabled={busy || !text.trim()}>Ask</button>
     </form>
   </section>;
+}
+
+function AnswerSelection({ text }: { text: string }) {
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { field.current?.focus(); field.current?.select(); }, [text]);
+  return <div className="qard-answer-selection">
+    <p className="qard-muted qard-small">Use your device’s Copy action, or press Ctrl+C / Cmd+C.</p>
+    <textarea ref={field} aria-label="Answer to copy" rows={5} readOnly value={text} onFocus={e => e.currentTarget.select()}/>
+  </div>;
 }
 
 /** A question you had to ask is usually a gap worth a card: front is the question, back the answer, both editable. */

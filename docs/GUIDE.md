@@ -50,10 +50,11 @@ Generation continues while you visit other screens, appears in a **Generating fl
 - `npm run dev` — rebuild the plugin on source changes.
 - `QARD_VAULT=~/path/to/vault npm run dev` (or `npm run dev -- --vault=~/path/to/vault`) — also copy `main.js`, `manifest.json` and `styles.css` into that vault's `.obsidian/plugins/qard/` after every rebuild, including edits to `styles.css`. It never touches `data.json` (settings and review history), refuses folders that aren't vaults, and adds the `.hotreload` marker so the [Hot Reload](https://github.com/pjeby/hot-reload) plugin reloads Qard automatically. `npm run build -- --vault=…` installs a production build once.
 - `npm run lint` — official Obsidian source checks, with zero warnings.
+- `npm run lint:css` — official Obsidian CSS checks against the review’s Electron 30 baseline, with zero warnings.
 - `npm run typecheck` — strict TypeScript checking.
 - `npm test` — parser, indexing, writing, selection, scheduling, and UI lifecycle tests.
 - `npm run build` — create `main.js` and the installable `release/qard/` folder.
-- `npm run check` — typecheck, lint, tests, production build, and release-content checks.
+- `npm run check` — typecheck, source and CSS lint, tests, production build, and release-content checks.
 - `npm run test-vault` — install the current build in an isolated vault without adding notes.
 - `npm run test-vault -- --examples` — install in a separate vault with optional example notes.
 
@@ -374,6 +375,8 @@ Licensed under MIT; see [LICENSE](../LICENSE).
 Version tags trigger GitHub Actions to run all checks, build the three install files, create GitHub artifact attestations, and publish the release. Tags must exactly match the manifest version. Release notes live in `docs/releases/<version>.md`. The build aliases React imports to Preact compatibility modules so the existing components work without bundling React DOM’s unused dynamic script loaders. UI tests run with the same renderer.
 
 Qard enumerates Markdown notes once after the workspace is ready to discover flashcards across files; subsequent indexing updates only affected files. This is expected vault access, not network access.
+
+Discovery skips hidden notes and folders. The course folder picker uses Markdown paths rather than all loaded files. API note tools also exclude the configured tests folder. Qard does not read or write the system clipboard: **Select answer** selects the answer’s Markdown in a read-only field so you can use your device’s Copy action. See [community review notes](REVIEW_NOTES.md) for the remaining vault-enumeration recommendation and development dependency audit limitations.
 
 ## Support
 
