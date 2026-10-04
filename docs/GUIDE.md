@@ -45,6 +45,18 @@ Review the questions and answers, edit them or preview their Markdown, and adjus
 
 Generation continues while you visit other screens, appears in a **Generating flashcards** row on the Decks home page and in the running-jobs menu, and can be cancelled or retried. The latest review draft, edits, selections and added status are saved in `Flashcard drafts.json` in your card folder. The home row changes to **Review flashcards** when the batch is ready and stays until all cards have been added or the draft is replaced. Click it to reopen generation or review. After a plugin reload, return to **Generate with AI** to resume reviewing. An interrupted AI request requires **Try again**. **Generate another batch** replaces the review draft; cards already added remain in the vault. Usage appears under **Writing flashcards** in the token usage report.
 
+## Keeping cards consistent with your notes
+
+Generated flashcards retain the note versions they were based on. Cards made from practice tests, lesson suggestions and their follow-up answers also link to their source notes. General-knowledge cards without a source are not tracked.
+
+When a linked note changes, **Source updates** appears in the workspace header and an affected-card row appears on Decks. Open it to compare the changed passages with the current card and its explanation. Note changes are detected locally; **Suggest an update** uses your configured Writer connection only when you request it. Review and edit the proposed question and answer, then choose **Apply update** or **Keep card as is**. Unrelated changes can be acknowledged without editing the card. Suggestions become unavailable if the card or its notes change while you are reviewing them.
+
+Wording edits keep the card's ID, review history and schedule. When the correct answer changes, leave **The correct answer changed** checked: Qard preserves the history, makes the card due now and flags it for a fresh normal review. That flag clears after an actual rating; cram sessions do not clear it. Memory statistics omit flagged cards until they are reviewed. This does not reset the FSRS model or erase previous reviews.
+
+Linked sources follow note and folder renames while Qard is enabled. Deleted sources are shown as missing and cannot be used for AI suggestions until restored. Existing cards retain their identities when their card notes move. A partially saved update can be finished after a reload without adding a duplicate card.
+
+For older generated cards and handwritten cards, open a card's preview and choose **Link a source note**. Tracking starts from that note's current version; Qard cannot reconstruct the source of an older card automatically. You can link more than one source note. Source versions, links and pending suggestions are stored locally in `Qard/Source links.json`; back up that file with your notes. Keep this metadata file at its original path. Generation drafts, new practice tests and new lessons also retain their source versions so a change before adding their suggested cards is still detected. Historical tests and lesson transcripts remain records of their original attempts; updates edit the derived flashcards, including their answers and explanations.
+
 ## Development
 
 - `npm run dev` — rebuild the plugin on source changes.
@@ -147,11 +159,13 @@ Choose **Study**, select any combination of decks/topics/individual cards, choos
 | New cards | Cards with no recorded reviews |
 | Difficult cards | Cards whose last rating was Again or Hard |
 
+**Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never assign card IDs, record ratings, alter schedules or count as reviews in Statistics. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
+
 Order can be deck/note order or shuffle. The session shows progress and finishes after every selected card has been reviewed once. Again does not silently add repeats; the summary offers an explicit **Review difficult cards** action. Sessions do not automatically resume after closing/reloading, but completed ratings remain saved.
 
 | Key | Action |
 | --- | --- |
-| Space | Reveal/hide answer |
+| Space | Normal: reveal/hide answer. Cram: reveal/next card |
 | 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal |
 | F | Toggle focus mode |
 | Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
@@ -167,6 +181,7 @@ Every preview and study card has **Open source**; previews also offer edit and d
 ## Commands
 
 - Qard: Open study workspace
+- Qard: Review source updates
 - Qard: Study selected deck(s)
 - Qard: Study this deck
 - Qard: Study this topic

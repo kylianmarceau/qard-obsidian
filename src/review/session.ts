@@ -3,6 +3,7 @@ import { topicKey } from '../decks/deck-index';
 import { scheduler, type ReviewState, type Rating } from './scheduler';
 export type StudyMode = 'all' | 'due' | 'new' | 'difficult';
 export type CardOrder = 'note' | 'shuffle';
+export type SessionStyle = 'normal' | 'cram';
 export interface Selection { decks: string[]; topics: string[]; cards: string[] }
 export interface SessionOptions { selection: Selection; mode: StudyMode; order: CardOrder; now?: number }
 export function shuffle<T>(values: readonly T[], random = Math.random): T[] {

@@ -13,6 +13,7 @@ export class VaultTestStorage implements TestStorage {
     const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
     return file instanceof TFile ? this.app.vault.read(file) : null;
   }
+  modified(path: string) { const file = this.app.vault.getAbstractFileByPath(normalizePath(path)); return file instanceof TFile ? file.stat?.mtime : undefined; }
   exists(path: string) { return !!this.app.vault.getAbstractFileByPath(normalizePath(path)); }
   async trash(path: string) {
     const folder = this.app.vault.getAbstractFileByPath(normalizePath(path));

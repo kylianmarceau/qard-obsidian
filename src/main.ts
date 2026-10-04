@@ -1,6 +1,7 @@
 import { Plugin, addIcon, Notice, MarkdownView, TFile } from 'obsidian';
 import { QardView, VIEW_TYPE } from './views/QardView';
 import { VaultIndexer } from './cards/indexer';
+import { SourceSyncService, sourceSyncPath } from './cards/source-sync-service';
 import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
@@ -25,6 +26,7 @@ export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
   writer!: CardWriter;
   flashcards!: FlashcardGenerationService;
+  sourceSync!: SourceSyncService;
   reviews!: ReviewStore;
   tests!: TestService;
   learn!: LearnService;
@@ -44,13 +46,21 @@ export default class QardPlugin extends Plugin {
     const dueCards = () => { const { states } = this.reviews.getSnapshot(), now = Date.now(); return this.index.getSnapshot().cards.filter(c => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now)).length; };
     this.jobs = new JobClock(() => this.reviews.getSnapshot().timings, (key, ms) => this.reviews.recordTiming(key, ms), () => settings().agents.roles);
     const timing = (kind: string, ms: number) => this.jobs.record(kind, ms);
-    this.flashcards = new FlashcardGenerationService(new VaultTestStorage(this.app), () => settings().cardFolder, () => studyNotes(this.app, [settings().tests.folder]).map(f => f.path), () => runner('writer'), this.writer, message => new Notice(message, 8000), timing, () => this.index.getSnapshot().decks.map(d => ({ name: d.name, topics: d.topics.map(t => t.name) })));
+    this.sourceSync = new SourceSyncService(new VaultTestStorage(this.app), sourceSyncPath('Qard'), () => this.index.getSnapshot().cards, this.writer, id => this.reviews.requireContentCheck(id), () => runner('writer'));
+    const captureSources = (paths: string[], unchangedSince?: number) => this.sourceSync.capture(paths, unchangedSince);
+    this.writer.trackSources = async (id, paths, versions) => {
+      const saved = versions?.filter(s => paths.includes(s.path)) ?? [];
+      const missing = paths.filter(p => !saved.some(s => s.path === p));
+      await this.sourceSync.track(id, [...saved, ...await captureSources(missing)]);
+    };
+    void this.sourceSync.load();
+    this.flashcards = new FlashcardGenerationService(new VaultTestStorage(this.app), () => settings().cardFolder, () => studyNotes(this.app, [settings().tests.folder]).map(f => f.path), () => runner('writer'), this.writer, message => new Notice(message, 8000), timing, () => this.index.getSnapshot().decks.map(d => ({ name: d.name, topics: d.topics.map(t => t.name) })), captureSources);
     void this.flashcards.load();
-    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing);
+    this.learn = new LearnService(new VaultLearnStorage(this.app), settings, runner, links, dueCards, undefined, message => new Notice(message, 8000), timing, captureSources);
     this.tests = new TestService(new VaultTestStorage(this.app), () => settings().tests, runner, undefined, {
       objectives: async paths => { const m = await this.learn.courseFor(paths); return m && { mastery: m.path, lines: objectiveLines(m) }; },
       record: (test, attempt) => this.learn.recordTest(test, attempt)
-    }, message => new Notice(message, 8000), timing);
+    }, message => new Notice(message, 8000), timing, captureSources);
     addIcon('qard', '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>');
     this.registerView(VIEW_TYPE, leaf => new QardView(leaf, this));
     this.addRibbonIcon('qard', 'Open study workspace', () => { void this.open().catch(e => new Notice(String(e))); });
@@ -59,6 +69,7 @@ export default class QardPlugin extends Plugin {
     this.addCommand({ id: 'open-practice-tests', name: 'Open practice tests', callback: () => this.show('tests') });
     this.addCommand({ id: 'open-today', name: 'Open today', callback: () => this.show('today') });
     this.addCommand({ id: 'open-learn', name: 'Open courses', callback: () => this.show('learn') });
+    this.addCommand({ id: 'source-updates', name: 'Review source updates', callback: () => this.show('source-updates') });
     this.addCommand({ id: 'open-statistics', name: 'Show study statistics', callback: () => this.show('statistics') });
     this.addCommand({ id: 'open-usage', name: 'Show token usage', callback: () => this.show('usage') });
     this.addCommand({ id: 'teach-this-note', name: 'Teach me this note', checkCallback: checking => {
@@ -94,7 +105,15 @@ export default class QardPlugin extends Plugin {
     this.addSettingTab(new QardSettingsTab(this));
     this.app.workspace.onLayoutReady(() => {
       if (this.disposed) return;
-      void this.index.start().catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
+      let sourceTimer: number | undefined;
+      const scanSources = () => { window.clearTimeout(sourceTimer); sourceTimer = window.setTimeout(() => { void this.sourceSync.refresh(); }, 350); };
+      this.registerEvent(this.app.vault.on('modify', file => { if (file instanceof TFile && file.extension === 'md') scanSources(); }));
+      this.registerEvent(this.app.vault.on('create', file => { if (file instanceof TFile && file.extension === 'md') scanSources(); }));
+      this.registerEvent(this.app.vault.on('delete', () => scanSources()));
+      this.registerEvent(this.app.vault.on('rename', (file, oldPath) => { void this.sourceSync.rename(oldPath, file.path).catch(() => scanSources()); }));
+      const offSourceIndex = this.index.subscribe(scanSources);
+      this.register(() => { window.clearTimeout(sourceTimer); offSourceIndex(); });
+      void this.index.start().then(() => this.sourceSync.refresh()).catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
       // Pick up background work that a reload of Obsidian or Qard interrupted.
       void this.learn.resumeBackground().catch(() => {});
       void this.tests.resume().catch(() => {});
@@ -109,7 +128,7 @@ export default class QardPlugin extends Plugin {
     return leaf.view;
   }
   openImport() { new ImportModal(this).open(); }
-  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'statistics') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
+  async show(kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates') { const view = await this.open(); view.show({ serial: Date.now(), kind }); }
   async teach(file: TFile) {
     const path = await this.learn.startLesson({ topic: file.basename, notes: [file.path] });
     const view = await this.open(); view.show({ serial: Date.now(), kind: 'lesson', path });
@@ -127,6 +146,6 @@ export default class QardPlugin extends Plugin {
     this.disposed = true;
     this.selectionModals.forEach(modal => modal.close()); this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach(leaf => { if (leaf.view instanceof QardView) leaf.view.release(); });
-    this.flashcards?.dispose(); this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
+    this.sourceSync?.dispose(); this.flashcards?.dispose(); this.index?.dispose(); this.tests?.dispose(); this.learn?.dispose(); this.reviews?.dispose();
   }
 }

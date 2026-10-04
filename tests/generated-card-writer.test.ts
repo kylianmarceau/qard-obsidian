@@ -94,3 +94,17 @@ it('appends later selections to their own topic while preserving saved answers',
   expect(create).toHaveBeenCalledOnce(); expect(result[0]?.backMarkdown).toBe('Edited answer.');
   expect(result.map(c => c.topic)).toEqual(['TCP', 'UDP']);
 });
+
+it('records generated sources before writing cards, and blocks creation if tracking cannot be saved', async () => {
+  const { writer, create, texts } = setup(); writer.trackSources = vi.fn().mockRejectedValueOnce(new Error('Source metadata unavailable')).mockResolvedValue(undefined);
+  const versions = [{ path: 'Notes/TCP.md', text: 'TCP is reliable.' }];
+  const generated = [{ ...cards[0]!, source: 'Notes/TCP.md', sourceSnapshots: versions }];
+  await expect(writer.createBatch(target, generated)).rejects.toThrow('Source metadata'); expect(create).not.toHaveBeenCalled(); expect(texts).toEqual({});
+  await writer.createBatch(target, generated); expect(writer.trackSources).toHaveBeenCalledWith('card-1', ['Notes/TCP.md'], versions); expect(create).toHaveBeenCalledOnce();
+});
+it('records sources for generated individual cards while leaving manual cards unlinked', async () => {
+  const { writer } = setup(); writer.trackSources = vi.fn().mockResolvedValue(undefined);
+  await writer.create({ deck: 'Networks', topic: 'Transport', folder: 'Qard', front: 'TCP?', back: 'Reliable.' }); expect(writer.trackSources).not.toHaveBeenCalled();
+  const created = await writer.create({ deck: 'Networks', topic: 'Transport', folder: 'Qard', front: 'UDP?', back: 'Unreliable.', generatedFrom: ['Notes/UDP.md'], sourceSnapshots: [{ path: 'Notes/UDP.md', text: 'UDP has no delivery guarantee.' }] });
+  expect(writer.trackSources).toHaveBeenCalledWith(created.id, ['Notes/UDP.md'], [{ path: 'Notes/UDP.md', text: 'UDP has no delivery guarantee.' }]);
+});

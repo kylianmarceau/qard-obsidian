@@ -71,6 +71,13 @@ export class ReviewStore {
     });
   }
   /** Adds migrated schedules. Existing Qard states always win. */
+  requireContentCheck(cardId: string, now = Date.now()) {
+    if (!/^[A-Za-z0-9_-]+$/.test(cardId)) return Promise.reject(new Error('A stable card ID is required.'));
+    return this.change(data => {
+      const state = data.states[cardId] ?? { cardId, interval: 0, ease: 2.5, reviewCount: 0, lapses: 0 };
+      return { ...data, states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, { [cardId]: { ...state, due: Math.min(state.due ?? now, now), needsContentCheck: true } }) };
+    });
+  }
   importStates(states: ReviewState[]) {
     const valid = states.filter(s => /^[A-Za-z0-9_-]+$/.test(s.cardId) && Number.isFinite(s.interval) && Number.isFinite(s.ease) && s.ease > 0 && Number.isSafeInteger(s.reviewCount) && s.reviewCount >= 0 && s.interval >= 0);
     if (!valid.length) return Promise.resolve();

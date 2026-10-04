@@ -3,6 +3,7 @@ import type { Schema } from '../tests/test-schema';
 import { askSchema, disputeSchema, marksSchema, planSchema, retrySchema, testSchema, wrapupSchema } from '../tests/test-schema';
 import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, probeMapSchema, probeSchema, questionsSchema, stepSchema, tutorMarkSchema } from '../learn/learn-schema';
 import type { Usage } from './usage';
+import { sourceSuggestionSchema } from '../cards/source-sync-schema';
 
 /** Per-day totals, keyed "feature|role|connection|model". */
 export interface UsageTotals { calls: number; input: number; output: number; cacheRead: number; cacheWrite: number; costUsd: number; costCalls: number }
@@ -10,6 +11,7 @@ export type UsageLog = Record<string, Record<string, UsageTotals>>;
 
 /** Which feature a run served, from the reply format it was asked for. No call site needs to say. */
 const PURPOSES = new Map<Schema, string>([
+  [sourceSuggestionSchema, 'Updating flashcards'],
   [flashcardsSchema, 'Writing flashcards'], [flashcardBatchSchema, 'Writing flashcards'], [planSchema, 'Test plans'], [testSchema, 'Writing tests'], [marksSchema, 'Marking'], [wrapupSchema, 'Test summaries'],
   [retrySchema, 'Test review'], [askSchema, 'Test review'], [disputeSchema, 'Test review'],
   [objectivesSchema, 'Course mapping'], [courseUpdateSchema, 'Course mapping'], [questionsSchema, 'Writing checks'],

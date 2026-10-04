@@ -9,10 +9,10 @@ export function SuggestedCards({ services, folder }: { services: QardServices; n
   const [busy, setBusy] = useState<number>(), [error, setError] = useState('');
   const test = entry?.test, attempt = entry?.attempt, cards = attempt?.wrapup?.cards ?? [];
   if (!test || !attempt) return <Waiting text="Loading…"/>;
-  const target = (i: number) => { const q = questions(test).find(x => x.id === cards[i]!.questionId)!; return { q, ...cardTarget(services, q, test.title, sectionOf(test, q.id)!.title) }; };
+  const target = (i: number) => { const q = questions(test).find(x => x.id === cards[i]!.questionId)!; return { q, ...cardTarget(services, q, test.title, sectionOf(test, q.id)!.title, test) }; };
   async function add(i: number) {
     setBusy(i); setError('');
-    try { const t = target(i); await services.writer.create({ deck: t.deck, topic: t.topic, sourceFile: t.sourceFile, front: cards[i]!.front, back: cards[i]!.back, folder: services.reviews.getSnapshot().settings.cardFolder }); await services.tests.cardState(folder, { suggestion: i }, 'added'); }
+    try { const t = target(i); await services.writer.create({ deck: t.deck, topic: t.topic, sourceFile: t.sourceFile, generatedFrom: t.generatedFrom, sourceSnapshots: t.sourceSnapshots, front: cards[i]!.front, back: cards[i]!.back, folder: services.reviews.getSnapshot().settings.cardFolder }); await services.tests.cardState(folder, { suggestion: i }, 'added'); }
     catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
   }
   const pending = cards.map((_, i) => i).filter(i => !attempt.cards?.[i]);
