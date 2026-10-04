@@ -54,7 +54,7 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
   const section = sectionOf(test, q.id)!, path = q.source?.path || folder;
   const [selected, setSelected] = useState<number>(), [panel, setPanel] = useState<Panel>(null), [compare, setCompare] = useState(false);
   const [retryText, setRetryText] = useState(''), [disputeText, setDisputeText] = useState(''), [override, setOverride] = useState<boolean[]>();
-  const target = cardTarget(services, q, test.title, section.title);
+  const target = cardTarget(services, q, test.title, section.title, test);
   const [front, setFront] = useState(''), [back, setBack] = useState(''), [cardError, setCardError] = useState(''), [saving, setSaving] = useState(false);
   const placed = useMemo(() => placeAnnotations(answer?.text ?? '', mark?.annotations ?? []), [answer?.text, mark?.annotations]);
   const lost = (mark?.score ?? 0) < q.marks, sure = lost && answer?.confidence === 'sure';

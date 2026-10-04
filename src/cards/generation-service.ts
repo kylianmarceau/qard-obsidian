@@ -1,10 +1,12 @@
+import { readSourceSnapshots } from './source-sync-service';
+import type { SourceSnapshot } from './source-sync-types';
 import { CANCELLED, runValidated, type AgentRunner } from '../agents/runner';
 import { safeFolder, type CardWriter } from './card-writer';
 import { flashcardPrompt } from './generation-prompts';
 import { flashcardBatchSchema, flashcardsSchema, readDestination, readFlashcardBatch, readFlashcards, type FlashcardDestination, type GeneratedContent } from './generation-schema';
 
 export interface FlashcardRequest { prompt: string; deck?: string; topic?: string; notes: string[]; folders?: string[] }
-export interface GeneratedDraft extends GeneratedContent { id: string; selected: boolean; added: boolean }
+export interface GeneratedDraft extends GeneratedContent { id: string; selected: boolean; added: boolean; sourceSnapshots?: SourceSnapshot[] }
 interface Batch { id: string; folder: string; request: FlashcardRequest; cards: GeneratedDraft[]; destination?: FlashcardDestination; destinationLocked?: boolean }
 export const flashcardDestination = (batch: Batch): FlashcardDestination => batch.destination ?? { deck: batch.request.deck ?? '', topic: batch.request.topic ?? '' };
 export const flashcardTopics = (batch: Batch): string[] => [...new Set(batch.cards.map(c => c.topic ?? flashcardDestination(batch).topic))];
@@ -21,7 +23,7 @@ export class FlashcardGenerationService {
   private controller?: AbortController;
   private writes = Promise.resolve();
   private disposed = false;
-  constructor(private storage: DraftStorage, private folder: () => string, private paths: () => string[], private runner: () => AgentRunner, private writer: Pick<CardWriter, 'createBatch'>, private notify: (text: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}, private destinations: () => { name: string; topics: string[] }[] = () => []) {}
+  constructor(private storage: DraftStorage, private folder: () => string, private paths: () => string[], private runner: () => AgentRunner, private writer: Pick<CardWriter, 'createBatch'>, private notify: (text: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}, private destinations: () => { name: string; topics: string[] }[] = () => [], private captureSources?: (paths: string[], unchangedSince?: number) => Promise<SourceSnapshot[]>) {}
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   getSnapshot = () => this.snapshot;
   private publish(patch: Partial<GenerationSnapshot>) { this.snapshot = { ...this.snapshot, ...patch }; if (!this.disposed) this.listeners.forEach(fn => fn()); }
@@ -45,6 +47,7 @@ export class FlashcardGenerationService {
       if (value.destination) readDestination(value.destination, false);
       if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean') throw new Error('Invalid saved destination.');
       for (const card of value.cards) {
+        if (card.sourceSnapshots !== undefined) readSourceSnapshots(card.sourceSnapshots);
         if (card.topic !== undefined) readDestination({ deck: 'validation', topic: card.topic }, false);
         if (value.destinationLocked || card.added) readDestination({ ...flashcardDestination(value), topic: card.topic ?? flashcardDestination(value).topic });
       }
@@ -85,14 +88,18 @@ export class FlashcardGenerationService {
       if (controller.signal.aborted) throw new Error(CANCELLED);
       const paths = this.paths();
       if (batch.request.notes.some(p => !paths.includes(p))) throw new Error('A selected note no longer exists. Start a new batch and choose the notes again.');
+      const versions = await this.captureSources?.(batch.request.notes);
+      if (versions?.some(s => s.text === null)) throw new Error('A selected source note is missing. Choose it again.');
       const infer = !batch.request.deck || !batch.request.topic;
-      const result = await Promise.race([runValidated(this.runner(), { prompt: flashcardPrompt(batch.request, this.destinations()), schema: infer ? flashcardBatchSchema : flashcardsSchema, signal: controller.signal, effort: 'high' }, v => {
+      const result = await Promise.race([runValidated(this.runner(), { prompt: flashcardPrompt(batch.request, this.destinations(), versions), schema: infer ? flashcardBatchSchema : flashcardsSchema, signal: controller.signal, effort: 'high' }, v => {
         if (!infer) return { destination: readDestination(flashcardDestination(batch)), cards: readFlashcards(v, paths) };
         const generated = readFlashcardBatch(v, paths);
         return { ...generated, destination: { deck: batch.request.deck || generated.destination.deck, topic: batch.request.topic || generated.destination.topic } };
       }), cancelled]);
+      const discovered = [...new Set(result.cards.map(c => c.source).filter(p => p && !versions?.some(s => s.path === p)))];
+      const sourceVersions = [...(versions ?? []), ...(await this.captureSources?.(discovered, startedAt) ?? [])];
       if (controller.signal.aborted || this.disposed) return;
-      this.publish({ batch: { ...batch, destination: result.destination, cards: result.cards.map(c => ({ ...c, ...(batch.request.topic ? { topic: batch.request.topic } : {}), id: crypto.randomUUID(), selected: true, added: false })) } });
+      this.publish({ batch: { ...batch, destination: result.destination, cards: result.cards.map(c => ({ ...c, ...(batch.request.topic ? { topic: batch.request.topic } : {}), id: crypto.randomUUID(), selected: true, added: false, ...(sourceVersions.length ? { sourceSnapshots: sourceVersions.filter(s => s.path === c.source) } : {}) })) } });
       await this.persist();
       if (this.disposed) return;
       this.publish({ job: undefined });

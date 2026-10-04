@@ -1,3 +1,4 @@
+import type { SourceSnapshot } from '../cards/source-sync-types';
 /** Checks and lessons. As with tests, Qard is the only writer; agents return JSON that Qard validates. */
 import type { AnswerState, Goal, Question, QuestionMark } from '../tests/test-types';
 import type { MasteryState } from './mastery';
@@ -39,7 +40,7 @@ export interface LessonClose {
   nextCheck?: string;
 }
 export interface Lesson {
-  version: 1; createdAt: number; topic: string; notes: string[];
+  version: 1; createdAt: number; topic: string; notes: string[]; sourceSnapshots?: SourceSnapshot[];
   mastery?: string; course?: string; objective?: string;
   probe?: { questions: Question[]; answers: Record<string, AnswerState>; submitted?: boolean; marks?: Record<string, QuestionMark>; findings?: string };
   map?: LessonMap; accepted?: boolean;

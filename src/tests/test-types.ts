@@ -1,3 +1,4 @@
+import type { SourceSnapshot } from '../cards/source-sync-types';
 /** Practice-test files. Qard is the only writer; agents return JSON that Qard validates and saves. */
 export type QuestionType = 'short' | 'long' | 'mcq' | 'calc';
 export type Confidence = 'sure' | 'unsure' | 'guess';
@@ -23,7 +24,7 @@ export interface Question {
   goal?: Goal;
 }
 export interface Section { id: string; title: string; questions: Question[] }
-export interface PracticeTest { version: 1; title: string; createdAt: number; sections: Section[]; /** The course mastery file its objectives come from. */ mastery?: string; recorded?: boolean }
+export interface PracticeTest { version: 1; title: string; createdAt: number; sections: Section[]; /** The course mastery file its objectives come from. */ mastery?: string; recorded?: boolean; sourceSnapshots?: SourceSnapshot[] }
 
 export interface Annotation { quote: string; kind: AnnotationKind; note: string }
 export interface QuestionMark { score: number; awarded: boolean[]; annotations: Annotation[]; mistake: Mistake; feedback: string }

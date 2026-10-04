@@ -87,6 +87,7 @@ export function memoryStatistics(cards: QardCard[], states: Record<string, Revie
   for (const card of cards) {
     if (!card.stable || card.duplicateId || seen.has(card.id)) continue;
     seen.add(card.id);
+    if (states[card.id]?.needsContentCheck) continue;
     const c = states[card.id]?.fsrs;
     if (!validFsrs(c) || c.last_review > now) continue;
     const difficulty = (c.difficulty - 1) / 9 * 100;

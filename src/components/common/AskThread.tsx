@@ -1,3 +1,4 @@
+import type { SourceSnapshot } from '../../cards/source-sync-types';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
@@ -7,7 +8,7 @@ import { Waiting } from '../tests/common';
 import { AgentLabel } from '../jobs/AgentLabel';
 
 export interface AskItem { q: string; a: string }
-export interface CardTarget { deck: string; topic: string; sourceFile?: string }
+export interface CardTarget { deck: string; topic: string; sourceFile?: string; generatedFrom?: string[]; sourceSnapshots?: SourceSnapshot[] }
 /** One line of an answer for the folded row: its first sentence-ish, without Markdown markers. */
 const preview = (text: string) => text.replace(/```[\s\S]*?```/g, ' ').replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim();
 

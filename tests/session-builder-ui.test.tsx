@@ -25,3 +25,18 @@ it('selects all cards across collapsed decks and starts the complete session', a
     expect(start).toHaveBeenCalledWith(snapshot.cards);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+it('starts cram without assigning IDs or writing to the notes', async () => {
+  const index = new CardIndex(); index.update('a.md', '> [!qard]- First\n> Answer'); index.setLoading(false);
+  const snapshot = index.getSnapshot(), start = vi.fn(), writer = { ensureStable: vi.fn() };
+  const services = { index, reviews: new ReviewStore(async () => {}), writer } as unknown as QardServices;
+  const host = document.createElement('div'), root = createRoot(host); document.body.append(host);
+  try {
+    await act(async () => root.render(<StudySessionBuilder cards={snapshot.cards} decks={snapshot.decks} initial={{ decks: ['a'], topics: [], cards: [] }} services={services} start={start} back={vi.fn()}/>));
+    const type = host.querySelector('[aria-label="Session type"]') as HTMLSelectElement;
+    await act(async () => { type.value = 'cram'; type.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(host.textContent).toContain('No ratings or schedule changes');
+    await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Start')!.click());
+    expect(start).toHaveBeenCalledWith(snapshot.cards, 'cram'); expect(writer.ensureStable).not.toHaveBeenCalled();
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

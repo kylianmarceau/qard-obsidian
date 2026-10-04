@@ -1,6 +1,6 @@
 import type { FsrsCard } from './fsrs-scheduler';
 export type Rating = 1 | 2 | 3 | 4;
-export interface ReviewState { cardId: string; lastReviewed?: number; due?: number; interval: number; ease: number; reviewCount: number; lapses: number; lastRating?: Rating; fsrs?: FsrsCard }
+export interface ReviewState { cardId: string; lastReviewed?: number; due?: number; interval: number; ease: number; reviewCount: number; lapses: number; lastRating?: Rating; fsrs?: FsrsCard; needsContentCheck?: boolean }
 export interface ReviewEvent { cardId: string; at: number; rating: Rating; scheduled: boolean; scheduler?: 'simple' | 'fsrs'; desiredRetention?: number }
 export interface Scheduler {
   getCardState(cardId: string, states: Record<string, ReviewState>): ReviewState | undefined;
@@ -11,7 +11,7 @@ export const DAY = 86_400_000;
 /** Small transparent interval scheduler, not FSRS. Manual selection never calls it. */
 export const scheduler: Scheduler = {
   getCardState: (id, states) => states[id],
-  isDue: (state, now) => !state?.reviewCount || state.due === undefined || state.due <= now,
+  isDue: (state, now) => !!state?.needsContentCheck || !state?.reviewCount || state.due === undefined || state.due <= now,
   reviewCard(cardId, state, rating, now) {
     const ease = Math.max(1.3, Math.min(3.2, (state?.ease || 2.5) + (rating === 1 ? -.2 : rating === 2 ? -.15 : rating === 4 ? .15 : 0)));
     const previous = state?.interval || 0;

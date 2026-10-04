@@ -3,12 +3,14 @@ import type { QardCard } from './card-types';
 import type { VaultIndexer } from './indexer';
 import { deleteCardInSource, deleteGroupInSource, ensureIdInSource, replaceCardInSource, serializeCard } from './source-patch';
 import { parseCards } from './parser';
-export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string }
+import type { SourceSnapshot } from './source-sync-types';
+export interface CardDraft { deck: string; topic: string; front: string; back: string; sourceFile?: string; folder: string; generatedFrom?: string[]; sourceSnapshots?: SourceSnapshot[] }
 export function safeFolder(folder: string): string {
   if (/^(?:[\\/]|[A-Za-z]:)/.test(folder) || folder.split(/[\\/]/).some(part => part === '..' || part.startsWith('.'))) throw new Error('Choose a normal vault folder, without hidden folders or parent paths.');
   return normalizePath(folder.trim()).replace(/^\.$/, '');
 }
 export class CardWriter {
+  trackSources?: (id: string, paths: string[], snapshots?: SourceSnapshot[]) => Promise<void>;
   constructor(private app: App, private index: VaultIndexer) {}
   private file(path: string) { const file = this.app.vault.getAbstractFileByPath(path); if (!(file instanceof TFile)) throw new Error('The source note no longer exists. Reopen the card from the library.'); return file; }
   private unique(card: QardCard) {
@@ -55,7 +57,7 @@ export class CardWriter {
     }
   }
   /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
-  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string; topic?: string }[]): Promise<QardCard[]> {
+  async createBatch(target: { deck: string; topic: string; folder: string; batchId: string }, cards: { id: string; front: string; back: string; topic?: string; source?: string; sourceSnapshots?: SourceSnapshot[] }[]): Promise<QardCard[]> {
     const deck = target.deck.trim(), topic = target.topic.trim() || 'General', folder = safeFolder(target.folder);
     if (!deck || /[\r\n]/.test(deck + topic)) throw new Error('Deck and topic names must be nonempty single lines.');
     if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) throw new Error('Invalid batch ID.');
@@ -69,6 +71,7 @@ export class CardWriter {
     });
     const slug = deck.replace(/[\\/:*?"<>|#^[\]]/g, '-').replace(/^\.+/, '').trim().slice(0, 80) || 'Cards';
     const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
+    for (const card of cards) if (card.source) await this.trackSources?.(card.id, [card.source], card.sourceSnapshots);
     const append = (source: string) => {
       const existing = parseCards(source, path).cards;
       for (const card of cards) {
@@ -105,6 +108,7 @@ export class CardWriter {
     const id = crypto.randomUUID();
     // Validate before creating directories or notes.
     serializeCard(id, draft.front, draft.back);
+    if (draft.generatedFrom?.length) await this.trackSources?.(id, draft.generatedFrom, draft.sourceSnapshots);
     let file: TFile | undefined;
     if (draft.sourceFile) {
       const existing = this.file(draft.sourceFile);

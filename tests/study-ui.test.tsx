@@ -86,3 +86,31 @@ it('previews FSRS intervals after reveal without rating the card and hides them 
   expect(services.reviews.getSnapshot().states.first!.fsrs).toBeDefined();
   expect(services.reviews.getSnapshot().states.first!.due).toBeUndefined();
 });
+
+it('crams with Space to reveal and Space to advance, without ratings, histories or schedule changes', async () => {
+  const many = parseCards('<!-- qard-id: first -->\n> [!qard]- First question\n> First answer\n\n<!-- qard-id: second -->\n> [!qard]- Second question\n> Second answer\n', 'a.md').cards;
+  await services.reviews.review('first', 4); const before = services.reviews.getSnapshot(), review = vi.spyOn(services.reviews, 'review'), repeat = vi.fn();
+  await act(async () => root.render(<StudyView cards={many} style="cram" services={services} exit={exit} repeat={repeat}/>));
+  await key('3'); expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  await key(' '); expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('false');
+  expect(host.querySelector('.qard-ratings')).toBeNull(); expect(host.querySelector('.qard-rating-interval')).toBeNull();
+  await key('4'); expect(host.textContent).toContain('1 / 2');
+  await key(' '); expect(host.textContent).toContain('2 / 2'); expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent?.startsWith('Reveal answer'))!.click());
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent?.startsWith('Next card'))!.click());
+  expect(host.textContent).toContain('Cram session complete'); expect(host.textContent).toContain('2 / 2'); expect(host.querySelector('.qard-summary-ratings')).toBeNull();
+  expect(review).not.toHaveBeenCalled(); expect(services.reviews.getSnapshot()).toBe(before);
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Cram again')!.click()); expect(repeat).toHaveBeenCalledWith(many);
+});
+it('guards cram navigation against held keys, text input, confirmation dialogs and double advance', async () => {
+  const many = parseCards('<!-- qard-id: first -->\n> [!qard]- First\n> Answer\n\n<!-- qard-id: second -->\n> [!qard]- Second\n> Answer\n', 'a.md').cards;
+  await act(async () => root.render(<StudyView cards={many} style="cram" services={services} exit={exit} repeat={vi.fn()}/>));
+  const field = document.createElement('input'); host.append(field); await key(' ', field); field.remove();
+  expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  await key(' '); await act(async () => { host.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', repeat: true, bubbles: true })); });
+  expect(host.textContent).toContain('1 / 2'); await key('Escape'); await key(' '); expect(host.textContent).toContain('1 / 2');
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Keep studying')!.click());
+  await act(async () => { for (let i = 0; i < 3; i++) host.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); });
+  expect(host.textContent).toContain('2 / 2'); expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+});

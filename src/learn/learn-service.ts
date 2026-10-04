@@ -1,3 +1,4 @@
+import type { SourceSnapshot } from '../cards/source-sync-types';
 import type { QardSettings } from '../settings/settings';
 import { tidyMermaid } from './mermaid';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
@@ -77,7 +78,7 @@ export class LearnService {
   private disposed = false;
   private proposalsLoaded?: Promise<void>;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
-  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}) {}
+  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}, private captureSources?: (paths: string[], unchangedSince?: number) => Promise<SourceSnapshot[]>) {}
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   getSnapshot = () => this.snapshot;
@@ -555,7 +556,8 @@ export class LearnService {
     if (!mastery && notes.length) mastery = (await this.courseFor(notes))?.path;
     const m = mastery ? await this.course(mastery) : undefined, o = m?.objectives.find(x => x.id === objective);
     if (o) notes = [...new Set([...notes, ...o.notes.map(n => this.storage.resolve(n, m!.path) ?? n)])];
-    const lesson: Lesson = { version: 1, createdAt: this.now(), topic: input.topic, notes, mastery, course: m?.course, objective: o?.id, steps: [], state: [], current: 0 };
+    const sourceSnapshots = await this.captureSources?.(notes);
+    const lesson: Lesson = { ...(sourceSnapshots ? { sourceSnapshots } : {}), version: 1, createdAt: this.now(), topic: input.topic, notes, mastery, course: m?.course, objective: o?.id, steps: [], state: [], current: 0 };
     const base = `${this.root()}/Lessons/${this.today()} ${safeName(input.topic)}`;
     let path = `${base}.json`, n = 2; while (this.storage.exists(path) || this.lessons.has(path)) path = `${base} ${n++}.json`;
     this.removed.delete(path); this.removed.delete(path.replace(/\.json$/, '.md'));

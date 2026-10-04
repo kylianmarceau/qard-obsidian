@@ -197,3 +197,14 @@ it('keeps topics editable when a deselected card has no topic, before locking a 
   service.updateCard(drafts[1]!.id, { topic: 'Transport' }); await service.addSelected();
   expect(writer.createBatch).toHaveBeenCalledOnce();
 });
+
+it('keeps the note version supplied to generation when the note changes before cards are added', async () => {
+  const files: Record<string, string> = { 'Notes/TCP.md': 'Original note.' }, writer = { createBatch: vi.fn().mockResolvedValue([]) }, run = vi.fn().mockResolvedValue(content);
+  const capture = vi.fn(async (paths: string[]) => paths.map(path => ({ path, text: files[path] ?? null })));
+  const service = new FlashcardGenerationService({ read: async p => files[p] ?? null, write: async (p, text) => { files[p] = text; } }, () => 'Qard', () => ['Notes/TCP.md'], () => ({ name: 'Writer', run }), writer, undefined, undefined, undefined, capture);
+  await service.load(); await service.start(request); await settled(service);
+  expect(run.mock.calls[0]?.[0].prompt).toContain('Original note.'); files['Notes/TCP.md'] = 'Updated note.';
+  await service.addSelected(); expect(writer.createBatch.mock.calls[0]?.[1][0].sourceSnapshots).toEqual([{ path: 'Notes/TCP.md', text: 'Original note.' }]);
+  const restored = new FlashcardGenerationService({ read: async p => files[p] ?? null, write: async () => {} }, () => 'Qard', () => ['Notes/TCP.md'], () => ({ name: 'Writer', run }), writer);
+  await restored.load(); expect(restored.getSnapshot().batch?.cards[0]?.sourceSnapshots?.[0]?.text).toBe('Original note.');
+});

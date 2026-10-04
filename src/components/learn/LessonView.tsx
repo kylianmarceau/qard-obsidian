@@ -36,7 +36,8 @@ function LessonTrail({ services, nav, lesson }: { services: QardServices; nav: L
 function lessonCardTarget(services: QardServices, lesson: Lesson): CardTarget {
   const noteCards = services.index.getSnapshot().cards.filter(c => lesson.notes.includes(c.sourceFile));
   const topic = lesson.map?.title ?? lesson.topic;
-  return noteCards.length ? { deck: noteCards[0]!.deck, topic, sourceFile: noteCards[0]!.sourceFile } : { deck: lesson.course ?? lesson.topic, topic };
+  const provenance = { generatedFrom: lesson.notes, sourceSnapshots: lesson.sourceSnapshots };
+  return noteCards.length ? { ...provenance, deck: noteCards[0]!.deck, topic, sourceFile: noteCards[0]!.sourceFile } : { ...provenance, deck: lesson.course ?? lesson.topic, topic };
 }
 
 export function LessonView({ services, nav, path }: { services: QardServices; nav: LearnNav; path: string }) {

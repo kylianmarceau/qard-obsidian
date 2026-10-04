@@ -18,10 +18,11 @@ export function useTestFolder(services: QardServices, folder: string): { entry?:
 }
 
 /** Where a card for this question belongs: its source note's deck and heading, else a deck named after the test. */
-export function cardTarget(services: QardServices, q: Question, testTitle: string, sectionTitle: string) {
+export function cardTarget(services: QardServices, q: Question, testTitle: string, sectionTitle: string, test?: import('../../tests/test-types').PracticeTest) {
   const cards = q.source ? services.index.getSnapshot().cards.filter(c => c.sourceFile === q.source!.path) : [];
   const topic = cards.find(c => q.source?.heading && c.topic === q.source.heading)?.topic ?? cards[0]?.topic ?? sectionTitle;
-  return cards.length ? { deck: cards[0]!.deck, topic, sourceFile: q.source!.path } : { deck: testTitle, topic: sectionTitle, sourceFile: undefined };
+  const provenance = q.source ? { generatedFrom: [q.source.path], sourceSnapshots: test?.sourceSnapshots?.filter(s => s.path === q.source!.path) } : {};
+  return cards.length ? { ...provenance, deck: cards[0]!.deck, topic, sourceFile: q.source!.path } : { ...provenance, deck: testTitle, topic: sectionTitle, sourceFile: undefined };
 }
 
 /** children: an optional quiet tag after the text, e.g. who is working on it. */

@@ -762,3 +762,25 @@ div.qard-ask-q { cursor: default; }
 .qard-answer-selection textarea { width: 100%; }
 
 .qard-stats-memory .qard-stats-distribution{max-width:640px;margin:24px auto 0}
+
+/* Source updates keep the affected card beside the passages that changed. */
+.qard-source-workspace { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 24px; }
+.qard-source-list { display: flex; flex-direction: column; gap: 8px; align-self: start; }
+.qard-source-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; height: auto; padding: 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.qard-source-list button small { color: var(--text-muted); }
+.qard-source-list button.is-selected { border-color: var(--interactive-accent); background: var(--background-secondary); }
+.qard-source-detail { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.qard-source-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.qard-source-columns pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-text); font-size: var(--font-small); padding: 12px; border-radius: 8px; background: var(--background-secondary); max-height: 340px; overflow: auto; }
+.qard-source-suggestion { display: flex; flex-direction: column; gap: 12px; }
+.qard-source-suggestion label { display: flex; flex-direction: column; gap: 6px; }
+.qard-source-suggestion textarea { width: 100%; resize: vertical; }
+.qard-source-suggestion label.qard-source-check { flex-direction: row; align-items: flex-start; }
+.qard-source-difference h3 { margin-top: 0; overflow-wrap: anywhere; }
+.qard-card-sources { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--background-modifier-border); }
+.qard-card-sources .qard-panel { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+@media (width <= 760px) {
+  .qard-source-workspace, .qard-source-columns { grid-template-columns: minmax(0, 1fr); }
+  .qard-source-list { max-height: 220px; overflow: auto; }
+}
