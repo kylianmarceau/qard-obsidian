@@ -4,11 +4,6 @@ import type { SourceChange, SourceSyncService } from '../cards/source-sync-servi
 import type { QardServices } from '../views/services';
 import { InlineMarkdown, Markdown } from './Markdown';
 
-export function SourceUpdatesButton({ service, open }: { service: SourceSyncService; open: () => void }) {
-  const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
-  return <button onClick={open} aria-label={`Source updates${state.changes.length ? `, ${state.changes.length} cards to review` : ''}`}>Source updates{state.changes.length > 0 && <span className="qard-muted"> · {state.changes.length}</span>}</button>;
-}
-
 export function SourceUpdatesRow({ service, open }: { service: SourceSyncService; open: () => void }) {
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
   if (!state.changes.length && !state.error) return null;
