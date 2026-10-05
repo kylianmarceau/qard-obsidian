@@ -2,6 +2,7 @@
 import { act } from 'preact/test-utils';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
+import type { QardCard } from '../src/cards/card-types';
 import { StudySessionBuilder } from '../src/components/StudySessionBuilder';
 import { CardIndex } from '../src/cards/card-index';
 import { ReviewStore } from '../src/review/review-store';
@@ -26,9 +27,9 @@ it('selects all cards across collapsed decks and starts the complete session', a
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
 
-it('starts cram without assigning IDs or writing to the notes', async () => {
+it('assigns stable IDs for resumable cram without recording ratings', async () => {
   const index = new CardIndex(); index.update('a.md', '> [!qard]- First\n> Answer'); index.setLoading(false);
-  const snapshot = index.getSnapshot(), start = vi.fn(), writer = { ensureStable: vi.fn() };
+  const snapshot = index.getSnapshot(), start = vi.fn(), writer = { ensureStable: vi.fn(async (cards: QardCard[]) => cards.map(c => ({ ...c, id: "stable-cram", stable: true }))) };
   const services = { index, reviews: new ReviewStore(async () => {}), writer } as unknown as QardServices;
   const host = document.createElement('div'), root = createRoot(host); document.body.append(host);
   try {
@@ -37,6 +38,6 @@ it('starts cram without assigning IDs or writing to the notes', async () => {
     await act(async () => { type.value = 'cram'; type.dispatchEvent(new Event('change', { bubbles: true })); });
     expect(host.textContent).toContain('No ratings or schedule changes');
     await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Start')!.click());
-    expect(start).toHaveBeenCalledWith(snapshot.cards, 'cram'); expect(writer.ensureStable).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledWith([expect.objectContaining({ id: 'stable-cram', stable: true })], 'cram'); expect(writer.ensureStable).toHaveBeenCalledWith(snapshot.cards); expect(services.reviews.getSnapshot().history).toEqual([]);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });

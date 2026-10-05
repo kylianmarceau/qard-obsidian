@@ -39,7 +39,7 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 
 ## AI flashcards
 
-Choose **Generate with AI** from Decks, inside a deck, or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
+Choose **Generate with AI** inside a deck or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
 
 Review the questions and answers, edit them or preview their Markdown, and adjust the suggested **Save to deck** and **Topic** if needed. Deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Once adding begins, the batch's destination stays fixed so later selections and save retries go into the same generated note without duplicating cards. Folder sources are snapshotted at Start, so background retries use the same notes even if a folder later gains new files.
 
@@ -159,9 +159,9 @@ Choose **Study**, select any combination of decks/topics/individual cards, choos
 | New cards | Cards with no recorded reviews |
 | Difficult cards | Cards whose last rating was Again or Hard |
 
-**Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never assign card IDs, record ratings, alter schedules or count as reviews in Statistics. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
+**Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never record ratings, alter schedules or count as reviews in Statistics. Cards receive stable IDs when needed to save the session position. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
 
-Order can be deck/note order or shuffle. The session shows progress and finishes after every selected card has been reviewed once. Again does not silently add repeats; the summary offers an explicit **Review difficult cards** action. Sessions do not automatically resume after closing/reloading, but completed ratings remain saved.
+Order can be deck/note order or shuffle. The session shows progress and finishes after every selected card has been reviewed once. Again does not silently add repeats; the summary offers an explicit **Review difficult cards** action. Normal and cram sessions automatically save their card order and next position. Use **Save and leave**, or close Qard, then choose **Resume** under **Continue studying** on the Decks screen (also shown inside the relevant deck). Sessions survive an Obsidian restart. Completed ratings and the next position save together; a failed save keeps you on the same card. Resuming uses the current Markdown and skips missing or ambiguous cards with a notice. Discarding a session removes only its saved queue, and completed sessions are removed automatically. Answers start hidden when you resume. Cram sessions assign stable card IDs when needed so their position can survive note edits; they still do not record ratings or change schedules.
 
 | Key | Action |
 | --- | --- |
@@ -375,11 +375,11 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- No FSRS, cloze cards, general import/export, persistent recordings or speech recognition.
+- No cloze cards, general import/export, persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
-- Cross-vault concurrent review-data merging and saved-session resume are not implemented.
+- Cross-vault concurrent review-data merging is not implemented.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
 
@@ -406,3 +406,13 @@ Support @kylianmarceau:
 AI generation can create several topics within one deck. By default, the writer assigns one topic per source note; describe a different grouping in your request if needed. Review each card’s topic before adding it. **One topic per note** rebuilds the topic names from the source-note links, including for drafts created by older versions. Cards without a source keep their current topic. Entering a shared name in **Topic for all cards** combines the batch under that topic.
 
 Deck and topic assignments are fixed once you attempt to add cards, so a failed save can be retried safely. Already saved cards are not reorganized automatically.
+
+## Exam planning
+
+Open **Exam plans** in the Qard header, then choose **New exam**. Give the exam a name and date, choose the weekdays you can study, set a daily review target, and select whole decks or individual topics. New cards in the selected decks/topics join the plan automatically. Plans can be edited or deleted without deleting cards, review history or saved sessions.
+
+The planner spreads a first pass over the remaining selected study days, including exam day if it is a selected weekday. Today's session reserves space for that first pass, then fills the remaining daily target with due repeat reviews. The target counts completed reviews today, across normal sessions; repeat ratings use the target too, while cram viewing does not count. Learning cards that become due later the same day can appear again within the remaining target. Rest days do not generate a new session. A missed study day increases the remaining first-pass workload. A warning appears when the remaining days and target cannot cover all cards even before repeat reviews.
+
+Coverage is the number of matching cards rated since the plan was created, including Again ratings; it is not a prediction of mastery or an exam score. Cards flagged after a source answer changes need another review to count toward coverage. FSRS due dates are not rescheduled by the planner. **Create practice test** opens the existing test setup with the exam details and selected source notes.
+
+**Study today's cards** creates an automatically saved normal session. If you leave it midway, the plan offers **Resume exam session** at the saved position, including on a rest day or after the exam date. Multiple exams and ordinary sessions can coexist. Plans and saved queues are stored in Qard's plugin data alongside review history; back up that file as well as your notes.

@@ -784,3 +784,67 @@ div.qard-ask-q { cursor: default; }
   .qard-source-workspace, .qard-source-columns { grid-template-columns: minmax(0, 1fr); }
   .qard-source-list { max-height: 220px; overflow: auto; }
 }
+
+/* Exam planning uses pane-width layout rather than the full Obsidian window. */
+.qard-exam-workspace { container-type: inline-size; min-width: 0; }
+.qard-exam-workspace > .qard-heading { align-items: flex-start; flex-wrap: wrap; }
+.qard-exam-workspace > .qard-heading > button { flex-shrink: 0; }
+.qard-exam-editor { width: 100%; min-width: 0; }
+.qard-exam-editor .qard-exam-form { display: flex; flex-direction: column; gap: 30px; }
+.qard-exam-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.qard-exam-section + .qard-exam-section { padding-top: 26px; border-top: 1px solid var(--qard-border); }
+.qard-exam-section-heading { display: flex; flex-direction: column; gap: 7px; }
+.qard-app .qard-exam-section-heading h2 { font-size: 15px; line-height: 1.4; }
+.qard-exam-section-heading p { font-size: 13px; line-height: 1.65; max-width: 65ch; }
+.qard-exam-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.qard-exam-name { grid-column: 1 / -1; }
+.qard-exam-fields label { display: flex; flex-direction: column; gap: 9px; min-width: 0; font-size: 13px; line-height: 1.5; }
+.qard-app .qard-exam-fields input { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; }
+.qard-exam-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 138px), 1fr)); gap: 10px; }
+.qard-exam-days label { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 42px; padding: 10px 12px; border: 1px solid var(--qard-border); border-radius: 8px; cursor: pointer; font-size: 13px; line-height: 1.4; }
+.qard-exam-days label:hover { background: var(--qard-soft); }
+.qard-exam-days label.is-selected { background: var(--qard-tint); border-color: color-mix(in srgb, var(--qard-blue) 30%, var(--qard-border)); }
+.qard-exam-days label:focus-within { outline: 2px solid var(--qard-blue); outline-offset: 2px; }
+.qard-exam-decks { display: flex; flex-direction: column; gap: 8px; }
+.qard-exam-decks .qard-select-deck { padding: 4px 12px; border: 1px solid var(--qard-border); border-radius: 9px; }
+.qard-exam-decks summary { min-width: 0; }
+.qard-exam-decks summary strong { min-width: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.qard-exam-decks summary small { margin-left: auto; flex-shrink: 0; color: var(--qard-muted); font-size: 11px; }
+.qard-exam-topics { display: flex; flex-direction: column; gap: 4px; padding: 8px 0 8px 24px; border-top: 1px solid var(--qard-border); }
+.qard-exam-topics label { display: flex; align-items: flex-start; gap: 10px; padding: 9px 4px; min-width: 0; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.qard-exam-topics label span { min-width: 0; overflow-wrap: anywhere; }
+.qard-exam-topics input { margin-top: 2px; }
+.qard-exam-footer { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; padding-top: 22px; border-top: 1px solid var(--qard-border); }
+.qard-exam-footer > p { max-width: 65ch; line-height: 1.7; }
+.qard-exam-plan { display: flex; flex-direction: column; gap: 14px; padding: 24px; margin-bottom: 18px; border: 1px solid var(--qard-border); border-radius: 12px; min-width: 0; }
+.qard-exam-plan .qard-panel-heading { align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 0; }
+.qard-exam-plan .qard-panel-heading h2 { font-size: 17px; color: var(--qard-text); overflow-wrap: anywhere; }
+.qard-exam-plan .qard-panel-heading > span { font-size: 13px; }
+.qard-exam-plan p { line-height: 1.65; overflow-wrap: anywhere; }
+.qard-exam-plan progress { width: 100%; height: 6px; }
+.qard-exam-plan .qard-actions { flex-wrap: wrap; gap: 10px; padding-top: 8px; }
+.qard-exam-warning { color: var(--text-warning); }
+.qard-saved-sessions { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; container-type: inline-size; }
+.qard-app .qard-saved-sessions > h2 { font-size: 13px; color: var(--qard-muted); line-height: 1.5; }
+.qard-saved-session { min-width: 0; border: 1px solid color-mix(in srgb, var(--qard-blue) 25%, var(--qard-border)); border-radius: 10px; background: var(--qard-tint); }
+.qard-saved-session-row { display: flex; align-items: center; gap: 20px; padding: 16px 18px; }
+.qard-saved-session-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+.qard-saved-session-title { display: block; min-width: 0; font-size: 14px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
+.qard-saved-session-progress { display: block; font-size: 12px; color: var(--qard-muted); line-height: 1.5; }
+.qard-saved-session-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.qard-app button.qard-saved-session-discard { padding: 7px; min-width: 34px; border-color: transparent; color: var(--qard-muted); }
+.qard-app button.qard-saved-session-discard:hover { color: var(--qard-text); background: var(--qard-soft); }
+.qard-saved-session .qard-saved-session-confirm { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin: 0; padding: 16px 18px; border: 0; border-top: 1px solid var(--qard-border); border-radius: 0 0 10px 10px; }
+.qard-saved-session-confirm p { line-height: 1.6; }
+
+@container (width < 440px) {
+  .qard-exam-fields { grid-template-columns: minmax(0, 1fr); }
+  .qard-exam-plan { padding: 18px; }
+  .qard-exam-decks summary small { display: none; }
+}
+
+@container (width < 420px) {
+  .qard-saved-session-row { flex-wrap: wrap; gap: 14px; padding: 14px; }
+  .qard-saved-session-copy { flex-basis: 100%; }
+  .qard-saved-session-actions { width: 100%; justify-content: space-between; }
+}

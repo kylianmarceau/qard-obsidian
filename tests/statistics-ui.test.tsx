@@ -17,7 +17,8 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   const index = new CardIndex(); index.setLoading(false);
   index.update('cards.md', '---\nqard-deck: Networks\n---\n<!-- qard-id: a -->\n> [!qard]- TCP\n> Reliable delivery\n');
-  services = { reviews: new ReviewStore(async () => {}), index } as unknown as QardServices;
+  services = { reviews: new ReviewStore(async () => {}), index, host, setFocus: vi.fn(), isActive: () => true,
+    app: { workspace: { on: vi.fn(), offref: vi.fn() } } } as unknown as QardServices;
   back.mockClear(); study.mockClear();
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); });

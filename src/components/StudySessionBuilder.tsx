@@ -10,7 +10,7 @@ const modes: { id: StudyMode; name: string; description: string }[] = [
   { id: 'new', name: 'New cards', description: 'Cards you have not reviewed yet.' },
   { id: 'difficult', name: 'Difficult cards', description: 'Cards last rated Again or Hard.' }
 ];
-export function StudySessionBuilder({ cards, decks, initial, services, start, back }: { cards: QardCard[]; decks: Deck[]; initial: Selection; services: QardServices; start: (cards: QardCard[], style?: SessionStyle) => void; back: () => void }) {
+export function StudySessionBuilder({ cards, decks, initial, services, start, back }: { cards: QardCard[]; decks: Deck[]; initial: Selection; services: QardServices; start: (cards: QardCard[], style?: SessionStyle) => void | Promise<void>; back: () => void }) {
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const [chosen, setChosen] = useState(new Set(selectCards(cards, saved.states, { selection: initial, mode: 'all', order: 'note' }).map(c => c.id)));
   const [mode, setMode] = useState<StudyMode>(saved.settings.defaultMode), [order, setOrder] = useState<CardOrder>(saved.settings.defaultOrder);
@@ -21,9 +21,9 @@ export function StudySessionBuilder({ cards, decks, initial, services, start, ba
   async function begin() {
     setBusy(true); setError('');
     try {
-      const ready = style === 'cram' ? selected : await services.writer.ensureStable(selected);
+      const ready = await services.writer.ensureStable(selected);
       const ordered = order === 'shuffle' ? selectCards(ready, {}, { selection: { decks: [], topics: [], cards: ready.map(c => c.id) }, mode: 'all', order: 'shuffle' }) : ready;
-      if (style === 'cram') start(ordered, style); else start(ordered);
+      if (style === 'cram') await start(ordered, style); else await start(ordered);
     }
     catch (e) { setError((e as Error).message); setBusy(false); }
   }
