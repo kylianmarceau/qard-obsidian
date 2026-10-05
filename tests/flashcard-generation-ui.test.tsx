@@ -7,6 +7,7 @@ import { ResumeFlashcards } from '../src/components/ResumeFlashcards';
 import { GenerateFlashcards } from '../src/components/GenerateFlashcards';
 import { CardEditor } from '../src/components/CardEditor';
 import { DeckBrowser } from '../src/components/DeckBrowser';
+import { TopicBrowser } from '../src/components/TopicBrowser';
 import { FlashcardGenerationService } from '../src/cards/generation-service';
 import { ReviewStore } from '../src/review/review-store';
 import { CardIndex } from '../src/cards/card-index';
@@ -57,9 +58,12 @@ it('allows cancellation and retry and preserves the request when editing it', as
   await click(button('Edit request')); expect((host.querySelector('[aria-label="Flashcard prompt"]') as HTMLTextAreaElement).value).toBe('Transport basics');
   expect(host.querySelector('input[type="number"]')).toBeNull(); expect(host.textContent).toContain('No sources selected');
 });
-it('offers AI generation from both the deck list and the manual new-card editor', async () => {
+it('keeps AI generation inside decks and the new-card editor, with no button on home', async () => {
   const generate = vi.fn();
-  await act(async () => root.render(<DeckBrowser decks={[]} search="" onSearch={vi.fn()} open={vi.fn()} create={vi.fn()} study={vi.fn()} generate={generate} loading={false}/>));
+  await act(async () => root.render(<DeckBrowser decks={[]} search="" onSearch={vi.fn()} open={vi.fn()} create={vi.fn()} study={vi.fn()} loading={false}/>));
+  expect(button('Generate with AI')).toBeUndefined();
+  expect(button('New card')).toBeTruthy(); expect(button('Study')).toBeTruthy();
+  await act(async () => root.render(<TopicBrowser deck={{ name: 'Networks', cards: [], topics: [], files: [] }} select={vi.fn()} study={vi.fn()} create={vi.fn()} generate={generate}/>));
   await click(button('Generate with AI')); expect(generate).toHaveBeenCalledOnce();
   await act(async () => root.render(<CardEditor services={services} initial={{ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' }} cancel={back} saved={vi.fn()} generate={generate}/>));
   await click(button('Generate with AI')); expect(generate).toHaveBeenLastCalledWith({ deck: 'Networks', topic: 'Transport', sourceFile: 'Notes/TCP.md' });

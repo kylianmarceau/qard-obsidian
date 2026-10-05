@@ -1,7 +1,7 @@
 {
   "id": "qard",
   "name": "Qard",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "minAppVersion": "1.7.2",
   "description": "A study workspace with Markdown flashcards, AI practice tests, guided lessons, and spaced repetition.",
   "author": "Qard",

@@ -25,7 +25,7 @@ See how course topics connect and choose what to learn next.
 
 1. In **Settings → Community plugins → Browse**, search for **Qard**, install it and enable it.
 2. Click the Qard ribbon icon or run **Qard: Open study workspace**.
-3. Choose **New card** to write a card, or set up an AI connection and choose **Generate with AI**.
+3. Choose **New card** to write a card, or set up an AI connection and choose **Generate with AI** inside a deck or on the New card page.
 
 Requires Obsidian 1.7.2 or newer. Qard adds no sample decks; your cards stay in ordinary Markdown notes.
 
