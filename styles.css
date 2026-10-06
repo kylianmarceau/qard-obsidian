@@ -128,10 +128,8 @@
 .qard-deck-list { display: grid; gap: 8px; }
 .qard-app button.qard-deck { display: flex; width: 100%; text-align: left; justify-content: flex-start; gap: 16px; padding: 18px; border-radius: 10px; }
 .qard-deck > svg { margin-left: auto; color: var(--qard-muted); opacity: .6; }
-.qard-deck-cover { position: relative; isolation: isolate; overflow: hidden; width: 48px; height: 56px; flex-shrink: 0; display: grid; place-items: center; border-radius: 5px 10px 10px 5px; border: 1px solid color-mix(in srgb, var(--qard-course) 26%, var(--qard-border)); background: color-mix(in srgb, var(--qard-course) 15%, var(--qard-bg)); color: var(--qard-course); }
-.qard-deck-cover::before { content: ''; position: absolute; inset: 0 auto 0 5px; width: 1px; background: color-mix(in srgb, var(--qard-course) 25%, transparent); }
-.qard-deck-cover::after { content: ''; position: absolute; width: 36px; height: 36px; border: 1px solid color-mix(in srgb, var(--qard-course) 24%, transparent); border-radius: 50%; right: -16px; bottom: -12px; }
-.qard-deck-cover > span { font-size: 15px; font-weight: 650; letter-spacing: -.5px; padding-left: 3px; }
+.qard-deck-badge { width: 48px; height: 48px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; background: color-mix(in srgb, var(--qard-course) 11%, var(--qard-bg)); color: var(--qard-course); }
+.qard-deck-badge > span { font-size: 15px; font-weight: 600; letter-spacing: -.5px; }
 .qard-deck-row { border: 1px solid var(--qard-border); border-radius: 12px; padding-right: 10px; transition: background .12s; }
 .qard-deck-row:hover { background: var(--qard-soft); }
 .qard-app .qard-deck-row > button.qard-deck { border: 0; background: transparent; }
