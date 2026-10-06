@@ -2020,9 +2020,26 @@ body.qard-focus-active .status-bar {
 .qard-waiting {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
   font-size: 15px;
   margin: 0 0 6px;
+}
+
+.qard-waiting-text {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.qard-waiting > .qard-dot {
+  align-self: flex-start;
+  margin-top: 7px;
+}
+
+.qard-waiting .qard-agent {
+  margin-left: 0;
 }
 
 .qard-dot {
@@ -4134,20 +4151,37 @@ body.qard-focus-active .status-bar {
 .qard-jobs-list {
   left: auto;
   right: 0;
-  width: min(360px, 90vw);
+  width: min(380px, calc(100cqw - 32px));
+  max-height: min(520px, 70vh);
+  padding: 0;
+  border-radius: 12px;
+}
+
+.qard-jobs-heading {
+  padding: 14px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--qard-border);
 }
 
 .qard-app button.qard-jobs-item {
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 48px;
-}
-
-.qard-jobs-item > span {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.qard-app button.qard-jobs-item:hover {
+  color: var(--qard-blue);
+  background: transparent;
 }
 
 .qard-jobs-item strong {
@@ -4155,17 +4189,38 @@ body.qard-focus-active .status-bar {
   font-weight: 600;
 }
 
-.qard-jobs-item small {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.qard-jobs-detail {
+  max-width: 100%;
+  color: var(--qard-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.qard-jobs-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .qard-jobs-note {
-  margin: 6px 8px 4px;
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--qard-border);
+  background: var(--qard-soft);
+  line-height: 1.6;
 }
 
 /* While you wait */
+.qard-wait-shell {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 .qard-wait {
   max-width: 720px;
   margin: 0 auto;
@@ -4174,11 +4229,68 @@ body.qard-focus-active .status-bar {
   gap: 12px;
 }
 
+.qard-wait-status {
+  padding: 20px;
+  border: 1px solid var(--qard-border);
+  border-radius: 12px;
+  background: var(--qard-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .qard-wait-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.qard-wait-heading {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.qard-wait-heading .qard-agent {
+  margin: 0 0 0 18px;
+  max-width: calc(100% - 18px);
+}
+
+.qard-wait-estimate {
+  color: var(--qard-muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.qard-wait-description {
+  margin: 0;
+  color: var(--qard-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.qard-wait-status > p {
+  margin: 0;
+}
+
+.qard-wait-status .qard-job-controls {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.qard-wait-status .qard-job-controls.is-stuck {
+  align-items: flex-start;
+}
+
+.qard-wait-status .qard-job-controls.is-stuck span {
+  flex: 1 1 200px;
+  line-height: 1.6;
 }
 
 .qard-wait-head .qard-waiting {
@@ -4188,6 +4300,7 @@ body.qard-focus-active .status-bar {
 .qard-wait-ready {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 10px 12px 10px 16px;
   border-radius: 12px;
@@ -4440,7 +4553,9 @@ body.qard-focus-active .status-bar {
   color: var(--qard-muted);
   background: var(--qard-soft);
   border: 1px solid var(--qard-border);
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   vertical-align: middle;
 }
 
@@ -4685,18 +4800,23 @@ div.qard-ask-q {
 
 .qard-jobs-row {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
 }
 
-.qard-jobs-row .qard-jobs-item {
-  flex: 1;
-  min-width: 0;
+.qard-jobs-row + .qard-jobs-row {
+  border-top: 1px solid var(--qard-border);
+}
+
+.qard-jobs-row.is-stuck {
+  background: color-mix(in srgb, var(--text-warning, #d9822b) 7%, var(--qard-bg));
 }
 
 .qard-app button.qard-jobs-cancel {
   flex-shrink: 0;
-  padding: 5px 8px;
+  padding: 0;
+  min-height: 24px;
   font-size: 12px;
 }
 

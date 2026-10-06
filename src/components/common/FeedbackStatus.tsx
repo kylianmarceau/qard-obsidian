@@ -5,7 +5,7 @@ export function Waiting({ text, children }: { text: string; children?: ReactNode
   return (
     <p className="qard-waiting" role="status">
       <span className="qard-dot" aria-hidden="true" />
-      {text}
+      <span className="qard-waiting-text">{text}</span>
       {children}
     </p>
   );

@@ -47,7 +47,7 @@ export function MapCourse({
   }, [proposal, keep]);
   if (folder && ((mapping && !mapping.error) || hold.held)) {
     return (
-      <>
+      <div className="qard-wait-shell">
         <div className="qard-actions">
           <DeleteLearnItem services={services} kind="mapping" path={folder} deleted={nav.learn} />
         </div>
@@ -63,7 +63,7 @@ export function MapCourse({
           context={{ kind: 'mapping' }}
           cancel={() => services.learn.cancel(folder, 'map-course')}
         />
-      </>
+      </div>
     );
   }
   if (folder && proposal && keep) {

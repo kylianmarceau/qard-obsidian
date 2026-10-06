@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { QardCard } from '../../cards/card-types';
@@ -102,6 +102,7 @@ export function WhileYouWait({
   services,
   title,
   detail,
+  hint,
   job,
   context,
   ready = false,
@@ -114,6 +115,7 @@ export function WhileYouWait({
   services: QardServices;
   title: string;
   detail?: string;
+  hint?: ReactNode;
   job?: { kind: string; startedAt?: number };
   context: WaitContext;
   ready?: boolean;
@@ -202,31 +204,34 @@ export function WhileYouWait({
 
   return (
     <div className="qard-wait">
-      {ready && engaged ? (
-        <div className="qard-wait-ready" role="status">
-          <CheckIcon size={16} />
-          <strong>{readyLabel}</strong>
-          <span className="qard-spacer" />
-          <button className="qard-primary" onClick={onContinue}>
-            Continue
-            <ArrowRight size={15} />
-          </button>
-        </div>
-      ) : (
-        <div className="qard-wait-head">
-          <Waiting text={title}>
-            {job && <AgentLabel services={services} role={roleOf(job.kind)} />}
-          </Waiting>
-          {left && <span className="qard-muted qard-small">{left}</span>}
-        </div>
-      )}
-      {!ready && <JobControls services={services} job={job} cancel={cancel} start={start} />}
-      {!engaged && (
-        <p className="qard-muted qard-small">
-          {detail ? `${detail} ` : ''}You can leave this screen; it keeps going, and Qard tells you
-          when it's done.
-        </p>
-      )}
+      <div className="qard-wait-status">
+        {ready && engaged ? (
+          <div className="qard-wait-ready" role="status">
+            <CheckIcon size={16} />
+            <strong>{readyLabel}</strong>
+            <span className="qard-spacer" />
+            <button className="qard-primary" onClick={onContinue}>
+              Continue
+              <ArrowRight size={15} />
+            </button>
+          </div>
+        ) : (
+          <div className="qard-wait-head">
+            <div className="qard-wait-heading">
+              <Waiting text={title} />
+              {job && <AgentLabel services={services} role={roleOf(job.kind)} />}
+            </div>
+            {left && <span className="qard-wait-estimate">{left}</span>}
+          </div>
+        )}
+        {!engaged && (
+          <p className="qard-wait-description">
+            {detail && <>{detail} </>}You can leave this page. Qard will notify you when it's ready.
+          </p>
+        )}
+        {!ready && hint}
+        {!ready && <JobControls services={services} job={job} cancel={cancel} start={start} />}
+      </div>
       {options &&
         (available.length ? (
           <section className="qard-wait-body">

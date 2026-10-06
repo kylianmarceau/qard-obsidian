@@ -150,6 +150,7 @@ export function LessonView({
         <WhileYouWait
           services={services}
           title={lesson.map || waitingPlan ? 'Planning the lesson…' : 'Finding where to start…'}
+          hint={<TutorHint services={services} />}
           job={waitingProbe ? probing : planning}
           ready={!waitingProbe && !waitingPlan}
           readyLabel={lesson.map ? 'Your lesson plan is ready' : 'A few quick questions are ready'}
@@ -161,7 +162,6 @@ export function LessonView({
             void (waitingProbe ? services.learn.probe(path) : services.learn.submitProbe(path))
           }
         />
-        <TutorHint services={services} />
       </>
     );
   }

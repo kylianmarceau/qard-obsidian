@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { TestNav } from '../../views/navigation';
 import type { LearnNav } from '../../views/navigation';
@@ -138,6 +139,7 @@ export function useTick(active: boolean) {
     if (!active) {
       return;
     }
+    setNow(Date.now());
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, [active]);
@@ -162,7 +164,31 @@ export function RunningJobs({
 }) {
   const jobs = useRunningJobs(services, nav, learnNav, flashcards),
     [open, setOpen] = useState(false);
+  const container = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const now = useTick(open && jobs.length > 0);
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !container.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        trigger.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
   useEffect(() => {
     if (!jobs.length) {
       setOpen(false);
@@ -172,57 +198,67 @@ export function RunningJobs({
     return null;
   }
   return (
-    <div className="qard-jobs">
-      <button className="qard-jobs-button" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div className="qard-jobs" ref={container}>
+      <button
+        ref={trigger}
+        className="qard-jobs-button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
         <span className="qard-dot" aria-hidden="true" />
         {jobs.length} running
+        <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open && (
-        <div className="qard-popover qard-jobs-list" role="list">
-          {jobs.map((j) => {
-            const estimate = services.jobs?.estimate(j.kind),
-              left = timeLeft(estimate, j.startedAt, now),
-              stuck = overdue(estimate, j.startedAt, now);
-            return (
-              <div
-                key={j.key}
-                role="listitem"
-                className={`qard-jobs-row${stuck ? ' is-stuck' : ''}`}
-              >
-                <button
-                  className="qard-popover-item qard-jobs-item"
-                  onClick={() => {
-                    setOpen(false);
-                    j.open();
-                  }}
+        <section className="qard-popover qard-jobs-list" aria-label="Running tasks">
+          <div className="qard-jobs-heading">Running tasks</div>
+          <div role="list">
+            {jobs.map((j) => {
+              const estimate = services.jobs?.estimate(j.kind),
+                left = timeLeft(estimate, j.startedAt, now),
+                stuck = overdue(estimate, j.startedAt, now);
+              return (
+                <div
+                  key={j.key}
+                  role="listitem"
+                  className={`qard-jobs-row${stuck ? ' is-stuck' : ''}`}
                 >
-                  <span>
+                  <button
+                    className="qard-jobs-item"
+                    onClick={() => {
+                      setOpen(false);
+                      j.open();
+                    }}
+                  >
                     <strong>{j.label}</strong>
-                    <small className="qard-muted">
-                      <InlineMarkdown text={j.detail} path={''} services={services} />
-                    </small>
+                    {j.detail && (
+                      <span className="qard-jobs-detail">
+                        <InlineMarkdown text={j.detail} path={''} services={services} />
+                      </span>
+                    )}
                     <AgentLabel services={services} role={roleOf(j.kind)} />
-                  </span>
-                  <small className={stuck ? 'qard-jobs-stuck' : 'qard-muted'}>
-                    {j.startedAt ? clock(now - j.startedAt) : ''}
-                    {left ? ` · ${left}` : ''}
-                  </small>
-                </button>
-                <button
-                  className="qard-text-button qard-jobs-cancel"
-                  aria-label={`Cancel ${j.label.toLowerCase()}`}
-                  onClick={j.cancel}
-                >
-                  Cancel
-                </button>
-              </div>
-            );
-          })}
+                  </button>
+                  <div className="qard-jobs-meta">
+                    <span className={stuck ? 'qard-jobs-stuck' : 'qard-muted'}>
+                      {j.startedAt ? `${clock(now - j.startedAt)} elapsed` : 'Running'}
+                      {left ? ` · ${left}` : ''}
+                    </span>
+                    <button
+                      className="qard-text-button qard-jobs-cancel"
+                      aria-label={`Cancel ${j.label.toLowerCase()}`}
+                      onClick={j.cancel}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <p className="qard-muted qard-small qard-jobs-note">
-            These keep going if you leave. Qard lets you know when each is done. Cancel one that's
-            stuck, then use Try again where it was.
+            Tasks continue in the background. Qard notifies you when they finish.
           </p>
-        </div>
+        </section>
       )}
     </div>
   );

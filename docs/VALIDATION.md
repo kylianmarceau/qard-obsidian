@@ -77,3 +77,17 @@ The formatting-only commit `72eaa7c` built byte-identical JavaScript. After the 
 The three production files were backed up and installed locally in Life Vault, then Qard was disabled/re-enabled in **Obsidian 1.14.4 on macOS**. The deck library reopened with the same 427/421/1 card counts. The existing CSC3044S plan retained its October 19 exam, 421-card coverage total, and 30-card daily target; its October calendar and agenda rendered as before. Before/after calendar screenshots differed only within the pointer highlight. The installed assets match the build, and the hash of `data.json` is unchanged after reload. No sample data was added, no study reviews were performed, and no AI provider was contacted during this native check.
 
 Saved lesson Markdown is checked against fixtures captured from the original service. The full regression suite covers the existing study, writing, test, learning, exam, persistence, and lifecycle behavior; the native check above is a focused reload/preservation check, not a repeat of every integration flow.
+
+
+## Agent status layout — 6 October 2026
+
+On `codex/agent-status-polish`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **341 tests across 49 files**, the production build and release-content verification. New interaction tests cover Escape with focus restoration, outside-click dismissal, and separate task navigation/cancellation. Existing waiting-screen, ready-state, recovery and learning tests continue to pass.
+
+An isolated browser preview using the production `RunningJobs` and `WhileYouWait` components verified course mapping, test creation and lesson loading at 1280, 420 and 320 px. Long course/model labels wrapped without page overflow; multiple task rows kept timing and Cancel separate; the tutor hint stayed inside the waiting panel. No live AI provider was contacted.
+
+The three plugin assets were backed up and installed in the registered `/Users/kyliandabancourt/Documents/Qard/qard/obsidian-plugin/.test-vault`. Installed hashes match the build. All existing test-vault files outside the install assets retain their hashes, including notes, settings and `data.json`. Life Vault's plugin files and review data retain their hashes. The active Life Vault session was not reloaded; native running-agent screens and mobile hardware have not been checked for this change.
+
+
+## Release 0.5.2
+
+Release 0.5.2 contains the agent-status layout changes described above. Before the release version bump, the agent-status build was also installed and Qard disabled/re-enabled in Life Vault in Obsidian 1.14.4 on macOS. The deck library reopened with the existing 774/499/433/957 card counts. Installed assets match the build, Qard remains enabled, and the hash of `data.json` is unchanged after reload. No live AI requests were made during installation.
