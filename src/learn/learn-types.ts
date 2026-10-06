@@ -5,28 +5,44 @@ import type { MasteryState } from './mastery';
 
 /** One to three fresh questions on one objective, written ahead of time and kept afterwards as evidence. */
 export interface CheckRecord {
-  version: 1; createdAt: number;
-  mastery: string; course: string; objective: string; title: string; goal: Goal;
+  version: 1;
+  createdAt: number;
+  mastery: string;
+  course: string;
+  objective: string;
+  title: string;
+  goal: Goal;
   questions: Question[];
   answers: Record<string, AnswerState>;
   marks: Record<string, QuestionMark>;
-  status: 'ready' | 'marking' | 'marked' | 'error'; error?: string;
+  status: 'ready' | 'marking' | 'marked' | 'error';
+  error?: string;
   finishedAt?: number;
 }
 
-export interface LessonMap { title: string; plan: string; mermaid: string; objective?: string; steps: { title: string; why: string }[] }
+export interface LessonMap {
+  title: string;
+  plan: string;
+  mermaid: string;
+  objective?: string;
+  steps: { title: string; why: string }[];
+}
 /** Written by the writer after the map is accepted, one step at a time. */
 export interface LessonStep {
-  title: string; explain: string; connect: string;
+  title: string;
+  explain: string;
+  connect: string;
   /** Ask before telling, when the student can plausibly work it out. */
   checkFirst: boolean;
   check: Question;
   misconceptions: { signs: string; reteach: string }[];
 }
 export interface StepState {
-  answer?: AnswerState; mark?: QuestionMark;
+  answer?: AnswerState;
+  mark?: QuestionMark;
   /** The tutor's reply to the answer, and a prepared re-explanation when the mistake was anticipated. */
-  reply?: string; reteach?: string;
+  reply?: string;
+  reteach?: string;
   retry?: { text: string; mark: QuestionMark; reply: string };
   asks: { q: string; a: string }[];
 }
@@ -40,10 +56,23 @@ export interface LessonClose {
   nextCheck?: string;
 }
 export interface Lesson {
-  version: 1; createdAt: number; topic: string; notes: string[]; sourceSnapshots?: SourceSnapshot[];
-  mastery?: string; course?: string; objective?: string;
-  probe?: { questions: Question[]; answers: Record<string, AnswerState>; submitted?: boolean; marks?: Record<string, QuestionMark>; findings?: string };
-  map?: LessonMap; accepted?: boolean;
+  version: 1;
+  createdAt: number;
+  topic: string;
+  notes: string[];
+  sourceSnapshots?: SourceSnapshot[];
+  mastery?: string;
+  course?: string;
+  objective?: string;
+  probe?: {
+    questions: Question[];
+    answers: Record<string, AnswerState>;
+    submitted?: boolean;
+    marks?: Record<string, QuestionMark>;
+    findings?: string;
+  };
+  map?: LessonMap;
+  accepted?: boolean;
   /** The plan the steps were written for. */
   stepsFor?: string;
   steps: (LessonStep | null)[];
@@ -52,6 +81,27 @@ export interface Lesson {
   finishedAt?: number;
   close?: LessonClose;
 }
-export interface LessonSummary { path: string; title: string; created: number; finished: boolean; mastery?: string; objective?: string; course?: string }
-export interface TodayItem { mastery: string; course: string; objective: string; title: string; state: MasteryState; due: string; check?: string }
-export interface Today { checks: TodayItem[]; lessons: TodayItem[]; moreLessons: number; cards: number }
+export interface LessonSummary {
+  path: string;
+  title: string;
+  created: number;
+  finished: boolean;
+  mastery?: string;
+  objective?: string;
+  course?: string;
+}
+export interface TodayItem {
+  mastery: string;
+  course: string;
+  objective: string;
+  title: string;
+  state: MasteryState;
+  due: string;
+  check?: string;
+}
+export interface Today {
+  checks: TodayItem[];
+  lessons: TodayItem[];
+  moreLessons: number;
+  cards: number;
+}

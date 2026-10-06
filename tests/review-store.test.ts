@@ -1,8 +1,44 @@
 import { it, expect, vi } from 'vitest';
 import { type PluginData, ReviewStore } from '../src/review/review-store';
-it('persists only review metadata and settings, never card text',async()=>{const write=vi.fn(async(_data: PluginData)=>{});const store=new ReviewStore(write);await store.review('stable',3,1000);expect(write).toHaveBeenCalledTimes(1);const saved=write.mock.calls[0]![0];expect(JSON.stringify(saved)).not.toMatch(/frontMarkdown|backMarkdown|sourceText/);expect(store.getSnapshot().states.stable?.reviewCount).toBe(1);});
-it('does not commit a rating if persistence fails',async()=>{const store=new ReviewStore(async()=>{throw new Error('disk full');});await expect(store.review('stable',3)).rejects.toThrow('disk full');expect(store.getSnapshot().states.stable).toBeUndefined();});
-it('serialises concurrent reviews and preserves all state',async()=>{const store=new ReviewStore(async()=>{});await Promise.all([store.review('one',1),store.review('two',4),store.review('one',3)]);expect(store.getSnapshot().states.one?.reviewCount).toBe(2);expect(store.getSnapshot().history).toHaveLength(3);});
-it('loads saved review state across a restart',async()=>{const store=new ReviewStore(async()=>{});await store.review('stable',4,2000);const restored=new ReviewStore(async()=>{});restored.load(JSON.parse(JSON.stringify(store.getSnapshot())));expect(restored.getSnapshot().states.stable).toEqual(store.getSnapshot().states.stable);});
-it('records ratings with scheduling disabled without changing due dates',async()=>{const store=new ReviewStore(async()=>{});await store.review('stable',4,2000);const due=store.getSnapshot().states.stable?.due;await store.saveSettings({...store.getSnapshot().settings,scheduling:false});await store.review('stable',1,3000);expect(store.getSnapshot().states.stable?.due).toBe(due);expect(store.getSnapshot().history[1]?.scheduled).toBe(false);});
-it('rejects temporary IDs for persistent history',async()=>{const store=new ReviewStore(async()=>{});await expect(store.review('volatile:note:1',3)).rejects.toThrow(/stable/);});
+it('persists only review metadata and settings, never card text', async () => {
+  const write = vi.fn(async (_data: PluginData) => {});
+  const store = new ReviewStore(write);
+  await store.review('stable', 3, 1000);
+  expect(write).toHaveBeenCalledTimes(1);
+  const saved = write.mock.calls[0]![0];
+  expect(JSON.stringify(saved)).not.toMatch(/frontMarkdown|backMarkdown|sourceText/);
+  expect(store.getSnapshot().states.stable?.reviewCount).toBe(1);
+});
+it('does not commit a rating if persistence fails', async () => {
+  const store = new ReviewStore(async () => {
+    throw new Error('disk full');
+  });
+  await expect(store.review('stable', 3)).rejects.toThrow('disk full');
+  expect(store.getSnapshot().states.stable).toBeUndefined();
+});
+it('serialises concurrent reviews and preserves all state', async () => {
+  const store = new ReviewStore(async () => {});
+  await Promise.all([store.review('one', 1), store.review('two', 4), store.review('one', 3)]);
+  expect(store.getSnapshot().states.one?.reviewCount).toBe(2);
+  expect(store.getSnapshot().history).toHaveLength(3);
+});
+it('loads saved review state across a restart', async () => {
+  const store = new ReviewStore(async () => {});
+  await store.review('stable', 4, 2000);
+  const restored = new ReviewStore(async () => {});
+  restored.load(JSON.parse(JSON.stringify(store.getSnapshot())));
+  expect(restored.getSnapshot().states.stable).toEqual(store.getSnapshot().states.stable);
+});
+it('records ratings with scheduling disabled without changing due dates', async () => {
+  const store = new ReviewStore(async () => {});
+  await store.review('stable', 4, 2000);
+  const due = store.getSnapshot().states.stable?.due;
+  await store.saveSettings({ ...store.getSnapshot().settings, scheduling: false });
+  await store.review('stable', 1, 3000);
+  expect(store.getSnapshot().states.stable?.due).toBe(due);
+  expect(store.getSnapshot().history[1]?.scheduled).toBe(false);
+});
+it('rejects temporary IDs for persistent history', async () => {
+  const store = new ReviewStore(async () => {});
+  await expect(store.review('volatile:note:1', 3)).rejects.toThrow(/stable/);
+});

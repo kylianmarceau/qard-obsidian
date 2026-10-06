@@ -16,10 +16,16 @@ const QUESTION_FORMAT = `${GOAL_RULES}
 ${MCQ_RULES}
 Every question needs a rubric of separate, checkable points whose marks add up to its marks, and a model answer that earns full marks.`;
 /** The lesson's notes, inlined so the live tutor needs no tools. */
-export const sourcesBlock = (sources?: string) => sources ? `\nThe notes' text:\n${sources}\n` : '';
-const notesList = (notes: string[]) => notes.length ? notes.map(n => `- ${n}`).join('\n') : '(none given: search the vault)';
-const objectiveBlock = (o: Objective) => `<objective id="${o.id}" state="${o.state}">\n${o.title}\nNotes: ${o.notes.join(', ') || '(none listed)'}\nEvidence so far: ${o.evidence.join('; ') || 'none'}\n</objective>`;
-const courseBlock = (m?: Mastery) => m ? `\nThe student's mastery file for ${m.course} (id | objective | state | evidence):\n<mastery>\n${objectiveLines(m)}\n</mastery>\n` : '';
+export const sourcesBlock = (sources?: string) =>
+  sources ? `\nThe notes' text:\n${sources}\n` : '';
+const notesList = (notes: string[]) =>
+  notes.length ? notes.map((n) => `- ${n}`).join('\n') : '(none given: search the vault)';
+const objectiveBlock = (o: Objective) =>
+  `<objective id="${o.id}" state="${o.state}">\n${o.title}\nNotes: ${o.notes.join(', ') || '(none listed)'}\nEvidence so far: ${o.evidence.join('; ') || 'none'}\n</objective>`;
+const courseBlock = (m?: Mastery) =>
+  m
+    ? `\nThe student's mastery file for ${m.course} (id | objective | state | evidence):\n<mastery>\n${objectiveLines(m)}\n</mastery>\n`
+    : '';
 
 const OBJECTIVE_RULES = `- Each objective is one teachable idea or skill, specific enough to test in a few questions ("Derive the LDA generative process", not "Topic models").
 - notes lists the notes that cover it.
@@ -27,7 +33,12 @@ const OBJECTIVE_RULES = `- Each objective is one teachable idea or skill, specif
 - label is a short name for the course map, two to four words ("LDA generative story", "Dirichlet draws").
 - group names the topic it belongs to, one to three words ("Text mining", "Topic models"). A topic is roughly one lecture block or week of the course: use four to eight for the whole course, and the exact same name for every objective in it.`;
 
-export function mapCoursePrompt(folder: string, notes: string[], request: string, profile?: string) {
+export function mapCoursePrompt(
+  folder: string,
+  notes: string[],
+  request: string,
+  profile?: string,
+) {
   return `Map a course into mastery objectives: the things the student must be able to explain or do.
 Course folder: ${folder}
 Notes in it:
@@ -43,7 +54,7 @@ ${OBJECTIVE_RULES}
 export function updateCoursePrompt(m: Mastery, changed: string[], request: string) {
   return `The student's mastery file for ${m.course} already has these objectives (id | objective | label | group | state | needs | notes):
 <objectives>
-${m.objectives.map(o => `${o.id} | ${o.title} | ${o.label ?? '-'} | ${o.group ?? '-'} | ${o.state} | ${o.needs.join(', ') || '-'} | ${o.notes.join(', ') || '-'}`).join('\n')}
+${m.objectives.map((o) => `${o.id} | ${o.title} | ${o.label ?? '-'} | ${o.group ?? '-'} | ${o.state} | ${o.needs.join(', ') || '-'} | ${o.notes.join(', ') || '-'}`).join('\n')}
 </objectives>
 
 Notes added or changed since the course was last mapped (read them):
@@ -58,7 +69,11 @@ Return empty lists when nothing changes.`;
 }
 
 export function checkPrompt(m: Mastery, o: Objective, goal: Goal, previous: CheckRecord[]) {
-  const past = previous.slice(-4).flatMap(c => c.questions.map(q => `- (${c.goal}) ${q.prompt.replace(/\s+/g, ' ').slice(0, 200)}`));
+  const past = previous
+    .slice(-4)
+    .flatMap((c) =>
+      c.questions.map((q) => `- (${c.goal}) ${q.prompt.replace(/\s+/g, ' ').slice(0, 200)}`),
+    );
   return `Write a short check on one objective. It will be answered days from now to test whether the student still understands it.
 ${objectiveBlock(o)}
 Course: ${m.course}
@@ -70,7 +85,10 @@ ${QUESTION_FORMAT}`;
 }
 
 export function markCheckPrompt(check: CheckRecord, ids: string[]) {
-  return `A check on "${check.title}".\n\n${check.questions.filter(q => ids.includes(q.id)).map(q => questionBlock(q, check.answers[q.id])).join('\n\n')}\n\n${MARKING}\nReturn one entry per question above, using its id.`;
+  return `A check on "${check.title}".\n\n${check.questions
+    .filter((q) => ids.includes(q.id))
+    .map((q) => questionBlock(q, check.answers[q.id]))
+    .join('\n\n')}\n\n${MARKING}\nReturn one entry per question above, using its id.`;
 }
 
 export function probePrompt(lesson: Lesson, m?: Mastery, o?: Objective, sources?: string) {
@@ -85,18 +103,18 @@ ${MCQ_RULES}`;
 }
 
 function answersBlock(questions: Question[], answers: Record<string, AnswerState>) {
-  return questions.map(q => questionBlock(q, answers[q.id])).join('\n\n');
+  return questions.map((q) => questionBlock(q, answers[q.id])).join('\n\n');
 }
 export function probeMapPrompt(lesson: Lesson, m?: Mastery, o?: Objective, sources?: string) {
   const probe = lesson.probe;
-  const typed = probe?.questions.filter(q => q.type !== 'mcq') ?? [];
+  const typed = probe?.questions.filter((q) => q.type !== 'mcq') ?? [];
   return `${TEACHING}
 
 The student wants to learn: ${lesson.topic}
 ${o ? objectiveBlock(o) : ''}Notes to teach from:
 ${notesList(lesson.notes)}
 ${sourcesBlock(sources)}${courseBlock(m)}
-${probe?.questions.length ? `Their probe answers (multiple choice is already marked; mark the others):\n${answersBlock(probe.questions, probe.answers)}\n${MARKING}\nReturn marks only for: ${typed.map(q => q.id).join(', ') || '(none)'}.\n` : 'There was no probe. Return an empty marks list.\n'}
+${probe?.questions.length ? `Their probe answers (multiple choice is already marked; mark the others):\n${answersBlock(probe.questions, probe.answers)}\n${MARKING}\nReturn marks only for: ${typed.map((q) => q.id).join(', ') || '(none)'}.\n` : 'There was no probe. Return an empty marks list.\n'}
 Then plan the lesson from the edge you found:
 - findings: what the answers show, in one or two sentences. Name a wrong answer as a slip, an isolated gap or a misconception.
 - map: three to five steps. The first builds on something the student has shown they know; the last reaches the goal. plan says in prose where you will start and why. mermaid is a small graph TD from the starting facts to the goal. Each step has a one-sentence why.${m ? '\n- objective: the mastery id this lesson teaches, if one fits.' : ''}`;
@@ -107,7 +125,10 @@ export function reviseMapPrompt(lesson: Lesson, change: string) {
 }
 
 export function stepPrompt(lesson: Lesson, map: LessonMap, index: number) {
-  const done = map.steps.slice(0, index).map((s, i) => `${i + 1}. ${s.title}`).join('\n');
+  const done = map.steps
+    .slice(0, index)
+    .map((s, i) => `${i + 1}. ${s.title}`)
+    .join('\n');
   const step = map.steps[index]!;
   return `${TEACHING}
 
@@ -128,7 +149,12 @@ Write step ${index + 1} of ${map.steps.length}: "${step.title}". Why it is neede
 ${QUESTION_FORMAT}`;
 }
 
-export function tutorMarkPrompt(lesson: Lesson, step: LessonStep, answer: AnswerState | undefined, retryOf?: StepState) {
+export function tutorMarkPrompt(
+  lesson: Lesson,
+  step: LessonStep,
+  answer: AnswerState | undefined,
+  retryOf?: StepState,
+) {
   return `${TEACHING}
 
 You are tutoring live, so be quick and brief. Lesson: ${lesson.topic}. Step: ${step.title}
@@ -143,20 +169,30 @@ reply: speak to the student in at most 80 words. If they are right, confirm the 
 misconception: the index of the anticipated misconception the answer shows, or -1.`;
 }
 
-export function askPrompt(lesson: Lesson, step: LessonStep | undefined, asks: { q: string; a: string }[], question: string, sources?: string) {
+export function askPrompt(
+  lesson: Lesson,
+  step: LessonStep | undefined,
+  asks: { q: string; a: string }[],
+  question: string,
+  sources?: string,
+) {
   return `${TEACHING}
 
 You are tutoring live. Lesson: ${lesson.topic}.${step ? `\nCurrent step: ${step.title}\n<explanation>${step.explain}</explanation>` : ''}
 Notes: ${lesson.notes.join(', ') || 'none'}
-${sourcesBlock(sources)}${asks.length ? `Earlier questions in this step:\n${asks.map(a => `Q: ${a.q}\nA: ${a.a}`).join('\n\n')}\n` : ''}
+${sourcesBlock(sources)}${asks.length ? `Earlier questions in this step:\n${asks.map((a) => `Q: ${a.q}\nA: ${a.a}`).join('\n\n')}\n` : ''}
 The student asks:\n<ask>\n${question.trim()}\n</ask>\nAnswer directly and correctly in at most 150 words, grounded in their notes where possible.`;
 }
 
 export function closePrompt(lesson: Lesson) {
-  const steps = lesson.steps.map((s, i) => {
-    const st = lesson.state[i];
-    return s ? `<step title="${s.title}" check="${st?.mark ? `${st.mark.score}/${s.check.marks}` : 'not answered'}" confidence="${st?.answer?.unknown ? "didn't know" : st?.answer?.confidence ?? 'unstated'}">${st?.asks.map(a => `\nasked: ${a.q}`).join('') ?? ''}${st?.mark && st.mark.score < s.check.marks ? `\nmistake: ${st.mark.feedback}` : ''}</step>` : '';
-  }).join('\n');
+  const steps = lesson.steps
+    .map((s, i) => {
+      const st = lesson.state[i];
+      return s
+        ? `<step title="${s.title}" check="${st?.mark ? `${st.mark.score}/${s.check.marks}` : 'not answered'}" confidence="${st?.answer?.unknown ? "didn't know" : (st?.answer?.confidence ?? 'unstated')}">${st?.asks.map((a) => `\nasked: ${a.q}`).join('') ?? ''}${st?.mark && st.mark.score < s.check.marks ? `\nmistake: ${st.mark.feedback}` : ''}</step>`
+        : '';
+    })
+    .join('\n');
   return `The student finished a lesson on: ${lesson.topic}
 Notes: ${lesson.notes.join(', ') || 'none'}
 Plan: ${lesson.map?.plan ?? ''}

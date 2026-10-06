@@ -12,7 +12,22 @@ export interface QardCard {
   sourceText: string;
   tags: string[];
 }
-export interface ParseIssue { file: string; line: number; message: string }
-export interface ParseResult { cards: QardCard[]; issues: ParseIssue[] }
-export interface Topic { name: string; cards: QardCard[] }
-export interface Deck { name: string; topics: Topic[]; cards: QardCard[]; files: string[] }
+export interface ParseIssue {
+  file: string;
+  line: number;
+  message: string;
+}
+export interface ParseResult {
+  cards: QardCard[];
+  issues: ParseIssue[];
+}
+export interface Topic {
+  name: string;
+  cards: QardCard[];
+}
+export interface Deck {
+  name: string;
+  topics: Topic[];
+  cards: QardCard[];
+  files: string[];
+}

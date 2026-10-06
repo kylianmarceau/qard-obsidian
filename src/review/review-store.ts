@@ -1,5 +1,11 @@
 import { readExams, validExam, type ExamPlan } from '../exams/exam-plan';
-import { readSessions, resolveSession, stableId, type SavedSession, type SessionStep } from './saved-session';
+import {
+  readSessions,
+  resolveSession,
+  stableId,
+  type SavedSession,
+  type SessionStep,
+} from './saved-session';
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle } from './session';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
@@ -9,10 +15,36 @@ import { addToLog, type UsageLog } from '../agents/usage-report';
 import type { Usage } from '../agents/usage';
 import { emptyStatistics, readStatistics, recordReview, type StudyStatistics } from './statistics';
 /** A card made for a mastery objective; lapses count Again ratings since the objective was last marked. */
-export interface CardLink { mastery: string; objective: string; lapses: number }
-export interface PluginData { version: 1; settings: QardSettings; states: Record<string, ReviewState>; history: ReviewEvent[]; links: Record<string, CardLink>; timings: Record<string, number[]>; usage: UsageLog; statistics: StudyStatistics; sessions: SavedSession[]; exams: ExamPlan[] }
+export interface CardLink {
+  mastery: string;
+  objective: string;
+  lapses: number;
+}
+export interface PluginData {
+  version: 1;
+  settings: QardSettings;
+  states: Record<string, ReviewState>;
+  history: ReviewEvent[];
+  links: Record<string, CardLink>;
+  timings: Record<string, number[]>;
+  usage: UsageLog;
+  statistics: StudyStatistics;
+  sessions: SavedSession[];
+  exams: ExamPlan[];
+}
 export class ReviewStore {
-  private data: PluginData = { version: 1, settings: DEFAULT_SETTINGS, states: Object.create(null) as Record<string, ReviewState>, history: [], links: Object.create(null) as Record<string, CardLink>, timings: {}, usage: {}, statistics: emptyStatistics(), sessions: [], exams: [] };
+  private data: PluginData = {
+    version: 1,
+    settings: DEFAULT_SETTINGS,
+    states: Object.create(null) as Record<string, ReviewState>,
+    history: [],
+    links: Object.create(null) as Record<string, CardLink>,
+    timings: {},
+    usage: {},
+    statistics: emptyStatistics(),
+    sessions: [],
+    exams: [],
+  };
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
   constructor(private persist: (data: PluginData) => Promise<void>) {}
@@ -21,120 +53,310 @@ export class ReviewStore {
     const value = raw as Partial<PluginData>;
     const states: Record<string, ReviewState> = Object.create(null) as Record<string, ReviewState>;
     for (const [id, state] of Object.entries(value.states || {})) {
-      if (state && typeof state === 'object' && /^[A-Za-z0-9_-]+$/.test(id) && Number.isSafeInteger(state.reviewCount) && state.reviewCount >= 0 && Number.isFinite(state.interval) && state.interval >= 0 && Number.isFinite(state.ease) && state.ease > 0) states[id] = { ...state, cardId: id };
+      if (
+        state &&
+        typeof state === 'object' &&
+        /^[A-Za-z0-9_-]+$/.test(id) &&
+        Number.isSafeInteger(state.reviewCount) &&
+        state.reviewCount >= 0 &&
+        Number.isFinite(state.interval) &&
+        state.interval >= 0 &&
+        Number.isFinite(state.ease) &&
+        state.ease > 0
+      )
+        states[id] = { ...state, cardId: id };
     }
-    const history = Array.isArray(value.history) ? value.history.filter(e => e && typeof e.cardId === 'string' && [1,2,3,4].includes(e.rating) && Number.isFinite(new Date(e.at).getTime())) : [];
+    const history = Array.isArray(value.history)
+      ? value.history.filter(
+          (e) =>
+            e &&
+            typeof e.cardId === 'string' &&
+            [1, 2, 3, 4].includes(e.rating) &&
+            Number.isFinite(new Date(e.at).getTime()),
+        )
+      : [];
     const links: Record<string, CardLink> = Object.create(null) as Record<string, CardLink>;
     for (const [id, link] of Object.entries(value.links || {})) {
-      if (/^[A-Za-z0-9_-]+$/.test(id) && link && typeof link.mastery === 'string' && typeof link.objective === 'string') links[id] = { mastery: link.mastery, objective: link.objective, lapses: Number.isFinite(link.lapses) ? link.lapses : 0 };
+      if (
+        /^[A-Za-z0-9_-]+$/.test(id) &&
+        link &&
+        typeof link.mastery === 'string' &&
+        typeof link.objective === 'string'
+      )
+        links[id] = {
+          mastery: link.mastery,
+          objective: link.objective,
+          lapses: Number.isFinite(link.lapses) ? link.lapses : 0,
+        };
     }
     const timings: Record<string, number[]> = {};
-    for (const [k, list] of Object.entries(value.timings || {})) if (Array.isArray(list)) timings[k] = list.filter(n => Number.isFinite(n) && n > 0).slice(-9);
+    for (const [k, list] of Object.entries(value.timings || {}))
+      if (Array.isArray(list))
+        timings[k] = list.filter((n) => Number.isFinite(n) && n > 0).slice(-9);
     const usage: UsageLog = {};
-    for (const [day, entries] of Object.entries(value.usage || {})) if (/^\d{4}-\d{2}-\d{2}$/.test(day) && entries && typeof entries === 'object') usage[day] = entries;
+    for (const [day, entries] of Object.entries(value.usage || {}))
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && entries && typeof entries === 'object')
+        usage[day] = entries;
     const settings = readSettings(value.settings);
     // An existing vault opts in; a vault without saved plugin data starts with FSRS.
     if (!value.settings?.scheduler) settings.scheduler = 'simple';
-    this.data = { version: 1, settings, states: settings.scheduler === 'fsrs' ? migrateFsrs(states, history, settings.desiredRetention) : states, history, links, timings, usage, statistics: readStatistics(value.statistics, history), sessions: readSessions(value.sessions), exams: readExams(value.exams) };
+    this.data = {
+      version: 1,
+      settings,
+      states:
+        settings.scheduler === 'fsrs'
+          ? migrateFsrs(states, history, settings.desiredRetention)
+          : states,
+      history,
+      links,
+      timings,
+      usage,
+      statistics: readStatistics(value.statistics, history),
+      sessions: readSessions(value.sessions),
+      exams: readExams(value.exams),
+    };
   }
   getSnapshot = () => this.data;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
   private change(transform: (data: PluginData) => PluginData): Promise<void> {
-    const operation = this.queue.catch(() => {}).then(async () => {
-      const next = transform(this.data);
-      await this.persist(next); // A failed write must never advance the session's state.
-      this.data = next; this.listeners.forEach(listener => listener());
-    });
-    this.queue = operation; return operation;
+    const operation = this.queue
+      .catch(() => {})
+      .then(async () => {
+        const next = transform(this.data);
+        await this.persist(next); // A failed write must never advance the session's state.
+        this.data = next;
+        this.listeners.forEach((listener) => listener());
+      });
+    this.queue = operation;
+    return operation;
   }
   saveSettings(settings: QardSettings) {
-    return this.change(data => {
+    return this.change((data) => {
       const next = readSettings(settings);
       let states = data.states;
       if (next.scheduler !== data.settings.scheduler) {
-        states = next.scheduler === 'fsrs' ? migrateFsrs(states, data.history, next.desiredRetention)
-          : Object.assign(Object.create(null) as Record<string, ReviewState>, Object.fromEntries(Object.entries(states).map(([id, state]) => { const { fsrs: _memory, ...simple } = state; return [id, simple]; })));
+        states =
+          next.scheduler === 'fsrs'
+            ? migrateFsrs(states, data.history, next.desiredRetention)
+            : Object.assign(
+                Object.create(null) as Record<string, ReviewState>,
+                Object.fromEntries(
+                  Object.entries(states).map(([id, state]) => {
+                    const { fsrs: _memory, ...simple } = state;
+                    return [id, simple];
+                  }),
+                ),
+              );
       }
       return { ...data, settings: next, states };
     });
   }
   review(cardId: string, rating: Rating, now = Date.now(), step?: SessionStep) {
-    if (!/^[A-Za-z0-9_-]+$/.test(cardId)) return Promise.reject(new Error('A stable card ID is required before reviewing.'));
-    if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime())) return Promise.reject(new Error('A valid rating and review date are required.'));
-    return this.change(data => {
-      const sessions = step ? this.advanceSession(data.sessions, step, cardId, rating, now) : data.sessions;
+    if (!/^[A-Za-z0-9_-]+$/.test(cardId))
+      return Promise.reject(new Error('A stable card ID is required before reviewing.'));
+    if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime()))
+      return Promise.reject(new Error('A valid rating and review date are required.'));
+    return this.change((data) => {
+      const sessions = step
+        ? this.advanceSession(data.sessions, step, cardId, rating, now)
+        : data.sessions;
       const previous = data.states[cardId];
       const scheduled = data.settings.scheduling;
-      const computed = data.settings.scheduler === 'fsrs'
-        ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
-        : scheduler.reviewCard(cardId, previous, rating, now);
-      const state = scheduled ? computed : { ...computed, due: previous?.due, interval: previous?.interval ?? 0, ease: previous?.ease ?? 2.5 };
-      const event: ReviewEvent = { cardId, at: now, rating, scheduled, scheduler: data.settings.scheduler,
-        ...(data.settings.scheduler === 'fsrs' ? { desiredRetention: data.settings.desiredRetention } : {}) };
+      const computed =
+        data.settings.scheduler === 'fsrs'
+          ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
+          : scheduler.reviewCard(cardId, previous, rating, now);
+      const state = scheduled
+        ? computed
+        : {
+            ...computed,
+            due: previous?.due,
+            interval: previous?.interval ?? 0,
+            ease: previous?.ease ?? 2.5,
+          };
+      const event: ReviewEvent = {
+        cardId,
+        at: now,
+        rating,
+        scheduled,
+        scheduler: data.settings.scheduler,
+        ...(data.settings.scheduler === 'fsrs'
+          ? { desiredRetention: data.settings.desiredRetention }
+          : {}),
+      };
       // Keep timestamped ratings for memory reconstruction and future personalization.
-      return { ...data, sessions, states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, { [cardId]: state }), history: [...data.history, event], statistics: recordReview(data.statistics, cardId, rating, now) };
+      return {
+        ...data,
+        sessions,
+        states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
+          [cardId]: state,
+        }),
+        history: [...data.history, event],
+        statistics: recordReview(data.statistics, cardId, rating, now),
+      };
     });
   }
   /** Adds migrated schedules. Existing Qard states always win. */
   requireContentCheck(cardId: string, now = Date.now()) {
-    if (!/^[A-Za-z0-9_-]+$/.test(cardId)) return Promise.reject(new Error('A stable card ID is required.'));
-    return this.change(data => {
-      const state = data.states[cardId] ?? { cardId, interval: 0, ease: 2.5, reviewCount: 0, lapses: 0 };
-      return { ...data, states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, { [cardId]: { ...state, due: Math.min(state.due ?? now, now), needsContentCheck: true } }) };
+    if (!/^[A-Za-z0-9_-]+$/.test(cardId))
+      return Promise.reject(new Error('A stable card ID is required.'));
+    return this.change((data) => {
+      const state = data.states[cardId] ?? {
+        cardId,
+        interval: 0,
+        ease: 2.5,
+        reviewCount: 0,
+        lapses: 0,
+      };
+      return {
+        ...data,
+        states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
+          [cardId]: { ...state, due: Math.min(state.due ?? now, now), needsContentCheck: true },
+        }),
+      };
     });
   }
   importStates(states: ReviewState[]) {
-    const valid = states.filter(s => /^[A-Za-z0-9_-]+$/.test(s.cardId) && Number.isFinite(s.interval) && Number.isFinite(s.ease) && s.ease > 0 && Number.isSafeInteger(s.reviewCount) && s.reviewCount >= 0 && s.interval >= 0);
+    const valid = states.filter(
+      (s) =>
+        /^[A-Za-z0-9_-]+$/.test(s.cardId) &&
+        Number.isFinite(s.interval) &&
+        Number.isFinite(s.ease) &&
+        s.ease > 0 &&
+        Number.isSafeInteger(s.reviewCount) &&
+        s.reviewCount >= 0 &&
+        s.interval >= 0,
+    );
     if (!valid.length) return Promise.resolve();
-    return this.change(data => {
+    return this.change((data) => {
       const next = Object.assign(Object.create(null) as Record<string, ReviewState>, data.states);
-      for (const state of valid) if (!next[state.cardId]) next[state.cardId] = data.settings.scheduler === 'fsrs' ? initializeFsrs(state, [], data.settings.desiredRetention) : state;
+      for (const state of valid)
+        if (!next[state.cardId])
+          next[state.cardId] =
+            data.settings.scheduler === 'fsrs'
+              ? initializeFsrs(state, [], data.settings.desiredRetention)
+              : state;
       return { ...data, states: next };
     });
   }
   link(cardId: string, link: CardLink) {
-    return this.change(data => ({ ...data, links: Object.assign(Object.create(null) as Record<string, CardLink>, data.links, { [cardId]: link }) }));
+    return this.change((data) => ({
+      ...data,
+      links: Object.assign(Object.create(null) as Record<string, CardLink>, data.links, {
+        [cardId]: link,
+      }),
+    }));
   }
   /** Recent job durations (ms) by job kind, connection and model, for time-left estimates. */
   recordTiming(key: string, ms: number) {
-    return this.change(data => ({ ...data, timings: { ...data.timings, [key]: [...(data.timings[key] ?? []), Math.round(ms)].slice(-9) } }));
+    return this.change((data) => ({
+      ...data,
+      timings: { ...data.timings, [key]: [...(data.timings[key] ?? []), Math.round(ms)].slice(-9) },
+    }));
   }
   /** Adds one agent run's tokens to the day's totals. */
-  recordUsage(day: string, key: string, usage: Usage) { return this.change(data => ({ ...data, usage: addToLog(data.usage, day, key, usage) })); }
-  resetUsage() { return this.change(data => ({ ...data, usage: {} })); }
-  async startSession(cards: QardCard[], style: SessionStyle = 'normal', examId?: string): Promise<SavedSession> {
-    if (!cards.length || cards.some(c => !c.stable || c.duplicateId || !stableId(c.id)) || new Set(cards.map(c => c.id)).size !== cards.length) throw new Error('These cards need unique, stable IDs before saving a session.');
-    const now = Date.now(), decks = [...new Set(cards.map(c => c.deck))];
-    const session: SavedSession = { id: crypto.randomUUID(), title: decks.join(', '), cardIds: cards.map(c => c.id), position: 0, style, results: [], createdAt: now, updatedAt: now, ...(examId ? { examId } : {}) };
-    await this.change(data => ({ ...data, sessions: [...data.sessions, session] })); return session;
+  recordUsage(day: string, key: string, usage: Usage) {
+    return this.change((data) => ({ ...data, usage: addToLog(data.usage, day, key, usage) }));
+  }
+  resetUsage() {
+    return this.change((data) => ({ ...data, usage: {} }));
+  }
+  async startSession(
+    cards: QardCard[],
+    style: SessionStyle = 'normal',
+    examId?: string,
+  ): Promise<SavedSession> {
+    if (
+      !cards.length ||
+      cards.some((c) => !c.stable || c.duplicateId || !stableId(c.id)) ||
+      new Set(cards.map((c) => c.id)).size !== cards.length
+    )
+      throw new Error('These cards need unique, stable IDs before saving a session.');
+    const now = Date.now(),
+      decks = [...new Set(cards.map((c) => c.deck))];
+    const session: SavedSession = {
+      id: crypto.randomUUID(),
+      title: decks.join(', '),
+      cardIds: cards.map((c) => c.id),
+      position: 0,
+      style,
+      results: [],
+      createdAt: now,
+      updatedAt: now,
+      ...(examId ? { examId } : {}),
+    };
+    await this.change((data) => ({ ...data, sessions: [...data.sessions, session] }));
+    return session;
   }
   async resumeSession(id: string, cards: QardCard[]) {
     let resolved: ReturnType<typeof resolveSession> | undefined;
-    await this.change(data => {
-      const session = data.sessions.find(s => s.id === id);
+    await this.change((data) => {
+      const session = data.sessions.find((s) => s.id === id);
       if (!session) throw new Error('This session has already finished or was discarded.');
       resolved = resolveSession(session, cards);
       const next = resolved.session;
-      return { ...data, sessions: data.sessions.flatMap(s => s.id !== id ? [s] : next.position < next.cardIds.length ? [next] : []) };
+      return {
+        ...data,
+        sessions: data.sessions.flatMap((s) =>
+          s.id !== id ? [s] : next.position < next.cardIds.length ? [next] : [],
+        ),
+      };
     });
     return resolved!;
   }
-  private advanceSession(sessions: SavedSession[], step: SessionStep, cardId: string, rating: Rating | undefined, now: number) {
-    const session = sessions.find(s => s.id === step.id);
-    if (!session || session.position !== step.position || session.cardIds[step.position] !== cardId) throw new Error('This session changed in another view. Return to Qard and resume it.');
-    if ((session.style === 'normal') !== (rating !== undefined)) throw new Error('The session mode changed. Resume it from Qard.');
-    const next = { ...session, position: session.position + 1, updatedAt: now, results: rating ? [...session.results, { cardId, rating }] : session.results };
-    return sessions.flatMap(s => s.id !== step.id ? [s] : next.position < next.cardIds.length ? [next] : []);
+  private advanceSession(
+    sessions: SavedSession[],
+    step: SessionStep,
+    cardId: string,
+    rating: Rating | undefined,
+    now: number,
+  ) {
+    const session = sessions.find((s) => s.id === step.id);
+    if (!session || session.position !== step.position || session.cardIds[step.position] !== cardId)
+      throw new Error('This session changed in another view. Return to Qard and resume it.');
+    if ((session.style === 'normal') !== (rating !== undefined))
+      throw new Error('The session mode changed. Resume it from Qard.');
+    const next = {
+      ...session,
+      position: session.position + 1,
+      updatedAt: now,
+      results: rating ? [...session.results, { cardId, rating }] : session.results,
+    };
+    return sessions.flatMap((s) =>
+      s.id !== step.id ? [s] : next.position < next.cardIds.length ? [next] : [],
+    );
   }
   advanceCram(step: SessionStep, cardId: string) {
-    return this.change(data => ({ ...data, sessions: this.advanceSession(data.sessions, step, cardId, undefined, Date.now()) }));
+    return this.change((data) => ({
+      ...data,
+      sessions: this.advanceSession(data.sessions, step, cardId, undefined, Date.now()),
+    }));
   }
-  discardSession(id: string) { return this.change(data => ({ ...data, sessions: data.sessions.filter(s => s.id !== id) })); }
+  discardSession(id: string) {
+    return this.change((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== id) }));
+  }
   saveExam(plan: ExamPlan) {
-    if (!validExam(plan)) return Promise.reject(new Error('Choose a name, valid exam date, study days, daily target and study material.'));
-    return this.change(data => ({ ...data, exams: [...data.exams.filter(p => p.id !== plan.id), readExams([plan])[0]!] }));
+    if (!validExam(plan))
+      return Promise.reject(
+        new Error('Choose a name, valid exam date, study days, daily target and study material.'),
+      );
+    return this.change((data) => ({
+      ...data,
+      exams: [...data.exams.filter((p) => p.id !== plan.id), readExams([plan])[0]!],
+    }));
   }
-  deleteExam(id: string) { return this.change(data => ({ ...data, exams: data.exams.filter(p => p.id !== id) })); }
-  flush() { return this.queue; }
-  dispose() { this.listeners.clear(); }
+  deleteExam(id: string) {
+    return this.change((data) => ({ ...data, exams: data.exams.filter((p) => p.id !== id) }));
+  }
+  flush() {
+    return this.queue;
+  }
+  dispose() {
+    this.listeners.clear();
+  }
 }

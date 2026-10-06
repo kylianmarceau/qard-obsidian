@@ -5,7 +5,10 @@ import { readSettings } from '../src/settings/settings';
 
 it('settings rows never return an Obsidian Setting from a promise callback (it is a thenable and would freeze the app)', async () => {
   const settings = readSettings({});
-  const plugin = { app: {}, reviews: { getSnapshot: () => ({ settings }), saveSettings: async () => {} } };
+  const plugin = {
+    app: {},
+    reviews: { getSnapshot: () => ({ settings }), saveSettings: async () => {} },
+  };
   const tab = new QardSettingsTab(plugin as never);
   let adopted = 0;
   class Watched extends Setting {
@@ -15,8 +18,9 @@ it('settings rows never return an Obsidian Setting from a promise callback (it i
       return super.then(callback);
     }
   }
-  for (const group of tab.getSettingDefinitions()) for (const row of group.items) row.render(new Watched({} as never) as never);
+  for (const group of tab.getSettingDefinitions())
+    for (const row of group.items) row.render(new Watched({} as never) as never);
   for (let i = 0; i < 50; i++) await Promise.resolve();
-  await new Promise(r => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 10));
   expect(adopted).toBe(0);
 });

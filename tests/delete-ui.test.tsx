@@ -10,35 +10,104 @@ import { parseCards } from '../src/cards/parser';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLElement, root: Root;
 beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
-  host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute('open', '');
+  };
+  host = document.createElement('div');
+  document.body.append(host);
+  root = createRoot(host);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
-const click = async (el: Element | null) => act(async () => { el!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 0)); });
-const button = (name: string) => [...host.querySelectorAll('button')].find(b => b.textContent === name)!;
-const deck = buildDecks(parseCards('---\nqard-deck: Networks\n---\n# TCP\n> [!qard]- Q\n> A\n# UDP\n> [!qard]- Q2\n> A2\n', 'a.md').cards)[0]!;
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+});
+const click = async (el: Element | null) =>
+  act(async () => {
+    el!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+const button = (name: string) =>
+  [...host.querySelectorAll('button')].find((b) => b.textContent === name)!;
+const deck = buildDecks(
+  parseCards(
+    '---\nqard-deck: Networks\n---\n# TCP\n> [!qard]- Q\n> A\n# UDP\n> [!qard]- Q2\n> A2\n',
+    'a.md',
+  ).cards,
+)[0]!;
 it('confirms deck deletion separately from navigation, including while search is active', async () => {
-  const open = vi.fn(), remove = vi.fn().mockResolvedValue(undefined);
-  await act(async () => root.render(<DeckBrowser decks={[deck]} search="TCP" onSearch={vi.fn()} open={open} create={vi.fn()} study={vi.fn()} loading={false} remove={remove}/>));
+  const open = vi.fn(),
+    remove = vi.fn().mockResolvedValue(undefined);
+  await act(async () =>
+    root.render(
+      <DeckBrowser
+        decks={[deck]}
+        search="TCP"
+        onSearch={vi.fn()}
+        open={open}
+        create={vi.fn()}
+        study={vi.fn()}
+        loading={false}
+        remove={remove}
+      />,
+    ),
+  );
   await click(host.querySelector('[aria-label="Delete deck Networks"]'));
-  expect(open).not.toHaveBeenCalled(); expect(remove).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
+  expect(remove).not.toHaveBeenCalled();
   expect(host.querySelector('[role="alertdialog"]')?.textContent).toContain('across every note');
-  await click(button('Cancel')); expect(remove).not.toHaveBeenCalled();
-  await click(host.querySelector('[aria-label="Delete deck Networks"]')); await click(button('Delete'));
-  expect(remove).toHaveBeenCalledExactlyOnceWith('Networks'); expect(host.querySelector('dialog')).toBeNull();
+  await click(button('Cancel'));
+  expect(remove).not.toHaveBeenCalled();
+  await click(host.querySelector('[aria-label="Delete deck Networks"]'));
+  await click(button('Delete'));
+  expect(remove).toHaveBeenCalledExactlyOnceWith('Networks');
+  expect(host.querySelector('dialog')).toBeNull();
 });
 it('offers separate deck and topic deletes without expanding or studying a topic', async () => {
-  const removeDeck = vi.fn().mockResolvedValue(undefined), removeTopic = vi.fn().mockResolvedValue(undefined), study = vi.fn();
-  await act(async () => root.render(<TopicBrowser deck={deck} select={vi.fn()} study={study} create={vi.fn()} removeDeck={removeDeck} removeTopic={removeTopic}/>));
+  const removeDeck = vi.fn().mockResolvedValue(undefined),
+    removeTopic = vi.fn().mockResolvedValue(undefined),
+    study = vi.fn();
+  await act(async () =>
+    root.render(
+      <TopicBrowser
+        deck={deck}
+        select={vi.fn()}
+        study={study}
+        create={vi.fn()}
+        removeDeck={removeDeck}
+        removeTopic={removeTopic}
+      />,
+    ),
+  );
   expect(host.querySelector('[aria-label="Delete deck Networks"]')).not.toBeNull();
-  await click(host.querySelector('[aria-label="Delete topic TCP"]')); await click(button('Delete'));
-  expect(removeTopic).toHaveBeenCalledExactlyOnceWith('TCP'); expect(removeDeck).not.toHaveBeenCalled(); expect(study).not.toHaveBeenCalled();
-  expect(host.querySelector('[aria-expanded="true"]')).toBeNull(); expect(host.querySelector('[aria-label="Delete topic UDP"]')).not.toBeNull();
+  await click(host.querySelector('[aria-label="Delete topic TCP"]'));
+  await click(button('Delete'));
+  expect(removeTopic).toHaveBeenCalledExactlyOnceWith('TCP');
+  expect(removeDeck).not.toHaveBeenCalled();
+  expect(study).not.toHaveBeenCalled();
+  expect(host.querySelector('[aria-expanded="true"]')).toBeNull();
+  expect(host.querySelector('[aria-label="Delete topic UDP"]')).not.toBeNull();
 });
 it('keeps the dialog open on errors and allows retry', async () => {
-  const remove = vi.fn().mockRejectedValueOnce(new Error('Trash unavailable')).mockResolvedValue(undefined), deleted = vi.fn();
-  await act(async () => root.render(<DeleteItem label="Delete course" description="Course only" remove={remove} deleted={deleted}/>));
-  await click(host.querySelector('[aria-label="Delete course"]')); await click(button('Delete'));
-  expect(host.querySelector('[role="alert"]')?.textContent).toBe('Trash unavailable'); expect(deleted).not.toHaveBeenCalled();
-  await click(button('Delete')); expect(deleted).toHaveBeenCalledOnce(); expect(host.querySelector('dialog')).toBeNull();
+  const remove = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Trash unavailable'))
+      .mockResolvedValue(undefined),
+    deleted = vi.fn();
+  await act(async () =>
+    root.render(
+      <DeleteItem
+        label="Delete course"
+        description="Course only"
+        remove={remove}
+        deleted={deleted}
+      />,
+    ),
+  );
+  await click(host.querySelector('[aria-label="Delete course"]'));
+  await click(button('Delete'));
+  expect(host.querySelector('[role="alert"]')?.textContent).toBe('Trash unavailable');
+  expect(deleted).not.toHaveBeenCalled();
+  await click(button('Delete'));
+  expect(deleted).toHaveBeenCalledOnce();
+  expect(host.querySelector('dialog')).toBeNull();
 });

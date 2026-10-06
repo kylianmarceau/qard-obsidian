@@ -12,19 +12,28 @@ const script = fileURLToPath(new URL('../scripts/prepare-test-vault.mjs', import
 async function setup() {
   const root = await mkdtemp(join(tmpdir(), 'qard-install-'));
   roots.push(root);
-  for (const file of ['main.js', 'manifest.json', 'styles.css']) await writeFile(join(root, file), 'test build');
+  for (const file of ['main.js', 'manifest.json', 'styles.css'])
+    await writeFile(join(root, file), 'test build');
   await mkdir(join(root, 'example-vault'));
-  await writeFile(join(root, 'example-vault', 'Demo.md'), '> [!qard]- Demo question\n> Demo answer');
+  await writeFile(
+    join(root, 'example-vault', 'Demo.md'),
+    '> [!qard]- Demo question\n> Demo answer',
+  );
   return root;
 }
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
 
 it('default test installation adds only plugin configuration, without sample notes', async () => {
   const root = await setup();
   execFileSync(process.execPath, [script], { cwd: root });
   expect(await readdir(join(root, '.test-vault'))).toEqual(['.obsidian']);
-  expect((await readdir(join(root, '.test-vault', '.obsidian/plugins/qard'))).sort())
-    .toEqual(['main.js', 'manifest.json', 'styles.css']);
+  expect((await readdir(join(root, '.test-vault', '.obsidian/plugins/qard'))).sort()).toEqual([
+    'main.js',
+    'manifest.json',
+    'styles.css',
+  ]);
   await writeFile(join(root, '.test-vault', 'My notes.md'), 'Keep my notes');
   execFileSync(process.execPath, [script], { cwd: root });
   expect(await readFile(join(root, '.test-vault', 'My notes.md'), 'utf8')).toBe('Keep my notes');
@@ -45,7 +54,17 @@ it('examples require opt-in, stay in a separate vault, and never overwrite edite
 
 it('the empty library offers creation without showing example decks', () => {
   const noop = vi.fn();
-  const html = renderToStaticMarkup(<DeckBrowser decks={[]} search="" onSearch={noop} open={noop} create={noop} study={noop} loading={false}/>);
+  const html = renderToStaticMarkup(
+    <DeckBrowser
+      decks={[]}
+      search=""
+      onSearch={noop}
+      open={noop}
+      create={noop}
+      study={noop}
+      loading={false}
+    />,
+  );
   expect(html).toContain('No cards yet.');
   expect(html).toContain('Create a card');
   expect(html).not.toContain('qard-deck-name');
@@ -53,7 +72,21 @@ it('the empty library offers creation without showing example decks', () => {
 
 it('the library links to practice tests and shows an unfinished test', () => {
   const noop = vi.fn();
-  const html = renderToStaticMarkup(<DeckBrowser decks={[]} search="" onSearch={noop} open={noop} create={noop} study={noop} loading={false} tests={noop} newTest={noop} learn={noop} resume={<button className="qard-resume">Continue HMM inference</button>}/>);
+  const html = renderToStaticMarkup(
+    <DeckBrowser
+      decks={[]}
+      search=""
+      onSearch={noop}
+      open={noop}
+      create={noop}
+      study={noop}
+      loading={false}
+      tests={noop}
+      newTest={noop}
+      learn={noop}
+      resume={<button className="qard-resume">Continue HMM inference</button>}
+    />,
+  );
   expect(html).toContain('Practice test');
   expect(html.match(/role="tab"/g)).toHaveLength(3);
   expect(html).toContain('>Learn<');

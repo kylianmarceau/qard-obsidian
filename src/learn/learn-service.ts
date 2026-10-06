@@ -3,12 +3,83 @@ import type { QardSettings } from '../settings/settings';
 import { tidyMermaid } from './mermaid';
 import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
-import { markChoice, markUnknown, questions as testQuestions, type AnswerState, type Attempt, type Confidence, type PracticeTest, type Question, type QuestionMark } from '../tests/test-types';
-import { NEEDS_LESSON, PASS, addDays, applyEvidence, breakCycles, goalFor, isDue, isoDay, newMasteryNote, parseMastery, readyToLearn, setFrontmatter, slugId, stamp, writeObjectives, type Evidence, type Mastery, type MasteryState, type Objective } from './mastery';
-import { answerSchema, closeSchema, courseUpdateSchema, mapSchema, objectivesSchema, readCourseUpdate, type ObjectiveReply, probeMapSchema, probeSchema, questionsSchema, readAnswer, readClose, readMap, readObjectives, readProbe, readProbeMap, readQuestions, readStep, readTutorMark, stepSchema, tutorMarkSchema } from './learn-schema';
-import { askPrompt, checkPrompt, closePrompt, mapCoursePrompt, updateCoursePrompt, markCheckPrompt, probeMapPrompt, probePrompt, reviseMapPrompt, stepPrompt, tutorMarkPrompt } from './learn-prompts';
+import {
+  markChoice,
+  markUnknown,
+  questions as testQuestions,
+  type AnswerState,
+  type Attempt,
+  type Confidence,
+  type PracticeTest,
+  type Question,
+  type QuestionMark,
+} from '../tests/test-types';
+import {
+  NEEDS_LESSON,
+  PASS,
+  addDays,
+  applyEvidence,
+  breakCycles,
+  goalFor,
+  isDue,
+  isoDay,
+  newMasteryNote,
+  parseMastery,
+  readyToLearn,
+  setFrontmatter,
+  slugId,
+  stamp,
+  writeObjectives,
+  type Evidence,
+  type Mastery,
+  type MasteryState,
+  type Objective,
+} from './mastery';
+import {
+  answerSchema,
+  closeSchema,
+  courseUpdateSchema,
+  mapSchema,
+  objectivesSchema,
+  readCourseUpdate,
+  type ObjectiveReply,
+  probeMapSchema,
+  probeSchema,
+  questionsSchema,
+  readAnswer,
+  readClose,
+  readMap,
+  readObjectives,
+  readProbe,
+  readProbeMap,
+  readQuestions,
+  readStep,
+  readTutorMark,
+  stepSchema,
+  tutorMarkSchema,
+} from './learn-schema';
+import {
+  askPrompt,
+  checkPrompt,
+  closePrompt,
+  mapCoursePrompt,
+  updateCoursePrompt,
+  markCheckPrompt,
+  probeMapPrompt,
+  probePrompt,
+  reviseMapPrompt,
+  stepPrompt,
+  tutorMarkPrompt,
+} from './learn-prompts';
 import type { CardLink } from '../review/review-store';
-import type { CheckRecord, Lesson, LessonSummary, StepState, Today, TodayItem } from './learn-types';
+import type {
+  CheckRecord,
+  Lesson,
+  LessonSummary,
+  StepState,
+  Today,
+  TodayItem,
+} from './learn-types';
 
 /** Vault access for learning files; the Obsidian adapter is vault-learn-storage.ts. */
 export interface LearnStorage {
@@ -27,40 +98,129 @@ export interface LearnStorage {
   /** Moves one selected Qard learning file to Obsidian's configured trash. */
   remove(path: string): Promise<void>;
 }
-export interface CardLinks { get(cardId: string): CardLink | undefined; set(cardId: string, link: CardLink): Promise<void> }
-export type LearnJobKind = 'map-course' | 'check-write' | 'check-mark' | 'probe' | 'map' | 'revise' | 'steps' | 'tutor' | 'ask' | 'close';
-export interface LearnJob { kind: LearnJobKind; id: string; startedAt?: number; error?: string }
-export interface CourseProposal { folder: string; course: string; objectives: Objective[] }
-export interface CourseUpdate { mastery: string; course: string; notes: string[]; added: Objective[]; extended: { id: string; title: string; notes: string[]; needs: string[]; group?: string; label?: string }[]; outdated: { id: string; title: string; reason: string }[] }
-export interface LearnSnapshot { revision: number; jobs: Record<string, LearnJob> }
+export interface CardLinks {
+  get(cardId: string): CardLink | undefined;
+  set(cardId: string, link: CardLink): Promise<void>;
+}
+export type LearnJobKind =
+  | 'map-course'
+  | 'check-write'
+  | 'check-mark'
+  | 'probe'
+  | 'map'
+  | 'revise'
+  | 'steps'
+  | 'tutor'
+  | 'ask'
+  | 'close';
+export interface LearnJob {
+  kind: LearnJobKind;
+  id: string;
+  startedAt?: number;
+  error?: string;
+}
+export interface CourseProposal {
+  folder: string;
+  course: string;
+  objectives: Objective[];
+}
+export interface CourseUpdate {
+  mastery: string;
+  course: string;
+  notes: string[];
+  added: Objective[];
+  extended: {
+    id: string;
+    title: string;
+    notes: string[];
+    needs: string[];
+    group?: string;
+    label?: string;
+  }[];
+  outdated: { id: string; title: string; reason: string }[];
+}
+export interface LearnSnapshot {
+  revision: number;
+  jobs: Record<string, LearnJob>;
+}
 /** A course mapping or update in flight or failed, kept on disk so a reload restarts it and failures stay visible. */
-export interface CourseJobRecord { kind: 'map' | 'update'; target: string; request: string; status: 'running' | 'failed'; startedAt: number; error?: string }
+export interface CourseJobRecord {
+  kind: 'map' | 'update';
+  target: string;
+  request: string;
+  status: 'running' | 'failed';
+  startedAt: number;
+  error?: string;
+}
 
 const LESSONS_PER_DAY = 3;
 /** Lesson steps are written this many at a time, so the whole lesson is ready soon after the plan. */
 const STEP_WRITERS = 3;
 const SOURCE_BUDGET = 60_000;
 const key = (target: string, kind: LearnJobKind, id = '') => `${target}|${kind}|${id}`;
-const safeName = (text: string) => text.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Lesson';
+const safeName = (text: string) =>
+  text
+    .replace(/[\\/:*?"<>|#^[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60) || 'Lesson';
 /** Identifies a plan, so steps written for an older version of it are not reused. */
-const planKey = (map: { title: string; steps: { title: string }[] }) => JSON.stringify([map.title, map.steps.map(s => s.title)]);
+const planKey = (map: { title: string; steps: { title: string }[] }) =>
+  JSON.stringify([map.title, map.steps.map((s) => s.title)]);
 /** Scores are recomputed from the awarded rubric points, and extra fields (the tutor's reply) are dropped. */
-const scoreQuestion = (q: Question, m: QuestionMark): QuestionMark => ({ awarded: m.awarded, annotations: m.annotations, mistake: m.mistake, feedback: m.feedback, score: Math.min(q.marks, q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0)) });
+const scoreQuestion = (q: Question, m: QuestionMark): QuestionMark => ({
+  awarded: m.awarded,
+  annotations: m.annotations,
+  mistake: m.mistake,
+  feedback: m.feedback,
+  score: Math.min(
+    q.marks,
+    q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0),
+  ),
+});
 
 /**
  * Sums a set of marked questions into one piece of evidence. A sure answer that was wrong (scored nothing,
  * or the marker called it a misconception) counts as sure, which makes a misconception; a sure but merely
  * incomplete answer does not. A pass that relied on a guess counts as a guess; all "I don't know" is unknown.
  */
-export function summarise(items: { q: Question; answer?: AnswerState; mark?: QuestionMark }[]): { score: number; marks: number; confidence?: Confidence | 'unknown' } {
-  const score = items.reduce((n, i) => n + (i.mark?.score ?? 0), 0), marks = items.reduce((n, i) => n + i.q.marks, 0);
+export function summarise(items: { q: Question; answer?: AnswerState; mark?: QuestionMark }[]): {
+  score: number;
+  marks: number;
+  confidence?: Confidence | 'unknown';
+} {
+  const score = items.reduce((n, i) => n + (i.mark?.score ?? 0), 0),
+    marks = items.reduce((n, i) => n + i.q.marks, 0);
   const pass = marks > 0 && score / marks >= PASS;
-  if (items.length && items.every(i => i.answer?.unknown)) return { score, marks, confidence: 'unknown' };
-  if (!pass && items.some(i => i.answer?.confidence === 'sure' && ((i.mark?.score ?? 0) === 0 || i.mark?.mistake === 'misconception'))) return { score, marks, confidence: 'sure' };
-  if (!pass) return { score, marks, confidence: items.some(i => i.answer?.confidence === 'guess') ? 'guess' : 'unsure' };
-  if (pass && items.some(i => i.answer?.confidence === 'guess')) return { score, marks, confidence: 'guess' };
-  const confidences = items.map(i => i.answer?.confidence);
-  return { score, marks, confidence: confidences.every(c => c === 'sure') ? 'sure' : confidences.includes('unsure') ? 'unsure' : undefined };
+  if (items.length && items.every((i) => i.answer?.unknown))
+    return { score, marks, confidence: 'unknown' };
+  if (
+    !pass &&
+    items.some(
+      (i) =>
+        i.answer?.confidence === 'sure' &&
+        ((i.mark?.score ?? 0) === 0 || i.mark?.mistake === 'misconception'),
+    )
+  )
+    return { score, marks, confidence: 'sure' };
+  if (!pass)
+    return {
+      score,
+      marks,
+      confidence: items.some((i) => i.answer?.confidence === 'guess') ? 'guess' : 'unsure',
+    };
+  if (pass && items.some((i) => i.answer?.confidence === 'guess'))
+    return { score, marks, confidence: 'guess' };
+  const confidences = items.map((i) => i.answer?.confidence);
+  return {
+    score,
+    marks,
+    confidence: confidences.every((c) => c === 'sure')
+      ? 'sure'
+      : confidences.includes('unsure')
+        ? 'unsure'
+        : undefined,
+  };
 }
 
 export class LearnService {
@@ -78,73 +238,142 @@ export class LearnService {
   private disposed = false;
   private proposalsLoaded?: Promise<void>;
   /** notify tells the student when background work finishes, wherever they are in Obsidian; timing learns how long jobs take. */
-  constructor(private storage: LearnStorage, private settings: () => QardSettings, private runner: (role: AgentRole) => AgentRunner, private links: CardLinks, private dueCards: () => number = () => 0, private now = () => Date.now(), private notify: (message: string) => void = () => {}, private timing: (kind: string, ms: number) => void = () => {}, private captureSources?: (paths: string[], unchangedSince?: number) => Promise<SourceSnapshot[]>) {}
+  constructor(
+    private storage: LearnStorage,
+    private settings: () => QardSettings,
+    private runner: (role: AgentRole) => AgentRunner,
+    private links: CardLinks,
+    private dueCards: () => number = () => 0,
+    private now = () => Date.now(),
+    private notify: (message: string) => void = () => {},
+    private timing: (kind: string, ms: number) => void = () => {},
+    private captureSources?: (
+      paths: string[],
+      unchangedSince?: number,
+    ) => Promise<SourceSnapshot[]>,
+  ) {}
 
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
   getSnapshot = () => this.snapshot;
-  private publish(jobs = this.snapshot.jobs) { this.snapshot = { revision: this.snapshot.revision + 1, jobs }; this.listeners.forEach(l => l()); }
-  job(target: string, kind: LearnJobKind, id = '') { return this.snapshot.jobs[key(target, kind, id)]; }
-  dismiss(target: string, kind: LearnJobKind, id = '') { const jobs = { ...this.snapshot.jobs }; delete jobs[key(target, kind, id)]; this.publish(jobs); }
+  private publish(jobs = this.snapshot.jobs) {
+    this.snapshot = { revision: this.snapshot.revision + 1, jobs };
+    this.listeners.forEach((l) => l());
+  }
+  job(target: string, kind: LearnJobKind, id = '') {
+    return this.snapshot.jobs[key(target, kind, id)];
+  }
+  dismiss(target: string, kind: LearnJobKind, id = '') {
+    const jobs = { ...this.snapshot.jobs };
+    delete jobs[key(target, kind, id)];
+    this.publish(jobs);
+  }
   /** Stops a running job; it shows as cancelled, with the usual Try again. */
-  cancel(target: string, kind: LearnJobKind, id = '') { this.controllers.get(key(target, kind, id))?.abort(); }
-  private async track<T>(target: string, kind: LearnJobKind, id: string, work: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+  cancel(target: string, kind: LearnJobKind, id = '') {
+    this.controllers.get(key(target, kind, id))?.abort();
+  }
+  private async track<T>(
+    target: string,
+    kind: LearnJobKind,
+    id: string,
+    work: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T | undefined> {
     if (this.isRemoved(target)) return undefined;
     const k = key(target, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
-    const startedAt = this.now(), controller = new AbortController();
+    const startedAt = this.now(),
+      controller = new AbortController();
     this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
-    const cancelled = new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new Error(CANCELLED)))), running = work(controller.signal);
-    cancelled.catch(() => {}); running.catch(() => {});
+    const cancelled = new Promise<never>((_, reject) =>
+        controller.signal.addEventListener('abort', () => reject(new Error(CANCELLED))),
+      ),
+      running = work(controller.signal);
+    cancelled.catch(() => {});
+    running.catch(() => {});
     try {
       const result = await Promise.race([running, cancelled]);
-      const jobs = { ...this.snapshot.jobs }; delete jobs[k]; if (!this.disposed && this.controllers.get(k) === controller) this.publish(jobs);
+      const jobs = { ...this.snapshot.jobs };
+      delete jobs[k];
+      if (!this.disposed && this.controllers.get(k) === controller) this.publish(jobs);
       this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed && this.controllers.get(k) === controller) this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt, error: controller.signal.aborted ? CANCELLED : (error as Error).message || 'Something went wrong.' } });
+      if (!this.disposed && this.controllers.get(k) === controller)
+        this.publish({
+          ...this.snapshot.jobs,
+          [k]: {
+            kind,
+            id,
+            startedAt,
+            error: controller.signal.aborted
+              ? CANCELLED
+              : (error as Error).message || 'Something went wrong.',
+          },
+        });
       return undefined;
-    } finally { if (this.controllers.get(k) === controller) this.controllers.delete(k); }
+    } finally {
+      if (this.controllers.get(k) === controller) this.controllers.delete(k);
+    }
   }
-  private isRemoved(target: string) { return [...this.removed].some(p => target === p || target.startsWith(p + '#')); }
+  private isRemoved(target: string) {
+    return [...this.removed].some((p) => target === p || target.startsWith(p + '#'));
+  }
   /** Even providers that ignore abort cannot return a late reply into deleted material. */
   private activeRunner(signal: AbortSignal, role: AgentRole): AgentRunner {
     const runner = this.runner(role);
-    return { name: runner.name, run: async task => {
-      if (signal.aborted) throw new Error(CANCELLED);
-      const reply = await runner.run(task);
-      if (signal.aborted) throw new Error(CANCELLED);
-      return reply;
-    } };
+    return {
+      name: runner.name,
+      run: async (task) => {
+        if (signal.aborted) throw new Error(CANCELLED);
+        const reply = await runner.run(task);
+        if (signal.aborted) throw new Error(CANCELLED);
+        return reply;
+      },
+    };
   }
   private stopTargets(targets: string[]) {
     const jobs = { ...this.snapshot.jobs };
     for (const k of Object.keys(jobs)) {
       const target = k.split('|')[0]!;
-      if (targets.some(p => target === p || target.startsWith(p + '#'))) {
-        this.controllers.get(k)?.abort(); this.controllers.delete(k); delete jobs[k];
+      if (targets.some((p) => target === p || target.startsWith(p + '#'))) {
+        this.controllers.get(k)?.abort();
+        this.controllers.delete(k);
+        delete jobs[k];
       }
     }
     this.publish(jobs);
   }
   /** Drain writes before trashing, and block delayed answer saves and stale UI events afterwards. */
   private async removePaths(paths: string[]) {
-    paths.forEach(p => { this.removed.add(p); window.clearTimeout(this.timers.get(p)); this.timers.delete(p); });
+    paths.forEach((p) => {
+      this.removed.add(p);
+      window.clearTimeout(this.timers.get(p));
+      this.timers.delete(p);
+    });
     this.stopTargets(paths);
-    await Promise.all(paths.map(p => (this.writes.get(p) ?? Promise.resolve()).catch(() => {})));
+    await Promise.all(paths.map((p) => (this.writes.get(p) ?? Promise.resolve()).catch(() => {})));
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i]!;
-      try { if (this.storage.exists(path)) await this.storage.remove(path); }
-      catch (e) {
+      try {
+        if (this.storage.exists(path)) await this.storage.remove(path);
+      } catch (e) {
         for (const p of paths.slice(i)) {
           this.removed.delete(p);
           const current = this.checks.get(p) ?? this.lessons.get(p);
           if (current) await this.save(p, current).catch(() => {});
         }
-        this.publish(); throw e;
+        this.publish();
+        throw e;
       }
-      this.checks.delete(path); this.lessons.delete(path); this.writes.delete(path);
+      this.checks.delete(path);
+      this.lessons.delete(path);
+      this.writes.delete(path);
     }
     this.publish();
   }
@@ -152,57 +381,105 @@ export class LearnService {
     await this.loadProposals();
     this.stopTargets([folder]);
     await this.removePaths([this.proposalFile('map', folder)]);
-    this.proposals.delete(folder); this.failures.delete(`map:${folder}`); this.publish();
+    this.proposals.delete(folder);
+    this.failures.delete(`map:${folder}`);
+    this.publish();
   }
   private ownFile(path: string, section: 'Lessons' | 'Checks') {
     const root = `${this.root()}/${section}/`;
-    if (!path.startsWith(root) || !path.endsWith('.json') || path.split(/[\\/]/).some(p => p === '..' || p.startsWith('.'))) throw new Error('Choose a Qard learning item.');
+    if (
+      !path.startsWith(root) ||
+      !path.endsWith('.json') ||
+      path.split(/[\\/]/).some((p) => p === '..' || p.startsWith('.'))
+    )
+      throw new Error('Choose a Qard learning item.');
   }
   async removeLesson(path: string) {
     this.ownFile(path, 'Lessons');
     await this.loadLesson(path);
-    const note = path.replace(/\.json$/, '.md'), text = await this.storage.read(note);
+    const note = path.replace(/\.json$/, '.md'),
+      text = await this.storage.read(note);
     const paths = [path];
     if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) paths.push(note);
     await this.removePaths(paths);
   }
-  async removeCheck(path: string) { this.ownFile(path, 'Checks'); const c = await this.loadCheck(path); this.stopTargets([`${c.mastery}#${c.objective}`]); await this.removePaths([path]); }
+  async removeCheck(path: string) {
+    this.ownFile(path, 'Checks');
+    const c = await this.loadCheck(path);
+    this.stopTargets([`${c.mastery}#${c.objective}`]);
+    await this.removePaths([path]);
+  }
   /** Trash only the mastery note and generated learning records; never the course's source folder. */
   async removeCourse(path: string) {
     if (!this.storage.masteryFiles().includes(path)) throw new Error('Choose a Qard mastery file.');
     await this.course(path);
-    this.removed.add(path); this.stopTargets([path]);
+    this.removed.add(path);
+    this.stopTargets([path]);
     try {
-      const lessons = (await this.listLessons()).filter(l => l.mastery === path);
-      const checks = (await this.loadChecks()).filter(c => c.mastery === path).map(c => this.pathOf(c)!);
-      const paths = [...checks, ...lessons.map(l => l.path)];
+      const lessons = (await this.listLessons()).filter((l) => l.mastery === path);
+      const checks = (await this.loadChecks())
+        .filter((c) => c.mastery === path)
+        .map((c) => this.pathOf(c)!);
+      const paths = [...checks, ...lessons.map((l) => l.path)];
       for (const l of lessons) {
-        const note = l.path.replace(/\.json$/, '.md'), text = await this.storage.read(note);
+        const note = l.path.replace(/\.json$/, '.md'),
+          text = await this.storage.read(note);
         if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) paths.push(note);
       }
       paths.push(this.proposalFile('update', path), path);
       await this.removePaths(paths);
-      this.updates.delete(path); this.failures.delete(`update:${path}`); this.publish();
-    } catch (e) { this.removed.delete(path); throw e; }
+      this.updates.delete(path);
+      this.failures.delete(`update:${path}`);
+      this.publish();
+    } catch (e) {
+      this.removed.delete(path);
+      throw e;
+    }
   }
-  private today() { return isoDay(this.now()); }
-  private root() { return this.settings().learn.folder.replace(/\/+$/, ''); }
-  private async profile() { const t = this.settings().tests; return t.useProfile ? (await this.storage.read(`${t.folder.replace(/\/+$/, '')}/_profile.md`)) ?? undefined : undefined; }
+  private today() {
+    return isoDay(this.now());
+  }
+  private root() {
+    return this.settings().learn.folder.replace(/\/+$/, '');
+  }
+  private async profile() {
+    const t = this.settings().tests;
+    return t.useProfile
+      ? ((await this.storage.read(`${t.folder.replace(/\/+$/, '')}/_profile.md`)) ?? undefined)
+      : undefined;
+  }
   private writeText(path: string, text: string) {
     const previous = this.writes.get(path) ?? Promise.resolve();
-    const next = previous.catch(() => {}).then(() => { if (!this.isRemoved(path)) return this.storage.write(path, text); });
-    this.writes.set(path, next); return next;
+    const next = previous
+      .catch(() => {})
+      .then(() => {
+        if (!this.isRemoved(path)) return this.storage.write(path, text);
+      });
+    this.writes.set(path, next);
+    return next;
   }
-  private save(path: string, value: unknown) { if (this.isRemoved(path)) return Promise.resolve(); return this.writeText(path, JSON.stringify(value, null, 2) + '\n'); }
+  private save(path: string, value: unknown) {
+    if (this.isRemoved(path)) return Promise.resolve();
+    return this.writeText(path, JSON.stringify(value, null, 2) + '\n');
+  }
   private later(path: string, value: () => unknown) {
     window.clearTimeout(this.timers.get(path));
-    this.timers.set(path, window.setTimeout(() => { this.timers.delete(path); void this.save(path, value()); }, 600));
+    this.timers.set(
+      path,
+      window.setTimeout(() => {
+        this.timers.delete(path);
+        void this.save(path, value());
+      }, 600),
+    );
   }
 
   // ---- courses -------------------------------------------------------
   async courses(): Promise<Mastery[]> {
     const result: Mastery[] = [];
-    for (const path of this.storage.masteryFiles().filter(p => !this.isRemoved(p))) { const text = await this.storage.read(path); if (text !== null) result.push(parseMastery(path, text)); }
+    for (const path of this.storage.masteryFiles().filter((p) => !this.isRemoved(p))) {
+      const text = await this.storage.read(path);
+      if (text !== null) result.push(parseMastery(path, text));
+    }
     return result.sort((a, b) => a.course.localeCompare(b.course));
   }
   async course(path: string): Promise<Mastery> {
@@ -214,57 +491,103 @@ export class LearnService {
   }
   /** The course whose folder holds most of these notes. */
   async courseFor(paths: string[]): Promise<Mastery | undefined> {
-    let best: Mastery | undefined, count = 0;
+    let best: Mastery | undefined,
+      count = 0;
     for (const m of await this.courses()) {
       const folder = m.path.split('/').slice(0, -1).join('/');
-      const n = paths.filter(p => !folder || p.startsWith(folder + '/')).length;
-      if (n > count) { best = m; count = n; }
+      const n = paths.filter((p) => !folder || p.startsWith(folder + '/')).length;
+      if (n > count) {
+        best = m;
+        count = n;
+      }
     }
     return best;
   }
-  proposal(folder: string) { return this.proposals.get(folder); }
+  proposal(folder: string) {
+    return this.proposals.get(folder);
+  }
   // Proposals are saved as they arrive, so a mapping finished while the student was elsewhere (or across a reload) is still there to review.
-  private proposalFile(kind: 'map' | 'update', target: string) { return `${this.root()}/Proposals/${kind} ${target.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim()}.json`; }
+  private proposalFile(kind: 'map' | 'update', target: string) {
+    return `${this.root()}/Proposals/${kind} ${target
+      .replace(/[\\/:*?"<>|#^[\]]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()}.json`;
+  }
   private loadProposals() {
-    return this.proposalsLoaded ??= (async () => {
+    return (this.proposalsLoaded ??= (async () => {
       for (const path of this.storage.files(`${this.root()}/Proposals`, 'json')) {
         try {
-          const value = JSON.parse((await this.storage.read(path)) ?? '') as ({ kind: 'map' } & CourseProposal) | ({ kind: 'update' } & CourseUpdate) | CourseJobRecord;
+          const value = JSON.parse((await this.storage.read(path)) ?? '') as
+            | ({ kind: 'map' } & CourseProposal)
+            | ({ kind: 'update' } & CourseUpdate)
+            | CourseJobRecord;
           if ('status' in value) {
             // Interrupted by a reload: start it again. Failed: keep it visible under Learn until retried or dismissed.
-            if (value.status === 'running') void (value.kind === 'map' ? this.mapCourse(value.target, value.request) : this.updateCourse(value.target, value.request));
+            if (value.status === 'running')
+              void (value.kind === 'map'
+                ? this.mapCourse(value.target, value.request)
+                : this.updateCourse(value.target, value.request));
             else this.failures.set(`${value.kind}:${value.target}`, value);
-          }
-          else if (value.kind === 'map' && !this.proposals.has(value.folder)) this.proposals.set(value.folder, value);
-          else if (value.kind === 'update' && !this.updates.has(value.mastery)) this.updates.set(value.mastery, value);
-        } catch { /* a broken file is skipped */ }
+          } else if (value.kind === 'map' && !this.proposals.has(value.folder))
+            this.proposals.set(value.folder, value);
+          else if (value.kind === 'update' && !this.updates.has(value.mastery))
+            this.updates.set(value.mastery, value);
+        } catch {
+          /* a broken file is skipped */
+        }
       }
       this.publish();
-    })();
+    })());
   }
   /** Background course work to surface in Learn: mappings running, and proposals waiting for review. */
   async pending() {
     await this.loadProposals();
     // Course mappings are keyed by folder; updates by their mastery file.
-    const mapping = Object.entries(this.snapshot.jobs).filter(([, j]) => j.kind === 'map-course' && !j.error).map(([k]) => k.split('|')[0]!).filter(t => !t.endsWith('.md'));
-    return { mapping, proposals: [...this.proposals.values()], updates: [...this.updates.values()], failed: [...this.failures.values()] };
+    const mapping = Object.entries(this.snapshot.jobs)
+      .filter(([, j]) => j.kind === 'map-course' && !j.error)
+      .map(([k]) => k.split('|')[0]!)
+      .filter((t) => !t.endsWith('.md'));
+    return {
+      mapping,
+      proposals: [...this.proposals.values()],
+      updates: [...this.updates.values()],
+      failed: [...this.failures.values()],
+    };
   }
   /** Runs a course mapping or update with a record on disk while it runs, and keeps its error if it fails. */
-  private async courseJob<T>(kind: 'map' | 'update', target: string, request: string, signal: AbortSignal, work: () => Promise<T>): Promise<T> {
-    const file = this.proposalFile(kind, target), record = (status: 'running' | 'failed', error?: string): CourseJobRecord => ({ kind, target, request, status, startedAt: this.now(), error });
+  private async courseJob<T>(
+    kind: 'map' | 'update',
+    target: string,
+    request: string,
+    signal: AbortSignal,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const file = this.proposalFile(kind, target),
+      record = (status: 'running' | 'failed', error?: string): CourseJobRecord => ({
+        kind,
+        target,
+        request,
+        status,
+        startedAt: this.now(),
+        error,
+      });
     this.failures.delete(`${kind}:${target}`);
     await this.writeText(file, JSON.stringify(record('running'), null, 2) + '\n');
-    try { return await work(); }
-    catch (error) {
+    try {
+      return await work();
+    } catch (error) {
       if (signal.aborted) throw error;
       const failed = record('failed', (error as Error).message || 'Something went wrong.');
-      this.failures.set(`${kind}:${target}`, failed); await this.writeText(file, JSON.stringify(failed, null, 2) + '\n').catch(() => {});
+      this.failures.set(`${kind}:${target}`, failed);
+      await this.writeText(file, JSON.stringify(failed, null, 2) + '\n').catch(() => {});
       throw error;
     }
   }
   async dismissFailure(kind: 'map' | 'update', target: string) {
-    this.failures.delete(`${kind}:${target}`); this.publish();
-    const file = this.proposalFile(kind, target); if (this.storage.exists(file)) await this.storage.remove(file);
+    this.failures.delete(`${kind}:${target}`);
+    this.publish();
+    const file = this.proposalFile(kind, target);
+    if (this.storage.exists(file)) await this.storage.remove(file);
   }
   /**
    * After Obsidian or Qard starts: restart course jobs a reload interrupted, and finish today's lessons (their steps
@@ -272,338 +595,760 @@ export class LearnService {
    */
   async resumeBackground() {
     await this.loadProposals();
-    for (const path of this.storage.files(`${this.root()}/Lessons`, 'json').filter(p => !this.isRemoved(p))) {
+    for (const path of this.storage
+      .files(`${this.root()}/Lessons`, 'json')
+      .filter((p) => !this.isRemoved(p))) {
       const l = await this.loadLesson(path).catch(() => undefined);
       if (!l || this.now() - l.createdAt > 86_400_000) continue;
       if (l.finishedAt && !l.close) void this.close(path);
-      else if (!l.finishedAt && l.map && (l.steps.length !== l.map.steps.length || l.steps.some(x => !x))) void this.prepareSteps(path);
+      else if (
+        !l.finishedAt &&
+        l.map &&
+        (l.steps.length !== l.map.steps.length || l.steps.some((x) => !x))
+      )
+        void this.prepareSteps(path);
     }
   }
   /** Turns the Writer's objectives into rows: clean unique ids, prerequisites remapped to them, no cycles. */
   private toObjectives(replies: ObjectiveReply[], taken: Set<string>): Objective[] {
-    const renamed = new Map<string, string>(), day = this.today();
-    const rows = replies.map(o => {
-      let id = slugId(o.id || o.title); while (taken.has(id)) id += '-2'; taken.add(id); renamed.set(o.id, id);
-      const notes = o.notes.map(n => n.replace(/\.md$/, '').split('/').pop()!).filter(Boolean);
+    const renamed = new Map<string, string>(),
+      day = this.today();
+    const rows = replies.map((o) => {
+      let id = slugId(o.id || o.title);
+      while (taken.has(id)) id += '-2';
+      taken.add(id);
+      renamed.set(o.id, id);
+      const notes = o.notes.map((n) => n.replace(/\.md$/, '').split('/').pop()!).filter(Boolean);
       const state: MasteryState = o.state === 'planned' && notes.length ? 'new' : o.state;
       const weak = ['gap', 'misconception', 'shaky'].includes(state);
-      return { id, title: o.title, label: o.label.trim() || undefined, group: o.group.trim() || undefined, state, due: weak ? day : undefined, notes, needs: o.needs, evidence: o.evidence.trim() ? [o.evidence.trim()] : [], cells: {} } satisfies Objective;
+      return {
+        id,
+        title: o.title,
+        label: o.label.trim() || undefined,
+        group: o.group.trim() || undefined,
+        state,
+        due: weak ? day : undefined,
+        notes,
+        needs: o.needs,
+        evidence: o.evidence.trim() ? [o.evidence.trim()] : [],
+        cells: {},
+      } satisfies Objective;
     });
-    return rows.map(o => ({ ...o, needs: [...new Set(o.needs.map(n => renamed.get(n) ?? slugId(n)).filter(n => taken.has(n) && n !== o.id))] }));
+    return rows.map((o) => ({
+      ...o,
+      needs: [
+        ...new Set(
+          o.needs.map((n) => renamed.get(n) ?? slugId(n)).filter((n) => taken.has(n) && n !== o.id),
+        ),
+      ],
+    }));
   }
   /** The writer proposes objectives for a course folder; nothing is written until the student accepts. */
   mapCourse(folder: string, request = '') {
     const clean = folder.replace(/\/+$/, '');
     this.removed.delete(this.proposalFile('map', clean));
-    return this.track(clean, 'map-course', '', signal => this.courseJob('map', clean, request, signal, async () => {
-      const notes = this.storage.files(clean, 'md');
-      const result = await runValidated(this.activeRunner(signal, 'writer'), { signal, prompt: mapCoursePrompt(clean, notes, request, await this.profile()), schema: objectivesSchema, effort: 'high' }, readObjectives);
-      const objectives = breakCycles(this.toObjectives(result.objectives, new Set()));
-      const proposal = { folder: clean, course: result.course.trim() || clean.split('/').pop()!, objectives };
-      this.proposals.set(clean, proposal); this.publish();
-      await this.writeText(this.proposalFile('map', clean), JSON.stringify({ kind: 'map', ...proposal }, null, 2) + '\n');
-      this.notify(`${proposal.course}: ${objectives.length} objectives ready to review in Qard → Learn.`);
-    }));
+    return this.track(clean, 'map-course', '', (signal) =>
+      this.courseJob('map', clean, request, signal, async () => {
+        const notes = this.storage.files(clean, 'md');
+        const result = await runValidated(
+          this.activeRunner(signal, 'writer'),
+          {
+            signal,
+            prompt: mapCoursePrompt(clean, notes, request, await this.profile()),
+            schema: objectivesSchema,
+            effort: 'high',
+          },
+          readObjectives,
+        );
+        const objectives = breakCycles(this.toObjectives(result.objectives, new Set()));
+        const proposal = {
+          folder: clean,
+          course: result.course.trim() || clean.split('/').pop()!,
+          objectives,
+        };
+        this.proposals.set(clean, proposal);
+        this.publish();
+        await this.writeText(
+          this.proposalFile('map', clean),
+          JSON.stringify({ kind: 'map', ...proposal }, null, 2) + '\n',
+        );
+        this.notify(
+          `${proposal.course}: ${objectives.length} objectives ready to review in Qard → Learn.`,
+        );
+      }),
+    );
   }
   async acceptCourse(folder: string, keep: string[]): Promise<string> {
     const proposal = this.proposals.get(folder);
     if (!proposal) throw new Error('There is no proposal for this folder.');
     const path = `${folder ? folder + '/' : ''}${safeName(proposal.course)} Mastery.md`;
-    if (this.storage.exists(path)) throw new Error(`${path} already exists. Open it instead, or delete it first.`);
-    const kept = proposal.objectives.filter(o => keep.includes(o.id)).map(o => ({ ...o, needs: o.needs.filter(n => keep.includes(n)) }));
+    if (this.storage.exists(path))
+      throw new Error(`${path} already exists. Open it instead, or delete it first.`);
+    const kept = proposal.objectives
+      .filter((o) => keep.includes(o.id))
+      .map((o) => ({ ...o, needs: o.needs.filter((n) => keep.includes(n)) }));
     this.removed.delete(path);
     await this.writeText(path, newMasteryNote(proposal.course, kept, stamp(this.now())));
     await this.discardProposal(folder);
     return path;
   }
   async discardProposal(folder: string) {
-    this.proposals.delete(folder); this.publish();
-    const file = this.proposalFile('map', folder); if (this.storage.exists(file)) await this.storage.remove(file);
+    this.proposals.delete(folder);
+    this.publish();
+    const file = this.proposalFile('map', folder);
+    if (this.storage.exists(file)) await this.storage.remove(file);
   }
 
   // ---- a growing course ---------------------------------------------
-  private folderOf(mastery: string) { return mastery.split('/').slice(0, -1).join('/'); }
+  private folderOf(mastery: string) {
+    return mastery.split('/').slice(0, -1).join('/');
+  }
   /** Course notes created or edited since the course was last mapped. Without a date, nothing counts as changed. */
   changedNotes(m: Mastery): string[] {
-    const since = m.mapped ? Date.parse(m.mapped.length === 10 ? `${m.mapped}T23:59` : m.mapped) : NaN;
+    const since = m.mapped
+      ? Date.parse(m.mapped.length === 10 ? `${m.mapped}T23:59` : m.mapped)
+      : NaN;
     if (Number.isNaN(since)) return [];
     const root = this.root() + '/';
-    return this.storage.files(this.folderOf(m.path), 'md').filter(p => p !== m.path && !p.startsWith(root) && (this.storage.modified(p) ?? 0) > since + 60_000);
+    return this.storage
+      .files(this.folderOf(m.path), 'md')
+      .filter(
+        (p) =>
+          p !== m.path && !p.startsWith(root) && (this.storage.modified(p) ?? 0) > since + 60_000,
+      );
   }
-  update(mastery: string) { return this.updates.get(mastery); }
+  update(mastery: string) {
+    return this.updates.get(mastery);
+  }
   /** The writer proposes additions from new or changed notes. Existing rows are never renamed or rewritten. */
   updateCourse(mastery: string, request = '') {
     if (!this.isRemoved(mastery)) this.removed.delete(this.proposalFile('update', mastery));
-    return this.track(mastery, 'map-course', '', signal => this.courseJob('update', mastery, request, signal, async () => {
-      const m = await this.course(mastery), changed = this.changedNotes(m);
-      const notes = changed.length ? changed : this.storage.files(this.folderOf(mastery), 'md').filter(p => p !== mastery);
-      const result = await runValidated(this.activeRunner(signal, 'writer'), { signal, prompt: updateCoursePrompt(m, notes, request), schema: courseUpdateSchema, effort: 'high' }, readCourseUpdate);
-      const existing = new Map(m.objectives.map(o => [o.id, o])), taken = new Set(existing.keys());
-      const added = this.toObjectives(result.added, taken);
-      const valid = new Set([...existing.keys(), ...added.map(o => o.id)]);
-      const extended = result.extended.filter(e => existing.has(e.id)).map(e => {
-        const o = existing.get(e.id)!;
-        const notesToAdd = e.notes.map(n => n.replace(/\.md$/, '').split('/').pop()!).filter(n => n && !o.notes.includes(n));
-        const group = !o.group && e.group.trim() ? e.group.trim() : undefined, label = !o.label && e.label.trim() ? e.label.trim() : undefined;
-        return { id: e.id, title: o.title, notes: [...new Set(notesToAdd)], needs: [...new Set(e.needs.filter(n => valid.has(n) && n !== e.id && !o.needs.includes(n)))], group, label };
-      }).filter(e => e.notes.length || e.needs.length || e.group || e.label);
-      const outdated = result.outdated.filter(x => existing.has(x.id)).map(x => ({ id: x.id, title: existing.get(x.id)!.title, reason: x.reason }));
-      const update = { mastery, course: m.course, notes, added, extended, outdated };
-      this.updates.set(mastery, update); this.publish();
-      await this.writeText(this.proposalFile('update', mastery), JSON.stringify({ kind: 'update', ...update }, null, 2) + '\n');
-      this.notify(`${m.course}: an update is ready to review on its course page.`);
-    }));
+    return this.track(mastery, 'map-course', '', (signal) =>
+      this.courseJob('update', mastery, request, signal, async () => {
+        const m = await this.course(mastery),
+          changed = this.changedNotes(m);
+        const notes = changed.length
+          ? changed
+          : this.storage.files(this.folderOf(mastery), 'md').filter((p) => p !== mastery);
+        const result = await runValidated(
+          this.activeRunner(signal, 'writer'),
+          {
+            signal,
+            prompt: updateCoursePrompt(m, notes, request),
+            schema: courseUpdateSchema,
+            effort: 'high',
+          },
+          readCourseUpdate,
+        );
+        const existing = new Map(m.objectives.map((o) => [o.id, o])),
+          taken = new Set(existing.keys());
+        const added = this.toObjectives(result.added, taken);
+        const valid = new Set([...existing.keys(), ...added.map((o) => o.id)]);
+        const extended = result.extended
+          .filter((e) => existing.has(e.id))
+          .map((e) => {
+            const o = existing.get(e.id)!;
+            const notesToAdd = e.notes
+              .map((n) => n.replace(/\.md$/, '').split('/').pop()!)
+              .filter((n) => n && !o.notes.includes(n));
+            const group = !o.group && e.group.trim() ? e.group.trim() : undefined,
+              label = !o.label && e.label.trim() ? e.label.trim() : undefined;
+            return {
+              id: e.id,
+              title: o.title,
+              notes: [...new Set(notesToAdd)],
+              needs: [
+                ...new Set(
+                  e.needs.filter((n) => valid.has(n) && n !== e.id && !o.needs.includes(n)),
+                ),
+              ],
+              group,
+              label,
+            };
+          })
+          .filter((e) => e.notes.length || e.needs.length || e.group || e.label);
+        const outdated = result.outdated
+          .filter((x) => existing.has(x.id))
+          .map((x) => ({ id: x.id, title: existing.get(x.id)!.title, reason: x.reason }));
+        const update = { mastery, course: m.course, notes, added, extended, outdated };
+        this.updates.set(mastery, update);
+        this.publish();
+        await this.writeText(
+          this.proposalFile('update', mastery),
+          JSON.stringify({ kind: 'update', ...update }, null, 2) + '\n',
+        );
+        this.notify(`${m.course}: an update is ready to review on its course page.`);
+      }),
+    );
   }
   /** Applies the ticked parts of an update and records the new mapping time. */
-  async acceptUpdate(mastery: string, choice: { added: string[]; extended: string[]; remove: string[] }) {
-    const update = this.updates.get(mastery); if (!update) throw new Error('There is no update to apply.');
-    const added = update.added.filter(o => choice.added.includes(o.id)), extended = new Map(update.extended.filter(e => choice.extended.includes(e.id)).map(e => [e.id, e]));
-    await this.storage.process(mastery, text => {
+  async acceptUpdate(
+    mastery: string,
+    choice: { added: string[]; extended: string[]; remove: string[] },
+  ) {
+    const update = this.updates.get(mastery);
+    if (!update) throw new Error('There is no update to apply.');
+    const added = update.added.filter((o) => choice.added.includes(o.id)),
+      extended = new Map(
+        update.extended.filter((e) => choice.extended.includes(e.id)).map((e) => [e.id, e]),
+      );
+    await this.storage.process(mastery, (text) => {
       const m = parseMastery(mastery, text);
-      const rows = m.objectives.filter(o => !choice.remove.includes(o.id)).map(o => {
-        const e = extended.get(o.id); if (!e) return o;
-        const notes = [...o.notes, ...e.notes];
-        return { ...o, notes, needs: [...o.needs, ...e.needs], group: o.group ?? e.group, label: o.label ?? e.label, state: o.state === 'planned' && notes.length ? 'new' as const : o.state };
-      });
-      const ids = new Set([...rows.map(o => o.id), ...added.map(o => o.id)]);
-      const all = breakCycles([...rows, ...added].map(o => ({ ...o, needs: o.needs.filter(n => ids.has(n)) })));
+      const rows = m.objectives
+        .filter((o) => !choice.remove.includes(o.id))
+        .map((o) => {
+          const e = extended.get(o.id);
+          if (!e) return o;
+          const notes = [...o.notes, ...e.notes];
+          return {
+            ...o,
+            notes,
+            needs: [...o.needs, ...e.needs],
+            group: o.group ?? e.group,
+            label: o.label ?? e.label,
+            state: o.state === 'planned' && notes.length ? ('new' as const) : o.state,
+          };
+        });
+      const ids = new Set([...rows.map((o) => o.id), ...added.map((o) => o.id)]);
+      const all = breakCycles(
+        [...rows, ...added].map((o) => ({ ...o, needs: o.needs.filter((n) => ids.has(n)) })),
+      );
       return setFrontmatter(writeObjectives(text, all), 'qard-mapped', stamp(this.now()));
     });
     await this.discardUpdate(mastery);
   }
   async discardUpdate(mastery: string) {
-    this.updates.delete(mastery); this.publish();
-    const file = this.proposalFile('update', mastery); if (this.storage.exists(file)) await this.storage.remove(file);
+    this.updates.delete(mastery);
+    this.publish();
+    const file = this.proposalFile('update', mastery);
+    if (this.storage.exists(file)) await this.storage.remove(file);
   }
 
   // ---- evidence ------------------------------------------------------
   /** Applies evidence to one objective, rewriting only the table, then prepares its next check. */
-  async record(mastery: string, objective: string, evidence: Evidence): Promise<Objective | undefined> {
+  async record(
+    mastery: string,
+    objective: string,
+    evidence: Evidence,
+  ): Promise<Objective | undefined> {
     if (this.isRemoved(mastery) || !this.storage.exists(mastery)) return undefined;
     let updated: Objective | undefined;
-    await this.storage.process(mastery, text => {
-      const m = parseMastery(mastery, text), o = m.objectives.find(x => x.id === objective);
+    await this.storage.process(mastery, (text) => {
+      const m = parseMastery(mastery, text),
+        o = m.objectives.find((x) => x.id === objective);
       if (!o) return text;
       updated = applyEvidence(o, evidence);
-      return writeObjectives(text, m.objectives.map(x => x.id === objective ? updated! : x));
+      return writeObjectives(
+        text,
+        m.objectives.map((x) => (x.id === objective ? updated! : x)),
+      );
     });
     this.publish();
-    if (updated && !NEEDS_LESSON.includes(updated.state) && updated.due && updated.due <= addDays(this.today(), 14)) void this.ensureCheck(mastery, objective);
+    if (
+      updated &&
+      !NEEDS_LESSON.includes(updated.state) &&
+      updated.due &&
+      updated.due <= addDays(this.today(), 14)
+    )
+      void this.ensureCheck(mastery, objective);
     return updated;
   }
   async setState(mastery: string, objective: string, state: MasteryState, due?: string) {
-    await this.storage.process(mastery, text => { const m = parseMastery(mastery, text); return writeObjectives(text, m.objectives.map(o => o.id === objective ? { ...o, state, due } : o)); });
+    await this.storage.process(mastery, (text) => {
+      const m = parseMastery(mastery, text);
+      return writeObjectives(
+        text,
+        m.objectives.map((o) => (o.id === objective ? { ...o, state, due } : o)),
+      );
+    });
     this.publish();
   }
   /** Test questions tagged with objectives feed the mastery file once the test is marked. */
   async recordTest(test: PracticeTest, attempt: Attempt) {
     if (!test.mastery) return;
-    const byObjective = new Map<string, { q: Question; answer?: AnswerState; mark?: QuestionMark }[]>();
-    for (const q of testQuestions(test)) if (q.objective && attempt.marks[q.id]) byObjective.set(q.objective, [...(byObjective.get(q.objective) ?? []), { q, answer: attempt.answers[q.id], mark: attempt.marks[q.id] }]);
+    const byObjective = new Map<
+      string,
+      { q: Question; answer?: AnswerState; mark?: QuestionMark }[]
+    >();
+    for (const q of testQuestions(test))
+      if (q.objective && attempt.marks[q.id])
+        byObjective.set(q.objective, [
+          ...(byObjective.get(q.objective) ?? []),
+          { q, answer: attempt.answers[q.id], mark: attempt.marks[q.id] },
+        ]);
     const day = this.today();
-    for (const [objective, items] of byObjective) await this.record(test.mastery, objective, { kind: 'test', day, label: items.map(i => i.q.id).join('+'), ...summarise(items) });
+    for (const [objective, items] of byObjective)
+      await this.record(test.mastery, objective, {
+        kind: 'test',
+        day,
+        label: items.map((i) => i.q.id).join('+'),
+        ...summarise(items),
+      });
   }
   async cardLapse(cardId: string) {
-    const link = this.links.get(cardId); if (!link) return;
+    const link = this.links.get(cardId);
+    if (!link) return;
     const lapses = link.lapses + 1;
-    if (lapses >= 2) { await this.links.set(cardId, { ...link, lapses: 0 }); await this.record(link.mastery, link.objective, { kind: 'card', day: this.today(), label: 'lapsed twice' }); }
-    else await this.links.set(cardId, { ...link, lapses });
+    if (lapses >= 2) {
+      await this.links.set(cardId, { ...link, lapses: 0 });
+      await this.record(link.mastery, link.objective, {
+        kind: 'card',
+        day: this.today(),
+        label: 'lapsed twice',
+      });
+    } else await this.links.set(cardId, { ...link, lapses });
   }
-  linkCard(cardId: string, mastery: string, objective: string) { return this.links.set(cardId, { mastery, objective, lapses: 0 }); }
+  linkCard(cardId: string, mastery: string, objective: string) {
+    return this.links.set(cardId, { mastery, objective, lapses: 0 });
+  }
 
   // ---- checks --------------------------------------------------------
   private async loadChecks(): Promise<CheckRecord[]> {
-    const paths = this.storage.files(`${this.root()}/Checks`, 'json').filter(p => !this.isRemoved(p));
-    for (const path of paths) if (!this.checks.has(path)) {
-      try { const text = await this.storage.read(path); if (text && !this.isRemoved(path)) this.checks.set(path, JSON.parse(text) as CheckRecord); } catch { /* a broken file is skipped */ }
-    }
-    return paths.map(p => this.checks.get(p)).filter((c): c is CheckRecord => !!c);
+    const paths = this.storage
+      .files(`${this.root()}/Checks`, 'json')
+      .filter((p) => !this.isRemoved(p));
+    for (const path of paths)
+      if (!this.checks.has(path)) {
+        try {
+          const text = await this.storage.read(path);
+          if (text && !this.isRemoved(path)) this.checks.set(path, JSON.parse(text) as CheckRecord);
+        } catch {
+          /* a broken file is skipped */
+        }
+      }
+    return paths.map((p) => this.checks.get(p)).filter((c): c is CheckRecord => !!c);
   }
-  checkAt(path: string) { return this.checks.get(path); }
+  checkAt(path: string) {
+    return this.checks.get(path);
+  }
   async loadCheck(path: string) {
     if (this.isRemoved(path)) throw new Error('This check was deleted.');
-    if (!this.checks.has(path)) { const text = await this.storage.read(path); if (!text || this.isRemoved(path)) throw new Error('This check no longer exists.'); this.checks.set(path, JSON.parse(text) as CheckRecord); this.publish(); }
+    if (!this.checks.has(path)) {
+      const text = await this.storage.read(path);
+      if (!text || this.isRemoved(path)) throw new Error('This check no longer exists.');
+      this.checks.set(path, JSON.parse(text) as CheckRecord);
+      this.publish();
+    }
     return this.checks.get(path)!;
   }
-  private pathOf(record: CheckRecord) { return [...this.checks.entries()].find(([, c]) => c === record)?.[0]; }
+  private pathOf(record: CheckRecord) {
+    return [...this.checks.entries()].find(([, c]) => c === record)?.[0];
+  }
   async pendingCheck(mastery: string, objective: string): Promise<string | undefined> {
-    const found = (await this.loadChecks()).filter(c => c.mastery === mastery && c.objective === objective && !c.finishedAt).sort((a, b) => b.createdAt - a.createdAt)[0];
+    const found = (await this.loadChecks())
+      .filter((c) => c.mastery === mastery && c.objective === objective && !c.finishedAt)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
     return found && this.pathOf(found);
   }
   /** A check written before its notes changed is rewritten, as long as nothing has been answered. */
   private stale(record: CheckRecord, o: Objective) {
     if (Object.keys(record.answers).length) return false;
-    return o.notes.some(n => { const path = this.storage.resolve(n, record.mastery); const t = path && this.storage.modified(path); return !!t && t > record.createdAt; });
+    return o.notes.some((n) => {
+      const path = this.storage.resolve(n, record.mastery);
+      const t = path && this.storage.modified(path);
+      return !!t && t > record.createdAt;
+    });
   }
   /** Writes the next check for an objective ahead of time, unless one is already waiting. */
   ensureCheck(mastery: string, objective: string): Promise<string | undefined> {
-    return this.track(`${mastery}#${objective}`, 'check-write', '', async signal => {
-      const m = await this.course(mastery), o = m.objectives.find(x => x.id === objective);
+    return this.track(`${mastery}#${objective}`, 'check-write', '', async (signal) => {
+      const m = await this.course(mastery),
+        o = m.objectives.find((x) => x.id === objective);
       if (!o) throw new Error(`No objective "${objective}" in ${m.course}.`);
       const existing = await this.pendingCheck(mastery, objective);
       if (existing && !this.stale(this.checks.get(existing)!, o)) return existing;
-      const goal = goalFor(o.state), previous = (await this.loadChecks()).filter(c => c.mastery === mastery && c.objective === objective && c.finishedAt);
-      const written = await runValidated(this.activeRunner(signal, 'writer'), { signal, prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema }, readQuestions);
-      const record: CheckRecord = { version: 1, createdAt: this.now(), mastery, course: m.course, objective, title: o.title, goal, questions: written.slice(0, 3).map(q => ({ ...q, objective, goal: q.goal ?? goal })), answers: {}, marks: {}, status: 'ready' };
-      const path = existing ?? `${this.root()}/Checks/${safeName(m.course)}/${this.today()} ${objective}.json`;
+      const goal = goalFor(o.state),
+        previous = (await this.loadChecks()).filter(
+          (c) => c.mastery === mastery && c.objective === objective && c.finishedAt,
+        );
+      const written = await runValidated(
+        this.activeRunner(signal, 'writer'),
+        { signal, prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema },
+        readQuestions,
+      );
+      const record: CheckRecord = {
+        version: 1,
+        createdAt: this.now(),
+        mastery,
+        course: m.course,
+        objective,
+        title: o.title,
+        goal,
+        questions: written.slice(0, 3).map((q) => ({ ...q, objective, goal: q.goal ?? goal })),
+        answers: {},
+        marks: {},
+        status: 'ready',
+      };
+      const path =
+        existing ?? `${this.root()}/Checks/${safeName(m.course)}/${this.today()} ${objective}.json`;
       this.removed.delete(path);
-      this.checks.set(path, record); await this.save(path, record); this.publish();
+      this.checks.set(path, record);
+      await this.save(path, record);
+      this.publish();
       return path;
     });
   }
   answerCheck(path: string, id: string, patch: Partial<AnswerState>) {
-    const record = this.checks.get(path); if (!record || record.finishedAt) return;
-    const next = { ...record, answers: { ...record.answers, [id]: { ...record.answers[id], ...patch } } };
-    this.checks.set(path, next); this.publish(); this.later(path, () => this.checks.get(path));
+    const record = this.checks.get(path);
+    if (!record || record.finishedAt) return;
+    const next = {
+      ...record,
+      answers: { ...record.answers, [id]: { ...record.answers[id], ...patch } },
+    };
+    this.checks.set(path, next);
+    this.publish();
+    this.later(path, () => this.checks.get(path));
   }
   /** Multiple choice and "I don't know" are marked locally; the tutor marks typed answers. */
   submitCheck(path: string) {
-    return this.track(path, 'check-mark', '', async signal => {
+    return this.track(path, 'check-mark', '', async (signal) => {
       window.clearTimeout(this.timers.get(path));
-      let record = this.checks.get(path); if (!record || record.finishedAt) return;
+      let record = this.checks.get(path);
+      if (!record || record.finishedAt) return;
       const marks: Record<string, QuestionMark> = {};
-      for (const q of record.questions) { const a = record.answers[q.id]; if (a?.unknown) marks[q.id] = markUnknown(q); else if (q.type === 'mcq') marks[q.id] = markChoice(q, a); }
-      const typed = record.questions.filter(q => !marks[q.id]);
-      record = { ...record, marks, status: typed.length ? 'marking' : 'marked' }; this.checks.set(path, record); this.publish();
+      for (const q of record.questions) {
+        const a = record.answers[q.id];
+        if (a?.unknown) marks[q.id] = markUnknown(q);
+        else if (q.type === 'mcq') marks[q.id] = markChoice(q, a);
+      }
+      const typed = record.questions.filter((q) => !marks[q.id]);
+      record = { ...record, marks, status: typed.length ? 'marking' : 'marked' };
+      this.checks.set(path, record);
+      this.publish();
       try {
         if (typed.length) {
-          const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: markCheckPrompt(record, typed.map(q => q.id)), schema: marksSchema, vault: false, effort: 'low' }, v => readMarks(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
+          const result = await runValidated(
+            this.activeRunner(signal, 'tutor'),
+            {
+              signal,
+              prompt: markCheckPrompt(
+                record,
+                typed.map((q) => q.id),
+              ),
+              schema: marksSchema,
+              vault: false,
+              effort: 'low',
+            },
+            (v) =>
+              readMarks(
+                v,
+                typed.map((q) => ({ id: q.id, rubric: q.rubric.length })),
+              ),
+          );
           for (const q of typed) marks[q.id] = scoreQuestion(q, result[q.id]!);
         }
-      } catch (error) { if (signal.aborted) throw error; record = { ...record, status: 'error', error: (error as Error).message }; this.checks.set(path, record); await this.save(path, record); throw error; }
+      } catch (error) {
+        if (signal.aborted) throw error;
+        record = { ...record, status: 'error', error: (error as Error).message };
+        this.checks.set(path, record);
+        await this.save(path, record);
+        throw error;
+      }
       record = { ...record, marks, status: 'marked', error: undefined, finishedAt: this.now() };
-      this.checks.set(path, record); await this.save(path, record); this.publish();
-      await this.record(record.mastery, record.objective, { kind: 'check', day: this.today(), label: record.goal, ...summarise(record.questions.map(q => ({ q, answer: record.answers[q.id], mark: marks[q.id] }))) });
+      this.checks.set(path, record);
+      await this.save(path, record);
+      this.publish();
+      await this.record(record.mastery, record.objective, {
+        kind: 'check',
+        day: this.today(),
+        label: record.goal,
+        ...summarise(
+          record.questions.map((q) => ({ q, answer: record.answers[q.id], mark: marks[q.id] })),
+        ),
+      });
     });
   }
 
   // ---- today ---------------------------------------------------------
   async todayList(): Promise<Today> {
-    const day = this.today(), checks: TodayItem[] = [], lessons: TodayItem[] = [], ready = new Set<string>();
+    const day = this.today(),
+      checks: TodayItem[] = [],
+      lessons: TodayItem[] = [],
+      ready = new Set<string>();
     await this.loadChecks();
     for (const m of await this.courses()) {
       for (const id of readyToLearn(m)) ready.add(`${m.path}#${id}`);
       for (const o of m.objectives) {
         if (!isDue(o, day)) continue;
-        const item: TodayItem = { mastery: m.path, course: m.course, objective: o.id, title: o.title, state: o.state, due: o.due! };
+        const item: TodayItem = {
+          mastery: m.path,
+          course: m.course,
+          objective: o.id,
+          title: o.title,
+          state: o.state,
+          due: o.due!,
+        };
         if (NEEDS_LESSON.includes(o.state)) lessons.push(item);
         else checks.push({ ...item, check: await this.pendingCheck(m.path, o.id) });
       }
     }
     // Suggest only a few lessons: misconceptions first, then objectives whose prerequisites are already taught.
-    const rank = (i: TodayItem) => i.state === 'misconception' ? 0 : ready.has(`${i.mastery}#${i.objective}`) ? 1 : 2;
+    const rank = (i: TodayItem) =>
+      i.state === 'misconception' ? 0 : ready.has(`${i.mastery}#${i.objective}`) ? 1 : 2;
     lessons.sort((a, b) => rank(a) - rank(b) || a.due.localeCompare(b.due));
-    return { checks, lessons: lessons.slice(0, LESSONS_PER_DAY), moreLessons: Math.max(0, lessons.length - LESSONS_PER_DAY), cards: this.dueCards() };
+    return {
+      checks,
+      lessons: lessons.slice(0, LESSONS_PER_DAY),
+      moreLessons: Math.max(0, lessons.length - LESSONS_PER_DAY),
+      cards: this.dueCards(),
+    };
   }
   /** Writes checks that are due but missing (for example after a hand edit). */
-  prepare(today: Today) { for (const c of today.checks) if (!c.check) void this.ensureCheck(c.mastery, c.objective); }
+  prepare(today: Today) {
+    for (const c of today.checks) if (!c.check) void this.ensureCheck(c.mastery, c.objective);
+  }
 
   // ---- lessons -------------------------------------------------------
-  lessonAt(path: string) { return this.lessons.get(path); }
+  lessonAt(path: string) {
+    return this.lessons.get(path);
+  }
   async loadLesson(path: string) {
     if (this.isRemoved(path)) throw new Error('This lesson was deleted.');
-    if (!this.lessons.has(path)) { const text = await this.storage.read(path); if (!text || this.isRemoved(path)) throw new Error('This lesson no longer exists.'); this.lessons.set(path, JSON.parse(text) as Lesson); this.publish(); }
+    if (!this.lessons.has(path)) {
+      const text = await this.storage.read(path);
+      if (!text || this.isRemoved(path)) throw new Error('This lesson no longer exists.');
+      this.lessons.set(path, JSON.parse(text) as Lesson);
+      this.publish();
+    }
     return this.lessons.get(path)!;
   }
   /** What a lesson builds on, for warming up while it is prepared: its notes and its objective's prerequisites (and their notes). */
   async warmupFor(path: string): Promise<{ files: string[]; objectives: string[] }> {
-    const lesson = this.lessons.get(path); if (!lesson) return { files: [], objectives: [] };
-    const m = lesson.mastery ? await this.course(lesson.mastery).catch(() => undefined) : undefined, o = m?.objectives.find(x => x.id === lesson.objective);
-    const needs = o?.needs ?? [], files = new Set(lesson.notes);
-    for (const id of needs) for (const n of m!.objectives.find(x => x.id === id)?.notes ?? []) { const p = this.storage.resolve(n, m!.path); if (p) files.add(p); }
+    const lesson = this.lessons.get(path);
+    if (!lesson) return { files: [], objectives: [] };
+    const m = lesson.mastery ? await this.course(lesson.mastery).catch(() => undefined) : undefined,
+      o = m?.objectives.find((x) => x.id === lesson.objective);
+    const needs = o?.needs ?? [],
+      files = new Set(lesson.notes);
+    for (const id of needs)
+      for (const n of m!.objectives.find((x) => x.id === id)?.notes ?? []) {
+        const p = this.storage.resolve(n, m!.path);
+        if (p) files.add(p);
+      }
     return { files: [...files], objectives: needs };
   }
   /** Opens a lesson and picks up any work a reload interrupted: the probe, the plan, unwritten steps or the wrap-up. */
   async openLesson(path: string) {
     const l = await this.loadLesson(path);
-    if (l.finishedAt) { if (!l.close) void this.close(path); }
-    else if (!l.probe) void this.probe(path);
+    if (l.finishedAt) {
+      if (!l.close) void this.close(path);
+    } else if (!l.probe) void this.probe(path);
     else if (l.probe.submitted && !l.map) void this.submitProbe(path);
-    else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some(s => !s))) await this.prepareSteps(path);
+    else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some((s) => !s)))
+      await this.prepareSteps(path);
     return l;
   }
   async listLessons(): Promise<LessonSummary[]> {
     const result: LessonSummary[] = [];
-    for (const path of this.storage.files(`${this.root()}/Lessons`, 'json').filter(p => !this.isRemoved(p))) {
-      try { const l = await this.loadLesson(path); result.push({ path, title: l.map?.title ?? l.topic, created: l.createdAt, finished: !!l.finishedAt, mastery: l.mastery, objective: l.objective, course: l.course }); } catch { /* skipped */ }
+    for (const path of this.storage
+      .files(`${this.root()}/Lessons`, 'json')
+      .filter((p) => !this.isRemoved(p))) {
+      try {
+        const l = await this.loadLesson(path);
+        result.push({
+          path,
+          title: l.map?.title ?? l.topic,
+          created: l.createdAt,
+          finished: !!l.finishedAt,
+          mastery: l.mastery,
+          objective: l.objective,
+          course: l.course,
+        });
+      } catch {
+        /* skipped */
+      }
     }
     return result.sort((a, b) => b.created - a.created);
   }
   private setLesson(path: string, lesson: Lesson, immediate = true) {
-    if (this.isRemoved(path) || (lesson.mastery && this.isRemoved(lesson.mastery))) throw new Error('This lesson or course was deleted.');
-    this.lessons.set(path, lesson); this.publish();
-    if (immediate) { window.clearTimeout(this.timers.get(path)); return this.save(path, lesson); }
-    this.later(path, () => this.lessons.get(path)); return Promise.resolve();
+    if (this.isRemoved(path) || (lesson.mastery && this.isRemoved(lesson.mastery)))
+      throw new Error('This lesson or course was deleted.');
+    this.lessons.set(path, lesson);
+    this.publish();
+    if (immediate) {
+      window.clearTimeout(this.timers.get(path));
+      return this.save(path, lesson);
+    }
+    this.later(path, () => this.lessons.get(path));
+    return Promise.resolve();
   }
-  private lesson(path: string) { const l = this.lessons.get(path); if (!l) throw new Error('This lesson is not loaded.'); return l; }
+  private lesson(path: string) {
+    const l = this.lessons.get(path);
+    if (!l) throw new Error('This lesson is not loaded.');
+    return l;
+  }
   private async context(lesson: Lesson) {
     const m = lesson.mastery ? await this.course(lesson.mastery).catch(() => undefined) : undefined;
-    return { m, o: m?.objectives.find(x => x.id === lesson.objective), sources: await this.sources(lesson.notes) };
+    return {
+      m,
+      o: m?.objectives.find((x) => x.id === lesson.objective),
+      sources: await this.sources(lesson.notes),
+    };
   }
   /** The text of the lesson's notes, capped, so tutor calls need no tools. Undefined when there are none to read. */
   private async sources(notes: string[]) {
-    let budget = SOURCE_BUDGET; const parts: string[] = [];
+    let budget = SOURCE_BUDGET;
+    const parts: string[] = [];
     for (const path of notes.slice(0, 4)) {
-      const text = await this.storage.read(path); if (!text || budget <= 0) continue;
+      const text = await this.storage.read(path);
+      if (!text || budget <= 0) continue;
       const part = text.length > budget ? text.slice(0, budget) + '\n[Truncated.]' : text;
-      parts.push(`<note path="${path}">\n${part}\n</note>`); budget -= part.length;
+      parts.push(`<note path="${path}">\n${part}\n</note>`);
+      budget -= part.length;
     }
     return parts.length ? parts.join('\n') : undefined;
   }
   /** Starts from an objective, a note or a topic. Returns the lesson path at once; the probe arrives later. */
-  async startLesson(input: { topic: string; notes: string[]; mastery?: string; objective?: string }): Promise<string> {
+  async startLesson(input: {
+    topic: string;
+    notes: string[];
+    mastery?: string;
+    objective?: string;
+  }): Promise<string> {
     let { mastery, objective, notes } = input;
     if (!mastery && notes.length) mastery = (await this.courseFor(notes))?.path;
-    const m = mastery ? await this.course(mastery) : undefined, o = m?.objectives.find(x => x.id === objective);
-    if (o) notes = [...new Set([...notes, ...o.notes.map(n => this.storage.resolve(n, m!.path) ?? n)])];
+    const m = mastery ? await this.course(mastery) : undefined,
+      o = m?.objectives.find((x) => x.id === objective);
+    if (o)
+      notes = [
+        ...new Set([...notes, ...o.notes.map((n) => this.storage.resolve(n, m!.path) ?? n)]),
+      ];
     const sourceSnapshots = await this.captureSources?.(notes);
-    const lesson: Lesson = { ...(sourceSnapshots ? { sourceSnapshots } : {}), version: 1, createdAt: this.now(), topic: input.topic, notes, mastery, course: m?.course, objective: o?.id, steps: [], state: [], current: 0 };
+    const lesson: Lesson = {
+      ...(sourceSnapshots ? { sourceSnapshots } : {}),
+      version: 1,
+      createdAt: this.now(),
+      topic: input.topic,
+      notes,
+      mastery,
+      course: m?.course,
+      objective: o?.id,
+      steps: [],
+      state: [],
+      current: 0,
+    };
     const base = `${this.root()}/Lessons/${this.today()} ${safeName(input.topic)}`;
-    let path = `${base}.json`, n = 2; while (this.storage.exists(path) || this.lessons.has(path)) path = `${base} ${n++}.json`;
-    this.removed.delete(path); this.removed.delete(path.replace(/\.json$/, '.md'));
+    let path = `${base}.json`,
+      n = 2;
+    while (this.storage.exists(path) || this.lessons.has(path)) path = `${base} ${n++}.json`;
+    this.removed.delete(path);
+    this.removed.delete(path.replace(/\.json$/, '.md'));
     await this.setLesson(path, lesson);
     void this.probe(path);
     return path;
   }
   probe(path: string) {
-    return this.track(path, 'probe', '', async signal => {
-      const lesson = this.lesson(path), { m, o, sources } = await this.context(lesson);
-      const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: probePrompt(lesson, m, o, sources), schema: probeSchema, effort: 'low', vault: !sources }, readProbe);
-      const questions = result.questions.slice(0, 4).map(q => ({ ...q, objective: m?.objectives.some(x => x.id === q.objective) ? q.objective : undefined }));
+    return this.track(path, 'probe', '', async (signal) => {
+      const lesson = this.lesson(path),
+        { m, o, sources } = await this.context(lesson);
+      const result = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: probePrompt(lesson, m, o, sources),
+          schema: probeSchema,
+          effort: 'low',
+          vault: !sources,
+        },
+        readProbe,
+      );
+      const questions = result.questions.slice(0, 4).map((q) => ({
+        ...q,
+        objective: m?.objectives.some((x) => x.id === q.objective) ? q.objective : undefined,
+      }));
       await this.setLesson(path, { ...this.lesson(path), probe: { questions, answers: {} } });
       if (!questions.length) void this.submitProbe(path);
     });
   }
   answerProbe(path: string, id: string, patch: Partial<AnswerState>) {
-    const lesson = this.lesson(path); if (!lesson.probe || lesson.probe.submitted) return;
-    void this.setLesson(path, { ...lesson, probe: { ...lesson.probe, answers: { ...lesson.probe.answers, [id]: { ...lesson.probe.answers[id], ...patch } } } }, false);
+    const lesson = this.lesson(path);
+    if (!lesson.probe || lesson.probe.submitted) return;
+    void this.setLesson(
+      path,
+      {
+        ...lesson,
+        probe: {
+          ...lesson.probe,
+          answers: { ...lesson.probe.answers, [id]: { ...lesson.probe.answers[id], ...patch } },
+        },
+      },
+      false,
+    );
   }
   /** One tutor call marks the probe and plans the lesson, to keep the wait short. */
   submitProbe(path: string) {
-    return this.track(path, 'map', '', async signal => {
+    return this.track(path, 'map', '', async (signal) => {
       let lesson = this.lesson(path);
       const probe = lesson.probe ?? { questions: [], answers: {} };
       const marks: Record<string, QuestionMark> = {};
-      for (const q of probe.questions) { const a = probe.answers[q.id]; if (a?.unknown) marks[q.id] = markUnknown(q); else if (q.type === 'mcq') marks[q.id] = markChoice(q, a); }
-      lesson = { ...lesson, probe: { ...probe, submitted: true, marks } }; await this.setLesson(path, lesson);
+      for (const q of probe.questions) {
+        const a = probe.answers[q.id];
+        if (a?.unknown) marks[q.id] = markUnknown(q);
+        else if (q.type === 'mcq') marks[q.id] = markChoice(q, a);
+      }
+      lesson = { ...lesson, probe: { ...probe, submitted: true, marks } };
+      await this.setLesson(path, lesson);
       const { m, o, sources } = await this.context(lesson);
-      const typed = probe.questions.filter(q => !marks[q.id]);
-      const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: probeMapPrompt(lesson, m, o, sources), schema: probeMapSchema, effort: 'low', vault: !sources }, v => readProbeMap(v, typed.map(q => ({ id: q.id, rubric: q.rubric.length }))));
-      for (const q of typed) { const found = result.marks.find(x => x.id === q.id)!; marks[q.id] = scoreQuestion(q, found); }
-      const objective = lesson.objective ?? (m?.objectives.some(x => x.id === result.map.objective) ? result.map.objective : undefined);
-      await this.setLesson(path, { ...this.lesson(path), objective, probe: { ...probe, submitted: true, marks, findings: result.findings }, map: result.map });
+      const typed = probe.questions.filter((q) => !marks[q.id]);
+      const result = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: probeMapPrompt(lesson, m, o, sources),
+          schema: probeMapSchema,
+          effort: 'low',
+          vault: !sources,
+        },
+        (v) =>
+          readProbeMap(
+            v,
+            typed.map((q) => ({ id: q.id, rubric: q.rubric.length })),
+          ),
+      );
+      for (const q of typed) {
+        const found = result.marks.find((x) => x.id === q.id)!;
+        marks[q.id] = scoreQuestion(q, found);
+      }
+      const objective =
+        lesson.objective ??
+        (m?.objectives.some((x) => x.id === result.map.objective)
+          ? result.map.objective
+          : undefined);
+      await this.setLesson(path, {
+        ...this.lesson(path),
+        objective,
+        probe: { ...probe, submitted: true, marks, findings: result.findings },
+        map: result.map,
+      });
       // Steps start being written while the student reads the plan.
       await this.prepareSteps(path);
       // Probe answers on known objectives are evidence too.
       if (lesson.mastery) {
         const day = this.today();
-        for (const q of probe.questions) if (q.objective) await this.record(lesson.mastery, q.objective, { kind: 'probe', day, label: q.id, ...summarise([{ q, answer: probe.answers[q.id], mark: marks[q.id] }]) });
+        for (const q of probe.questions)
+          if (q.objective)
+            await this.record(lesson.mastery, q.objective, {
+              kind: 'probe',
+              day,
+              label: q.id,
+              ...summarise([{ q, answer: probe.answers[q.id], mark: marks[q.id] }]),
+            });
       }
     });
   }
   reviseMap(path: string, change: string) {
-    return this.track(path, 'revise', '', async signal => {
-      const map = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: reviseMapPrompt(this.lesson(path), change), schema: mapSchema, vault: false, effort: 'low' }, readMap);
+    return this.track(path, 'revise', '', async (signal) => {
+      const map = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: reviseMapPrompt(this.lesson(path), change),
+          schema: mapSchema,
+          vault: false,
+          effort: 'low',
+        },
+        readMap,
+      );
       await this.setLesson(path, { ...this.lesson(path), map });
       await this.prepareSteps(path);
     });
@@ -613,16 +1358,24 @@ export class LearnService {
    * steps already written for the same plan are kept.
    */
   private async prepareSteps(path: string) {
-    const lesson = this.lesson(path); if (!lesson.map) return;
+    const lesson = this.lesson(path);
+    if (!lesson.map) return;
     const plan = planKey(lesson.map);
     if (lesson.stepsFor !== plan || lesson.steps.length !== lesson.map.steps.length) {
       const count = lesson.map.steps.length;
-      await this.setLesson(path, { ...lesson, stepsFor: plan, steps: Array<null>(count).fill(null), state: Array.from({ length: count }, () => ({ asks: [] })), current: 0 });
+      await this.setLesson(path, {
+        ...lesson,
+        stepsFor: plan,
+        steps: Array<null>(count).fill(null),
+        state: Array.from({ length: count }, () => ({ asks: [] })),
+        current: 0,
+      });
     }
     void this.writeSteps(path);
   }
   async acceptMap(path: string) {
-    const lesson = this.lesson(path); if (!lesson.map) return;
+    const lesson = this.lesson(path);
+    if (!lesson.map) return;
     await this.setLesson(path, { ...lesson, accepted: true, current: 0 });
     await this.prepareSteps(path);
   }
@@ -631,19 +1384,34 @@ export class LearnService {
    * next unwritten step of the current plan; a step written for a plan that has since been revised is dropped.
    */
   writeSteps(path: string) {
-    return this.track(path, 'steps', '', async signal => {
+    return this.track(path, 'steps', '', async (signal) => {
       const busy = new Set<string>();
       const worker = async () => {
         for (;;) {
-          const lesson = this.lesson(path), plan = lesson.stepsFor;
+          const lesson = this.lesson(path),
+            plan = lesson.stepsFor;
           if (!lesson.map || !plan || this.disposed) return;
           const index = lesson.steps.findIndex((s, i) => !s && !busy.has(`${plan}#${i}`));
           if (index < 0) return;
           busy.add(`${plan}#${index}`);
-          const step = await runValidated(this.activeRunner(signal, 'writer'), { signal, prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema }, readStep);
+          const step = await runValidated(
+            this.activeRunner(signal, 'writer'),
+            { signal, prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema },
+            readStep,
+          );
           const latest = this.lesson(path);
           if (latest.stepsFor !== plan) continue;
-          await this.setLesson(path, { ...latest, steps: latest.steps.map((s, i) => i === index ? { ...step, check: { ...step.check, id: `k${index + 1}`, objective: latest.objective } } : s) });
+          await this.setLesson(path, {
+            ...latest,
+            steps: latest.steps.map((s, i) =>
+              i === index
+                ? {
+                    ...step,
+                    check: { ...step.check, id: `k${index + 1}`, objective: latest.objective },
+                  }
+                : s,
+            ),
+          });
         }
       };
       await Promise.all(Array.from({ length: STEP_WRITERS }, worker));
@@ -651,114 +1419,252 @@ export class LearnService {
   }
   private patchStep(path: string, index: number, patch: Partial<StepState>, immediate = true) {
     const lesson = this.lesson(path);
-    return this.setLesson(path, { ...lesson, state: lesson.state.map((s, i) => i === index ? { ...s, ...patch } : s) }, immediate);
+    return this.setLesson(
+      path,
+      { ...lesson, state: lesson.state.map((s, i) => (i === index ? { ...s, ...patch } : s)) },
+      immediate,
+    );
   }
   answerStep(path: string, patch: Partial<AnswerState>) {
-    const lesson = this.lesson(path), st = lesson.state[lesson.current];
+    const lesson = this.lesson(path),
+      st = lesson.state[lesson.current];
     if (!st || st.mark) return;
     void this.patchStep(path, lesson.current, { answer: { ...st.answer, ...patch } }, false);
   }
   /** "I don't know" and right multiple-choice answers need no call; everything else goes to the tutor. */
   checkStep(path: string) {
-    const lesson = this.lesson(path), index = lesson.current, step = lesson.steps[index], st = lesson.state[index];
+    const lesson = this.lesson(path),
+      index = lesson.current,
+      step = lesson.steps[index],
+      st = lesson.state[index];
     if (!step || !st) return Promise.resolve(undefined);
-    return this.track(path, 'tutor', String(index), async signal => {
-      const q = step.check, a = st.answer;
-      if (a?.unknown) return this.patchStep(path, index, { mark: markUnknown(q), reply: 'No problem. Read the explanation, then look at the model answer.' });
-      if (q.type === 'mcq' && a?.choice === q.answer) return this.patchStep(path, index, { mark: markChoice(q, a), reply: 'Right.' });
-      const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: tutorMarkPrompt(lesson, step, a), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, q.rubric.length));
-      await this.patchStep(path, index, { mark: scoreQuestion(q, result), reply: result.reply, reteach: step.misconceptions[result.misconception]?.reteach });
+    return this.track(path, 'tutor', String(index), async (signal) => {
+      const q = step.check,
+        a = st.answer;
+      if (a?.unknown)
+        return this.patchStep(path, index, {
+          mark: markUnknown(q),
+          reply: 'No problem. Read the explanation, then look at the model answer.',
+        });
+      if (q.type === 'mcq' && a?.choice === q.answer)
+        return this.patchStep(path, index, { mark: markChoice(q, a), reply: 'Right.' });
+      const result = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: tutorMarkPrompt(lesson, step, a),
+          schema: tutorMarkSchema,
+          vault: false,
+          effort: 'low',
+        },
+        (v) => readTutorMark(v, q.rubric.length),
+      );
+      await this.patchStep(path, index, {
+        mark: scoreQuestion(q, result),
+        reply: result.reply,
+        reteach: step.misconceptions[result.misconception]?.reteach,
+      });
     });
   }
   retryStep(path: string, text: string) {
-    const lesson = this.lesson(path), index = lesson.current, step = lesson.steps[index], st = lesson.state[index];
+    const lesson = this.lesson(path),
+      index = lesson.current,
+      step = lesson.steps[index],
+      st = lesson.state[index];
     if (!step || !st?.mark || st.retry) return Promise.resolve(undefined);
-    return this.track(path, 'tutor', `${index}-retry`, async signal => {
-      const result = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: tutorMarkPrompt(lesson, step, { ...st.answer, text, unknown: false }, st), schema: tutorMarkSchema, vault: false, effort: 'low' }, v => readTutorMark(v, step.check.rubric.length));
-      await this.patchStep(path, index, { retry: { text, mark: scoreQuestion(step.check, result), reply: result.reply } });
+    return this.track(path, 'tutor', `${index}-retry`, async (signal) => {
+      const result = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: tutorMarkPrompt(lesson, step, { ...st.answer, text, unknown: false }, st),
+          schema: tutorMarkSchema,
+          vault: false,
+          effort: 'low',
+        },
+        (v) => readTutorMark(v, step.check.rubric.length),
+      );
+      await this.patchStep(path, index, {
+        retry: { text, mark: scoreQuestion(step.check, result), reply: result.reply },
+      });
     });
   }
   ask(path: string, question: string) {
-    const lesson = this.lesson(path), index = lesson.current;
-    return this.track(path, 'ask', String(index), async signal => {
-      const st = lesson.state[index], sources = await this.sources(lesson.notes);
-      const { answer } = await runValidated(this.activeRunner(signal, 'tutor'), { signal, prompt: askPrompt(lesson, lesson.steps[index] ?? undefined, st?.asks ?? [], question, sources), schema: answerSchema, effort: 'low', vault: !sources }, readAnswer);
+    const lesson = this.lesson(path),
+      index = lesson.current;
+    return this.track(path, 'ask', String(index), async (signal) => {
+      const st = lesson.state[index],
+        sources = await this.sources(lesson.notes);
+      const { answer } = await runValidated(
+        this.activeRunner(signal, 'tutor'),
+        {
+          signal,
+          prompt: askPrompt(
+            lesson,
+            lesson.steps[index] ?? undefined,
+            st?.asks ?? [],
+            question,
+            sources,
+          ),
+          schema: answerSchema,
+          effort: 'low',
+          vault: !sources,
+        },
+        readAnswer,
+      );
       const latest = this.lesson(path).state[index];
-      if (latest) await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
+      if (latest)
+        await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
     });
   }
   async go(path: string, index: number) {
     const lesson = this.lesson(path);
-    if (index >= 0 && index < lesson.steps.length && lesson.steps[index]) await this.setLesson(path, { ...lesson, current: index });
+    if (index >= 0 && index < lesson.steps.length && lesson.steps[index])
+      await this.setLesson(path, { ...lesson, current: index });
   }
   /** Records the lesson (at most "taught"), then the writer suggests cards and a note edit, and the next check is written. */
   async finishLesson(path: string) {
     let lesson = this.lesson(path);
     if (!lesson.finishedAt) {
-      lesson = { ...lesson, finishedAt: this.now() }; await this.setLesson(path, lesson);
+      lesson = { ...lesson, finishedAt: this.now() };
+      await this.setLesson(path, lesson);
       if (lesson.mastery && lesson.objective) {
-        const marked = lesson.steps.map((s, i) => s && lesson.state[i]?.mark ? { q: s.check, mark: lesson.state[i].mark } : undefined).filter(Boolean) as { q: Question; mark: QuestionMark }[];
-        await this.record(lesson.mastery, lesson.objective, { kind: 'lesson', day: this.today(), label: `${marked.filter(x => x.mark.score >= x.q.marks * PASS).length}/${lesson.steps.length} checks` });
+        const marked = lesson.steps
+          .map((s, i) =>
+            s && lesson.state[i]?.mark ? { q: s.check, mark: lesson.state[i].mark } : undefined,
+          )
+          .filter(Boolean) as { q: Question; mark: QuestionMark }[];
+        await this.record(lesson.mastery, lesson.objective, {
+          kind: 'lesson',
+          day: this.today(),
+          label: `${marked.filter((x) => x.mark.score >= x.q.marks * PASS).length}/${lesson.steps.length} checks`,
+        });
       }
     }
     return this.close(path);
   }
   close(path: string) {
-    return this.track(path, 'close', '', async signal => {
+    return this.track(path, 'close', '', async (signal) => {
       const lesson = this.lesson(path);
-      const result = await runValidated(this.activeRunner(signal, 'writer'), { signal, prompt: closePrompt(lesson), schema: closeSchema }, readClose);
+      const result = await runValidated(
+        this.activeRunner(signal, 'writer'),
+        { signal, prompt: closePrompt(lesson), schema: closeSchema },
+        readClose,
+      );
       const note = await this.writeLessonNote(path, lesson, result.summary);
       let nextCheck: string | undefined;
       if (lesson.mastery && lesson.objective) {
         await this.ensureCheck(lesson.mastery, lesson.objective);
-        nextCheck = (await this.course(lesson.mastery)).objectives.find(o => o.id === lesson.objective)?.due;
+        nextCheck = (await this.course(lesson.mastery)).objectives.find(
+          (o) => o.id === lesson.objective,
+        )?.due;
       }
-      await this.setLesson(path, { ...this.lesson(path), close: { summary: result.summary, cards: result.cards.slice(0, 4), noteEdit: result.noteEdit?.text.trim() ? result.noteEdit : undefined, cardState: {}, note, nextCheck } });
+      await this.setLesson(path, {
+        ...this.lesson(path),
+        close: {
+          summary: result.summary,
+          cards: result.cards.slice(0, 4),
+          noteEdit: result.noteEdit?.text.trim() ? result.noteEdit : undefined,
+          cardState: {},
+          note,
+          nextCheck,
+        },
+      });
     });
   }
   private async writeLessonNote(path: string, lesson: Lesson, summary: string) {
-    const notePath = path.replace(/\.json$/, '.md'), day = isoDay(lesson.createdAt);
-    const steps = lesson.steps.map((s, i) => {
-      if (!s) return '';
-      const st = lesson.state[i], a = st?.answer;
-      const answer = a?.unknown ? "_I didn't know._" : s.check.type === 'mcq' ? s.check.options?.[a?.choice ?? -1] ?? '_No answer._' : a?.text?.trim() || '_No answer._';
-      return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map(x => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
-    }).filter(Boolean).join('\n\n');
-    const mastery = lesson.mastery ? ` · [[${lesson.mastery.replace(/\.md$/, '')}|${lesson.course ?? 'Mastery'}]]${lesson.objective ? ` · \`${lesson.objective}\`` : ''}` : '';
+    const notePath = path.replace(/\.json$/, '.md'),
+      day = isoDay(lesson.createdAt);
+    const steps = lesson.steps
+      .map((s, i) => {
+        if (!s) return '';
+        const st = lesson.state[i],
+          a = st?.answer;
+        const answer = a?.unknown
+          ? "_I didn't know._"
+          : s.check.type === 'mcq'
+            ? (s.check.options?.[a?.choice ?? -1] ?? '_No answer._')
+            : a?.text?.trim() || '_No answer._';
+        return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map((x) => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
+      })
+      .filter(Boolean)
+      .join('\n\n');
+    const mastery = lesson.mastery
+      ? ` · [[${lesson.mastery.replace(/\.md$/, '')}|${lesson.course ?? 'Mastery'}]]${lesson.objective ? ` · \`${lesson.objective}\`` : ''}`
+      : '';
     const body = `---\nqard-lesson: true\n${lesson.objective ? `qard-objective: ${lesson.objective}\n` : ''}---\n\n# ${lesson.map?.title ?? lesson.topic}\n\n${day}${mastery}\n\n## Summary\n\n${summary.trim()}\n\n## Plan\n\n${lesson.map?.plan ?? ''}\n\n\`\`\`mermaid\n${tidyMermaid(lesson.map?.mermaid ?? '')}\n\`\`\`\n\n## Steps\n\n${steps}\n`;
     await this.writeText(notePath, body);
     return notePath;
   }
-  async lessonCard(path: string, index: number, state: 'added' | 'skipped' | undefined, cardId?: string) {
-    const lesson = this.lesson(path); if (!lesson.close) return;
-    const cardState = { ...lesson.close.cardState }; if (state) cardState[index] = state; else delete cardState[index];
+  async lessonCard(
+    path: string,
+    index: number,
+    state: 'added' | 'skipped' | undefined,
+    cardId?: string,
+  ) {
+    const lesson = this.lesson(path);
+    if (!lesson.close) return;
+    const cardState = { ...lesson.close.cardState };
+    if (state) cardState[index] = state;
+    else delete cardState[index];
     await this.setLesson(path, { ...lesson, close: { ...lesson.close, cardState } });
-    if (cardId && lesson.mastery && lesson.objective) await this.linkCard(cardId, lesson.mastery, lesson.objective);
+    if (cardId && lesson.mastery && lesson.objective)
+      await this.linkCard(cardId, lesson.mastery, lesson.objective);
   }
   /** Adds the suggested paragraph at the end of its heading's section, or the end of the note. */
   async noteEdit(path: string, accept: boolean) {
-    const lesson = this.lesson(path), edit = lesson.close?.noteEdit; if (!lesson.close || !edit) return;
+    const lesson = this.lesson(path),
+      edit = lesson.close?.noteEdit;
+    if (!lesson.close || !edit) return;
     if (accept) {
-      const target = this.storage.exists(edit.path) ? edit.path : this.storage.resolve(edit.path.replace(/\.md$/, ''), path);
+      const target = this.storage.exists(edit.path)
+        ? edit.path
+        : this.storage.resolve(edit.path.replace(/\.md$/, ''), path);
       if (!target) throw new Error(`Could not find ${edit.path}.`);
-      await this.storage.process(target, text => insertUnderHeading(text, edit.heading, edit.text));
+      await this.storage.process(target, (text) =>
+        insertUnderHeading(text, edit.heading, edit.text),
+      );
     }
-    await this.setLesson(path, { ...lesson, close: { ...lesson.close, noteState: accept ? 'accepted' : 'skipped' } });
+    await this.setLesson(path, {
+      ...lesson,
+      close: { ...lesson.close, noteState: accept ? 'accepted' : 'skipped' },
+    });
   }
 
-  async flush() { this.timers.forEach((timer, path) => { window.clearTimeout(timer); void this.save(path, this.checks.get(path) ?? this.lessons.get(path)); }); this.timers.clear(); await Promise.all(this.writes.values()); }
-  dispose() { this.disposed = true; void this.flush(); this.listeners.clear(); }
+  async flush() {
+    this.timers.forEach((timer, path) => {
+      window.clearTimeout(timer);
+      void this.save(path, this.checks.get(path) ?? this.lessons.get(path));
+    });
+    this.timers.clear();
+    await Promise.all(this.writes.values());
+  }
+  dispose() {
+    this.disposed = true;
+    void this.flush();
+    this.listeners.clear();
+  }
 }
 
 export function insertUnderHeading(text: string, heading: string, addition: string): string {
-  const eol = text.includes('\r\n') ? '\r\n' : '\n', lines = text.replace(/\s*$/, '').split(/\r?\n/), block = addition.trim().split(/\r?\n/);
-  const wanted = heading.trim().replace(/^#+\s*/, '').toLowerCase();
-  const at = wanted ? lines.findIndex(l => /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l)?.[2]?.toLowerCase() === wanted) : -1;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n',
+    lines = text.replace(/\s*$/, '').split(/\r?\n/),
+    block = addition.trim().split(/\r?\n/);
+  const wanted = heading
+    .trim()
+    .replace(/^#+\s*/, '')
+    .toLowerCase();
+  const at = wanted
+    ? lines.findIndex((l) => /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l)?.[2]?.toLowerCase() === wanted)
+    : -1;
   if (at < 0) return [...lines, '', ...block, ''].join(eol);
   const level = /^#+/.exec(lines[at]!)![0].length;
   let end = lines.findIndex((l, i) => i > at && (/^(#{1,6})\s/.exec(l)?.[1]?.length ?? 7) <= level);
   if (end < 0) end = lines.length;
-  let insert = end; while (insert > at + 1 && !lines[insert - 1]!.trim()) insert--;
+  let insert = end;
+  while (insert > at + 1 && !lines[insert - 1]!.trim()) insert--;
   const after = lines.slice(end);
-  return [...lines.slice(0, insert), '', ...block, '', ...after, ...(after.length ? [''] : [])].join(eol).replace(/(\r?\n)+$/, eol);
+  return [...lines.slice(0, insert), '', ...block, '', ...after, ...(after.length ? [''] : [])]
+    .join(eol)
+    .replace(/(\r?\n)+$/, eol);
 }

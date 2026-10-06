@@ -1,4 +1,12 @@
-import type { AnswerState, Attempt, PracticeTest, Question, QuestionMark, TestPlan, TestRequest } from './test-types';
+import type {
+  AnswerState,
+  Attempt,
+  PracticeTest,
+  Question,
+  QuestionMark,
+  TestPlan,
+  TestRequest,
+} from './test-types';
 import { questions } from './test-types';
 
 /** Shared by every task. Agents read the vault; Qard writes all files from their JSON. */
@@ -7,7 +15,12 @@ The working directory is the student's Obsidian vault. Paths are vault-relative.
 Ground questions and marking in the student's notes. Where the notes are silent, use standard, correct subject knowledge.
 Write in plain, direct language. Use Markdown, with LaTeX in $…$ for maths.`;
 
-export interface TestDefaults { questions: number; marking: 'section' | 'end'; profile?: string; objectives?: string }
+export interface TestDefaults {
+  questions: number;
+  marking: 'section' | 'end';
+  profile?: string;
+  objectives?: string;
+}
 
 /** How to write multiple-choice options so they measure knowledge, not test-taking skill. */
 export const MCQ_RULES = `Multiple choice: write the correct answer first, then turn it into each wrong option using a real misconception, in the same form and length. Put no reasoning inside any option; the explanation belongs in the model answer. Never make one option stand out by length, detail or formatting. If the answer can be spotted without knowing the material, rewrite the options. Do not add an "I don't know" option; Qard adds one.`;
@@ -17,17 +30,28 @@ export const GOAL_RULES = `Each question has a goal, and the goal decides the fo
 - recall (state a fact, name, formula): short
 - explain (why or how): long
 - apply (use it on a new case, calculate, write code): calc, or long for code`;
-const objectivesBlock = (objectives?: string) => objectives?.trim() ? `
+const objectivesBlock = (objectives?: string) =>
+  objectives?.trim()
+    ? `
 The course's mastery objectives (id | objective | state | evidence). Give every question the id of the objective it tests. Favour weak objectives (gap, misconception, shaky, slipping) and, for "right once" objectives, ask in a harder form than before:
 <objectives>
 ${objectives.trim()}
 </objectives>
-` : '';
-const list = (paths: string[]) => paths.length ? paths.map(p => `- ${p}`).join('\n') : '(none)';
-const profileBlock = (profile?: string) => profile?.trim() ? `\nThe student's study profile (past weak spots and habits). Use it to target weaknesses:\n<profile>\n${profile.trim()}\n</profile>\n` : '';
-const requestBlock = (r: TestRequest) => `The student's request:\n<request>\n${r.prompt.trim() || '(no prompt: build a balanced test from the sources)'}\n</request>\n\n` +
-  (r.folders?.length ? `Course folders the student attached:\n${list(r.folders)}\nThe source list below includes their Markdown notes and subfolders. Read across the course material and balance coverage unless the request narrows the scope.\n\n` : '') +
-  (r.sources.length ? `Sources the student chose (read these first):\n${list(r.sources)}${r.decks.length ? `\n(These include the flashcard decks: ${r.decks.join(', ')}.)` : ''}\n` : 'The student chose no sources. Search the vault for the notes that best fit the request.\n');
+`
+    : '';
+const list = (paths: string[]) => (paths.length ? paths.map((p) => `- ${p}`).join('\n') : '(none)');
+const profileBlock = (profile?: string) =>
+  profile?.trim()
+    ? `\nThe student's study profile (past weak spots and habits). Use it to target weaknesses:\n<profile>\n${profile.trim()}\n</profile>\n`
+    : '';
+const requestBlock = (r: TestRequest) =>
+  `The student's request:\n<request>\n${r.prompt.trim() || '(no prompt: build a balanced test from the sources)'}\n</request>\n\n` +
+  (r.folders?.length
+    ? `Course folders the student attached:\n${list(r.folders)}\nThe source list below includes their Markdown notes and subfolders. Read across the course material and balance coverage unless the request narrows the scope.\n\n`
+    : '') +
+  (r.sources.length
+    ? `Sources the student chose (read these first):\n${list(r.sources)}${r.decks.length ? `\n(These include the flashcard decks: ${r.decks.join(', ')}.)` : ''}\n`
+    : 'The student chose no sources. Search the vault for the notes that best fit the request.\n');
 
 export function planPrompt(r: TestRequest, d: TestDefaults) {
   return `${requestBlock(r)}${profileBlock(d.profile)}${objectivesBlock(d.objectives)}
@@ -45,7 +69,9 @@ The student asks for this change:\n<change>\n${change.trim()}\n</change>\n
 Return the whole plan with the change applied. Keep everything else unless the change requires otherwise. Update the counts, marks and minutes.`;
 }
 export function generatePrompt(input: { request: TestRequest; plan?: TestPlan }, d: TestDefaults) {
-  const basis = input.plan ? `Write the test described by this approved plan:\n<plan>\n${JSON.stringify(input.plan, null, 2)}\n</plan>\n` : requestBlock(input.request);
+  const basis = input.plan
+    ? `Write the test described by this approved plan:\n<plan>\n${JSON.stringify(input.plan, null, 2)}\n</plan>\n`
+    : requestBlock(input.request);
   return `${basis}${profileBlock(d.profile)}${objectivesBlock(d.objectives)}
 Question types:
 - short: one to three sentences. 1–3 marks.
@@ -60,13 +86,14 @@ Rules:
 - model is an answer that earns full marks, no longer than needed.
 - source is the note (and heading, if any) the question is based on.
 - Section ids are s1, s2, …; question ids are q1, q2, … across the whole test, in order.
-${input.plan ? 'Follow the plan\'s sections, focus and mix.' : `Use two to four sections and about ${d.questions} questions.`}`;
+${input.plan ? "Follow the plan's sections, focus and mix." : `Use two to four sections and about ${d.questions} questions.`}`;
 }
 
 /** What the student answered: their text, or for multiple choice the option they picked. */
 function studentAnswer(q: Question, a: AnswerState | undefined) {
   if (a?.unknown) return '(the student said they did not know)';
-  if (q.type === 'mcq' && a?.choice !== undefined) return `Picked ${String.fromCharCode(65 + a.choice)}. ${q.options?.[a.choice] ?? ''} (${a.choice === q.answer ? 'correct' : 'wrong'})`;
+  if (q.type === 'mcq' && a?.choice !== undefined)
+    return `Picked ${String.fromCharCode(65 + a.choice)}. ${q.options?.[a.choice] ?? ''} (${a.choice === q.answer ? 'correct' : 'wrong'})`;
   return a?.text?.trim() || '(blank)';
 }
 export function questionBlock(q: Question, a: AnswerState | undefined) {
@@ -88,7 +115,10 @@ Annotate the answer the way a teacher marks a script:
 mistake is the main reason marks were lost: misconception, careless, imprecise, incomplete, or none. feedback is one sentence.
 You may read the source notes to check facts.`;
 export function markPrompt(test: PracticeTest, attempt: Attempt, ids: string[]) {
-  return `Test: ${test.title}\n\n${questions(test).filter(q => ids.includes(q.id)).map(q => questionBlock(q, attempt.answers[q.id])).join('\n\n')}\n\n${MARKING}\nReturn one entry per question above, using its id.`;
+  return `Test: ${test.title}\n\n${questions(test)
+    .filter((q) => ids.includes(q.id))
+    .map((q) => questionBlock(q, attempt.answers[q.id]))
+    .join('\n\n')}\n\n${MARKING}\nReturn one entry per question above, using its id.`;
 }
 export function disputePrompt(test: PracticeTest, attempt: Attempt, q: Question, argument: string) {
   const m = attempt.marks[q.id];
@@ -105,18 +135,31 @@ Judge the first answer plus this second attempt against the rubric. score is wha
 }
 export function askPrompt(q: Question, attempt: Attempt, question: string) {
   const prior = attempt.review[q.id]?.followups ?? [];
-  return `${questionBlock(q, attempt.answers[q.id])}\n${prior.length ? `\nEarlier follow-ups:\n${prior.map(f => `Q: ${f.q}\nA: ${f.a}`).join('\n\n')}\n` : ''}
+  return `${questionBlock(q, attempt.answers[q.id])}\n${prior.length ? `\nEarlier follow-ups:\n${prior.map((f) => `Q: ${f.q}\nA: ${f.a}`).join('\n\n')}\n` : ''}
 The student asks about this question:\n<ask>\n${question.trim()}\n</ask>\n
 Answer like a good tutor: direct, correct, at most 150 words. Read the source note if it helps.`;
 }
-export function wrapupPrompt(test: PracticeTest, attempt: Attempt, profile: string | undefined, today: string) {
-  const summary = questions(test).map(q => {
-    const m: QuestionMark | undefined = attempt.marks[q.id], a = attempt.answers[q.id];
-    const lost = q.rubric.filter((_, i) => !m?.awarded[i]).map(r => r.point);
-    return `<question id="${q.id}" marks="${m?.score ?? 0}/${q.marks}" confidence="${a?.confidence ?? 'unstated'}" mistake="${m?.mistake ?? 'none'}">
-${q.prompt}${q.source ? `\nsource: ${q.source.path}` : ''}${lost.length ? `\nmissed: ${lost.join(' | ')}` : ''}${m?.annotations.filter(n => n.kind !== 'correct').map(n => `\nnote: ${n.note}`).join('') ?? ''}
+export function wrapupPrompt(
+  test: PracticeTest,
+  attempt: Attempt,
+  profile: string | undefined,
+  today: string,
+) {
+  const summary = questions(test)
+    .map((q) => {
+      const m: QuestionMark | undefined = attempt.marks[q.id],
+        a = attempt.answers[q.id];
+      const lost = q.rubric.filter((_, i) => !m?.awarded[i]).map((r) => r.point);
+      return `<question id="${q.id}" marks="${m?.score ?? 0}/${q.marks}" confidence="${a?.confidence ?? 'unstated'}" mistake="${m?.mistake ?? 'none'}">
+${q.prompt}${q.source ? `\nsource: ${q.source.path}` : ''}${lost.length ? `\nmissed: ${lost.join(' | ')}` : ''}${
+        m?.annotations
+          .filter((n) => n.kind !== 'correct')
+          .map((n) => `\nnote: ${n.note}`)
+          .join('') ?? ''
+      }
 </question>`;
-  }).join('\n');
+    })
+    .join('\n');
   return `The student has finished "${test.title}". Marked results:\n${summary}\n
 ${profile?.trim() ? `Their current study profile:\n<profile>\n${profile.trim()}\n</profile>` : 'They have no study profile yet.'}
 Return:

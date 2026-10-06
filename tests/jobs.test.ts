@@ -5,7 +5,13 @@ import { DEFAULT_AGENT_SETTINGS } from '../src/settings/settings';
 it('learns typical job durations per connection and model, and says how long is left', async () => {
   const timings: Record<string, number[]> = {};
   let roles = DEFAULT_AGENT_SETTINGS.roles;
-  const clock = new JobClock(() => timings, async (key, ms) => { timings[key] = [...(timings[key] ?? []), ms]; }, () => roles);
+  const clock = new JobClock(
+    () => timings,
+    async (key, ms) => {
+      timings[key] = [...(timings[key] ?? []), ms];
+    },
+    () => roles,
+  );
   expect(clock.estimate('generate')).toBeUndefined();
   for (const ms of [60_000, 90_000, 300_000]) clock.record('generate', ms);
   clock.record('generate', 100); // instant failures and cache hits are ignored

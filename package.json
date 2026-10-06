@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run typecheck && npm run lint && npm run lint:css && npm test && npm run build && npm run check:release",
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm run lint:css && npm test && npm run build && npm run check:release",
     "test-vault": "node scripts/prepare-test-vault.mjs",
     "lint": "eslint src --max-warnings 0",
     "lint:css": "stylelint styles.css --max-warnings 0",
-    "check:release": "node scripts/check-release.mjs"
+    "check:release": "node scripts/check-release.mjs",
+    "format": "prettier --write src tests scripts *.mjs *.ts *.json styles.css",
+    "format:check": "prettier --check src tests scripts *.mjs *.ts *.json styles.css"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
@@ -37,6 +39,7 @@
     "jsdom": "^26.1.0",
     "obsidian": "latest",
     "preact-render-to-string": "6.7.0",
+    "prettier": "3.6.2",
     "stylelint": "17.16.0",
     "stylelint-config-obsidianmd": "0.1.0",
     "typescript": "^5.9.3",
