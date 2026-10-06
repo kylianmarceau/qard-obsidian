@@ -55,16 +55,18 @@ export function ExamEditor({
     setError('');
   }
   function validate(part: number): string {
-    if (part === 0)
+    if (part === 0) {
       return !name.trim()
         ? 'Enter an exam name.'
         : !validDay(date) || date < localDay()
           ? 'Choose an exam date today or later.'
           : '';
-    if (part === 1)
+    }
+    if (part === 1) {
       return ![selection.decks, selection.topics, selection.cards].some((items) => items.length)
         ? 'Choose at least one deck or topic.'
         : '';
+    }
     return !weekdays.length
       ? 'Choose at least one study day.'
       : !Number.isInteger(Number(limit)) || Number(limit) < 1 || Number(limit) > 1000

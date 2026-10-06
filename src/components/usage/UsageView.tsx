@@ -33,7 +33,9 @@ export function UsageView({ services }: { services: QardServices }) {
   );
   // Every day of the range gets a bar, including days with no use.
   const bars = useMemo(() => {
-    if (!days || days === 1) return [];
+    if (!days || days === 1) {
+      return [];
+    }
     const byDay = new Map(report.daily.map((d) => [d.day, d.totals]));
     return Array.from({ length: days }, (_, i) => {
       const day = addDays(today, i + 1 - days);

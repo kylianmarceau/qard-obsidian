@@ -13,9 +13,13 @@ export const OPENROUTER_KEY_SECRET = 'qard-openrouter-api-key';
 
 /** Node built-ins exist only on desktop; load them lazily so mobile never touches them. */
 export function nodeHost(): NodeHost | undefined {
-  if (!Platform.isDesktopApp) return undefined;
+  if (!Platform.isDesktopApp) {
+    return undefined;
+  }
   const load = (window as unknown as { require?: (id: string) => unknown }).require;
-  if (!load) return undefined;
+  if (!load) {
+    return undefined;
+  }
   const cp = load('child_process') as typeof import('child_process'),
     fs = load('fs') as typeof import('fs'),
     os = load('os') as typeof import('os'),
@@ -59,9 +63,12 @@ export function readSecret(app: App, id: string) {
 /** The tutor defaults to each connection's fast model; the writer and marker to its best. */
 export function defaultModel(provider: AgentProvider, role: AgentRole) {
   const fast = role === 'tutor';
-  if (provider === 'anthropic') return fast ? FAST_API_MODEL : DEFAULT_API_MODEL;
-  if (provider === 'openrouter')
+  if (provider === 'anthropic') {
+    return fast ? FAST_API_MODEL : DEFAULT_API_MODEL;
+  }
+  if (provider === 'openrouter') {
     return fast ? 'anthropic/claude-haiku-4.5' : 'anthropic/claude-opus-5.5';
+  }
   return provider === 'claude-code' && fast ? 'haiku' : '';
 }
 
@@ -80,7 +87,9 @@ function tracked(
   model: string,
   record?: (e: UsageEvent) => void,
 ): AgentRunner {
-  if (!record) return runner;
+  if (!record) {
+    return runner;
+  }
   return {
     name: runner.name,
     run: (task) =>
@@ -108,37 +117,40 @@ export function createRunner(
 ): AgentRunner {
   const { provider } = settings.agents.roles[role],
     model = settings.agents.roles[role].model.trim() || defaultModel(provider, role);
-  return tracked(buildRunner(app, settings, role, provider, model), role, provider, model, record);
+  return tracked(buildRunner(app, settings, provider, model), role, provider, model, record);
 }
 function buildRunner(
   app: App,
   settings: QardSettings,
-  role: AgentRole,
   provider: AgentProvider,
   model: string,
 ): AgentRunner {
   const reader = {
     paths: () => studyNotes(app, [settings.tests.folder]).map((f) => f.path),
     read: (p: string) => {
-      if (!isStudyNote(p, [settings.tests.folder])) return Promise.resolve('');
+      if (!isStudyNote(p, [settings.tests.folder])) {
+        return Promise.resolve('');
+      }
       const f = app.vault.getAbstractFileByPath(p);
       return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve('');
     },
   };
   // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
   const exclude = [settings.tests.folder.replace(/\/+$/, '')];
-  if (provider === 'anthropic')
+  if (provider === 'anthropic') {
     return new AnthropicRunner(reader, () => readSecret(app, API_KEY_SECRET), model, exclude);
-  if (provider === 'openrouter')
+  }
+  if (provider === 'openrouter') {
     return new OpenRouterRunner(
       reader,
       () => readSecret(app, OPENROUTER_KEY_SECRET),
       model,
       exclude,
     );
+  }
   const host = nodeHost(),
     vault = vaultPath(app);
-  if (!host || !vault)
+  if (!host || !vault) {
     return {
       name: 'Unavailable',
       run: () =>
@@ -148,6 +160,7 @@ function buildRunner(
           ),
         ),
     };
+  }
   return provider === 'codex'
     ? new CodexRunner(host, vault, settings.agents.codexPath, model)
     : new ClaudeCodeRunner(host, vault, settings.agents.claudePath, model);
@@ -158,7 +171,9 @@ export async function detectAgent(
   provider: AgentProvider,
 ): Promise<string | undefined> {
   const host = nodeHost();
-  if (!host) return undefined;
+  if (!host) {
+    return undefined;
+  }
   return provider === 'codex'
     ? findBinary(host, 'codex', settings.agents.codexPath)
     : findBinary(host, 'claude', settings.agents.claudePath);

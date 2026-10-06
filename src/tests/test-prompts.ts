@@ -91,9 +91,12 @@ ${input.plan ? "Follow the plan's sections, focus and mix." : `Use two to four s
 
 /** What the student answered: their text, or for multiple choice the option they picked. */
 function studentAnswer(q: Question, a: AnswerState | undefined) {
-  if (a?.unknown) return '(the student said they did not know)';
-  if (q.type === 'mcq' && a?.choice !== undefined)
+  if (a?.unknown) {
+    return '(the student said they did not know)';
+  }
+  if (q.type === 'mcq' && a?.choice !== undefined) {
     return `Picked ${String.fromCharCode(65 + a.choice)}. ${q.options?.[a.choice] ?? ''} (${a.choice === q.answer ? 'correct' : 'wrong'})`;
+  }
   return a?.text?.trim() || '(blank)';
 }
 export function questionBlock(q: Question, a: AnswerState | undefined) {

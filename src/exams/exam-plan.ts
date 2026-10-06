@@ -16,7 +16,9 @@ export function localDay(now: number | Date = Date.now()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 export function validDay(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
   const d = new Date(`${value}T12:00:00`);
   return Number.isFinite(d.getTime()) && localDay(d) === value;
 }
@@ -48,7 +50,9 @@ export function readExams(raw: unknown): ExamPlan[] {
   return Array.isArray(raw)
     ? (raw as ExamPlan[])
         .filter((p) => {
-          if (!validExam(p) || seen.has(p.id)) return false;
+          if (!validExam(p) || seen.has(p.id)) {
+            return false;
+          }
           seen.add(p.id);
           return true;
         })
@@ -85,13 +89,18 @@ export function examProgress(
     covered = new Set<string>();
   let doneToday = 0;
   const firstReviews = new Map<string, number>();
-  for (const e of history)
+  for (const e of history) {
     if (ids.has(e.cardId) && e.at >= plan.createdAt && e.at <= now) {
-      if (localDay(e.at) === today) doneToday++;
-      if (states[e.cardId]?.needsContentCheck) continue;
+      if (localDay(e.at) === today) {
+        doneToday++;
+      }
+      if (states[e.cardId]?.needsContentCheck) {
+        continue;
+      }
       covered.add(e.cardId);
       firstReviews.set(e.cardId, Math.min(firstReviews.get(e.cardId) ?? Infinity, e.at));
     }
+  }
   const weekdays = new Set(plan.weekdays);
   // Calendar arithmetic at noon avoids DST days being treated as 23/25-hour intervals.
   const first = new Date(`${today}T12:00:00`),
@@ -105,8 +114,11 @@ export function examProgress(
     ) + 1,
   );
   let studyDays = Math.floor(calendarDays / 7) * weekdays.size;
-  for (let i = 0; i < calendarDays % 7; i++)
-    if (weekdays.has((first.getDay() + i) % 7)) studyDays++;
+  for (let i = 0; i < calendarDays % 7; i++) {
+    if (weekdays.has((first.getDay() + i) % 7)) {
+      studyDays++;
+    }
+  }
   const isStudyDay = !expired && weekdays.has(first.getDay());
   const uncovered = selected.filter((c) => !covered.has(c.id));
   const coveredToday = [...firstReviews.values()].filter((at) => localDay(at) === today).length;

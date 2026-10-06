@@ -28,7 +28,9 @@ export class CardIndex {
   getSnapshot = () => this.snapshot;
   update(path: string, content: string, notify = true) {
     this.files.set(path, parseCards(content, path));
-    if (notify) this.publish();
+    if (notify) {
+      this.publish();
+    }
   }
   remove(path: string) {
     this.files.delete(path);
@@ -46,10 +48,13 @@ export class CardIndex {
     const cards = [...this.files.values()].flatMap((f) => f.cards.map((c) => ({ ...c })));
     const issues = [...this.files.values()].flatMap((f) => f.issues);
     const ids = new Map<string, QardCard[]>();
-    for (const card of cards)
-      if (card.stable) ids.set(card.id, [...(ids.get(card.id) || []), card]);
-    for (const group of ids.values())
-      if (group.length > 1)
+    for (const card of cards) {
+      if (card.stable) {
+        ids.set(card.id, [...(ids.get(card.id) || []), card]);
+      }
+    }
+    for (const group of ids.values()) {
+      if (group.length > 1) {
         for (const card of group) {
           card.duplicateId = true;
           issues.push({
@@ -58,6 +63,8 @@ export class CardIndex {
             message: `Duplicate qard-id “${card.id}”. Give copied cards a new ID (or remove the copied ID before studying).`,
           });
         }
+      }
+    }
     this.snapshot = {
       cards,
       decks: buildDecks(cards),

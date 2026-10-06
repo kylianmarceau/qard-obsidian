@@ -12,36 +12,52 @@ export class VaultIndexer extends CardIndex {
     super();
   }
   async start() {
-    if (this.stopped) return;
+    if (this.stopped) {
+      return;
+    }
     const { vault } = this.app;
     this.plugin.registerEvent(
       vault.on('create', (file) => {
-        if (file instanceof TFile && file.extension === 'md') this.schedule(file);
+        if (file instanceof TFile && file.extension === 'md') {
+          this.schedule(file);
+        }
       }),
     );
     this.plugin.registerEvent(
       vault.on('modify', (file) => {
-        if (file instanceof TFile && file.extension === 'md') this.schedule(file);
+        if (file instanceof TFile && file.extension === 'md') {
+          this.schedule(file);
+        }
       }),
     );
     this.plugin.registerEvent(
       vault.on('delete', (file) => {
-        for (const card of this.getSnapshot().cards)
-          if (card.sourceFile === file.path || card.sourceFile.startsWith(file.path + '/'))
+        for (const card of this.getSnapshot().cards) {
+          if (card.sourceFile === file.path || card.sourceFile.startsWith(file.path + '/')) {
             this.invalidate(card.sourceFile);
+          }
+        }
         this.invalidate(file.path);
       }),
     );
     this.plugin.registerEvent(
       vault.on('rename', (file, oldPath) => {
         this.invalidate(oldPath);
-        if (file instanceof TFile && file.extension === 'md') this.schedule(file);
-        else
-          for (const note of studyNotes(this.app))
-            if (note.path.startsWith(file.path + '/')) this.schedule(note);
+        if (file instanceof TFile && file.extension === 'md') {
+          this.schedule(file);
+        } else {
+          for (const note of studyNotes(this.app)) {
+            if (note.path.startsWith(file.path + '/')) {
+              this.schedule(note);
+            }
+          }
+        }
         // Folder rename may arrive without per-file events.
-        for (const card of this.getSnapshot().cards)
-          if (card.sourceFile.startsWith(oldPath + '/')) this.invalidate(card.sourceFile);
+        for (const card of this.getSnapshot().cards) {
+          if (card.sourceFile.startsWith(oldPath + '/')) {
+            this.invalidate(card.sourceFile);
+          }
+        }
       }),
     );
     const files = studyNotes(this.app);
@@ -52,7 +68,9 @@ export class VaultIndexer extends CardIndex {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       }
     }
-    if (!this.stopped) this.setLoading(false);
+    if (!this.stopped) {
+      this.setLoading(false);
+    }
   }
   private invalidate(path: string) {
     window.clearTimeout(this.pending.get(path));
@@ -86,11 +104,13 @@ export class VaultIndexer extends CardIndex {
         this.generations.get(path) === generation &&
         file.path === path &&
         this.app.vault.getAbstractFileByPath(path) === file
-      )
+      ) {
         this.update(path, source, notify);
+      }
     } catch {
-      if (!this.stopped && this.generations.get(path) === generation)
+      if (!this.stopped && this.generations.get(path) === generation) {
         this.fail(path, 'Could not read this note. Try opening it in Obsidian.');
+      }
     }
   }
   override dispose() {

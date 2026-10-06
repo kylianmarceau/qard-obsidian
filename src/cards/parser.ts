@@ -10,13 +10,16 @@ export function sourceLines(source: string): Line[] {
   const result: Line[] = [];
   const re = /([^\r\n]*)(\r\n|\n|\r|$)/g;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(source)) && match[0].length)
+  while ((match = re.exec(source)) && match[0].length) {
     result.push({ text: match[1]!, start: match.index, end: re.lastIndex });
+  }
   return result;
 }
 function hash(value: string): string {
   let result = 2166136261;
-  for (let i = 0; i < value.length; i++) result = Math.imul(result ^ value.charCodeAt(i), 16777619);
+  for (let i = 0; i < value.length; i++) {
+    result = Math.imul(result ^ value.charCodeAt(i), 16777619);
+  }
   return (result >>> 0).toString(36);
 }
 const header = /^ {0,3}> ?\[!qard\][+-]?(?:[ \t]+(.*))?$/i;
@@ -51,10 +54,13 @@ export function parseCards(
           .map((l) => l.text)
           .join('\n'),
       );
-      if (doc.errors.length) throw new Error('Invalid YAML');
+      if (doc.errors.length) {
+        throw new Error('Invalid YAML');
+      }
       const value: unknown = doc.toJS({ maxAliasCount: 20 });
-      if (value && typeof value === 'object' && !Array.isArray(value))
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
         metadata = value as Record<string, unknown>;
+      }
     } catch {
       issue(0, 'Invalid frontmatter; file was not indexed.');
       return result;
@@ -81,11 +87,15 @@ export function parseCards(
   for (let i = start; i < lines.length; i++) {
     const line = lines[i]!;
     if (fence) {
-      if (closesFence(line.text, fence)) fence = '';
+      if (closesFence(line.text, fence)) {
+        fence = '';
+      }
       continue;
     }
     if (comment) {
-      if (line.text.includes('-->')) comment = false;
+      if (line.text.includes('-->')) {
+        comment = false;
+      }
       continue;
     }
     const opening = line.text.match(fenceStart);
@@ -94,7 +104,9 @@ export function parseCards(
       continue;
     }
     if (/^\s*<!--/.test(line.text)) {
-      if (!line.text.includes('-->')) comment = true;
+      if (!line.text.includes('-->')) {
+        comment = true;
+      }
       continue;
     }
     const heading = line.text.match(/^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/);
@@ -115,22 +127,33 @@ export function parseCards(
       continue;
     }
     const match = line.text.match(header);
-    if (!match) continue;
+    if (!match) {
+      continue;
+    }
     let end = i + 1;
     let insideFence = (match[1] || '').match(fenceStart)?.[1] || '';
     let separator = -1;
     const body: string[] = [];
     while (end < lines.length) {
       const content = lines[end]!.text.match(quoted);
-      if (!content) break;
+      if (!content) {
+        break;
+      }
       const value = content[1]!;
-      if (!insideFence && header.test(lines[end]!.text)) break;
+      if (!insideFence && header.test(lines[end]!.text)) {
+        break;
+      }
       if (insideFence) {
-        if (closesFence(value, insideFence)) insideFence = '';
+        if (closesFence(value, insideFence)) {
+          insideFence = '';
+        }
       } else {
         const code = value.match(fenceStart);
-        if (code) insideFence = code[1]!;
-        else if (value.trim() === '<!-- qard-answer -->' && separator < 0) separator = body.length;
+        if (code) {
+          insideFence = code[1]!;
+        } else if (value.trim() === '<!-- qard-answer -->' && separator < 0) {
+          separator = body.length;
+        }
       }
       body.push(value);
       end++;
@@ -152,7 +175,9 @@ export function parseCards(
       continue;
     }
     let idLine = i - 1;
-    if (idLine >= 0 && lines[idLine]!.text.trim() === '') idLine--;
+    if (idLine >= 0 && lines[idLine]!.text.trim() === '') {
+      idLine--;
+    }
     const identity = idLine >= start ? lines[idLine]!.text.match(idComment)?.[1] : undefined;
     const first = identity ? lines[idLine]! : line;
     const finish = lines[end - 1]!.end;
@@ -186,7 +211,9 @@ export function sameContent(a: QardCard, b: QardCard) {
 export function topicAtLine(source: string, path: string, line: number): string {
   let topic = 'General';
   parseCards(source, path, (headingLine, name) => {
-    if (headingLine <= line) topic = name;
+    if (headingLine <= line) {
+      topic = name;
+    }
   });
   return topic;
 }

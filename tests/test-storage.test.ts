@@ -1,4 +1,7 @@
 import { expect, it, vi } from 'vitest';
+import { TFile, TFolder, type App } from 'obsidian';
+import { VaultTestStorage } from '../src/tests/vault-storage';
+import { VaultLearnStorage } from '../src/learn/vault-learn-storage';
 vi.mock('obsidian', async (importOriginal) => {
   const base = await importOriginal<typeof import('obsidian')>();
   return {
@@ -11,9 +14,6 @@ vi.mock('obsidian', async (importOriginal) => {
     },
   };
 });
-import { TFile, TFolder, type App } from 'obsidian';
-import { VaultTestStorage } from '../src/tests/vault-storage';
-import { VaultLearnStorage } from '../src/learn/vault-learn-storage';
 const file = (path: string) =>
   Object.assign(new (TFile as unknown as new (p: string) => TFile)(path), {
     name: path.split('/').pop()!,

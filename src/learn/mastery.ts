@@ -117,12 +117,18 @@ interface TableBlock {
 }
 function findTable(lines: string[]): TableBlock | undefined {
   for (let i = 0; i < lines.length - 1; i++) {
-    if (!isRow(lines[i]!) || !isDivider(lines[i + 1]!)) continue;
+    if (!isRow(lines[i]!) || !isDivider(lines[i + 1]!)) {
+      continue;
+    }
     const header = cellsOf(lines[i]!),
       lower = header.map((h) => h.toLowerCase());
-    if (!lower.includes('id') || !lower.includes('state')) continue;
+    if (!lower.includes('id') || !lower.includes('state')) {
+      continue;
+    }
     let end = i + 2;
-    while (end < lines.length && isRow(lines[end]!)) end++;
+    while (end < lines.length && isRow(lines[end]!)) {
+      end++;
+    }
     return { start: i, end, header };
   }
   return undefined;
@@ -155,11 +161,16 @@ function frontmatterValue(text: string, key: string): string | undefined {
 export function setFrontmatter(text: string, key: string, value: string): string {
   const eol = text.includes('\r\n') ? '\r\n' : '\n',
     m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-  if (!m) return `---${eol}${key}: ${value}${eol}---${eol}${eol}${text}`;
+  if (!m) {
+    return `---${eol}${key}: ${value}${eol}---${eol}${eol}${text}`;
+  }
   const lines = m[1]!.split(/\r?\n/),
     at = lines.findIndex((l) => l.startsWith(key + ':'));
-  if (at >= 0) lines[at] = `${key}: ${value}`;
-  else lines.push(`${key}: ${value}`);
+  if (at >= 0) {
+    lines[at] = `${key}: ${value}`;
+  } else {
+    lines.push(`${key}: ${value}`);
+  }
   return `---${eol}${lines.join(eol)}${eol}---` + text.slice(m[0].length);
 }
 function frontmatterCourse(text: string): string | undefined {
@@ -189,7 +200,9 @@ export function parseMastery(path: string, text: string): Mastery {
         : undefined;
   const lines = text.split(/\r?\n/),
     table = findTable(lines);
-  if (!table) return { path, course, mapped, objectives: [] };
+  if (!table) {
+    return { path, course, mapped, objectives: [] };
+  }
   const at = (name: string) => column(table.header, name),
     seen = new Set<string>();
   const objectives: Objective[] = [];
@@ -201,7 +214,9 @@ export function parseMastery(path: string, text: string): Mastery {
       };
     const title = get('Objective'),
       id = get('ID').replace(/`/g, '') || slugId(title);
-    if ((!title && !get('ID')) || seen.has(id)) continue;
+    if ((!title && !get('ID')) || seen.has(id)) {
+      continue;
+    }
     seen.add(id);
     const rawState = get('State').toLowerCase().replace(/[-_]/g, ' ').trim();
     const state =
@@ -227,7 +242,9 @@ export function parseMastery(path: string, text: string): Mastery {
   }
   // Unknown prerequisites (a deleted or mistyped id) are ignored rather than breaking the map.
   const ids = new Set(objectives.map((o) => o.id));
-  for (const o of objectives) o.needs = o.needs.filter((n) => ids.has(n) && n !== o.id);
+  for (const o of objectives) {
+    o.needs = o.needs.filter((n) => ids.has(n) && n !== o.id);
+  }
   return { path, course, mapped, objectives };
 }
 
@@ -262,12 +279,17 @@ export function writeObjectives(text: string, objectives: Objective[]): string {
   const eol = text.includes('\r\n') ? '\r\n' : '\n',
     lines = text.split(/\r?\n/),
     table = findTable(lines);
-  if (!table)
+  if (!table) {
     return (
       text.replace(/\s*$/, '') + eol + eol + tableFor([...COLUMNS], objectives).join(eol) + eol
     );
+  }
   const header = [...table.header];
-  for (const name of COLUMNS) if (column(header, name) < 0) header.push(name);
+  for (const name of COLUMNS) {
+    if (column(header, name) < 0) {
+      header.push(name);
+    }
+  }
   return [
     ...lines.slice(0, table.start),
     ...tableFor(header, objectives),
@@ -300,7 +322,9 @@ function lastPass(evidence: string[]): string | undefined {
     const m = /^(\d{4}-\d{2}-\d{2}) (probe|check|test)\b.*?(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/.exec(
       entry,
     );
-    if (m && Number(m[4]) > 0 && Number(m[3]) / Number(m[4]) >= PASS) return m[1];
+    if (m && Number(m[4]) > 0 && Number(m[3]) / Number(m[4]) >= PASS) {
+      return m[1];
+    }
   }
   return undefined;
 }
@@ -321,16 +345,25 @@ export function applyEvidence(o: Objective, e: Evidence): Objective {
     due,
     evidence,
   });
-  if (e.kind === 'card') return o.state === 'mastered' ? next('slipping', day) : { ...o, evidence };
-  if (e.kind === 'lesson')
+  if (e.kind === 'card') {
+    return o.state === 'mastered' ? next('slipping', day) : { ...o, evidence };
+  }
+  if (e.kind === 'lesson') {
     return ['right once', 'mastered'].includes(o.state)
       ? { ...o, evidence }
       : next('taught', addDays(day, 3));
-  if (e.confidence === 'unknown') return next(o.state === 'mastered' ? 'slipping' : 'gap', day);
+  }
+  if (e.confidence === 'unknown') {
+    return next(o.state === 'mastered' ? 'slipping' : 'gap', day);
+  }
   const ratio = e.marks ? (e.score ?? 0) / e.marks : 0;
   if (ratio >= PASS) {
-    if (o.state === 'mastered') return next('mastered', addDays(day, 45));
-    if (e.confidence === 'guess') return next('shaky', addDays(day, 3));
+    if (o.state === 'mastered') {
+      return next('mastered', addDays(day, 45));
+    }
+    if (e.confidence === 'guess') {
+      return next('shaky', addDays(day, 3));
+    }
     if (o.state === 'right once') {
       const previous = lastPass(o.evidence);
       return previous && daysBetween(previous, day) >= 2
@@ -339,8 +372,12 @@ export function applyEvidence(o: Objective, e: Evidence): Objective {
     }
     return next('right once', addDays(day, 7));
   }
-  if (o.state === 'mastered' || o.state === 'slipping') return next('slipping', day);
-  if (e.confidence === 'sure') return next('misconception', day);
+  if (o.state === 'mastered' || o.state === 'slipping') {
+    return next('slipping', day);
+  }
+  if (e.confidence === 'sure') {
+    return next('misconception', day);
+  }
   return ratio >= 0.4 ? next('shaky', addDays(day, 2)) : next('gap', day);
 }
 
@@ -348,8 +385,12 @@ export const isDue = (o: Objective, today: string) =>
   o.state !== 'new' && o.state !== 'planned' && !!o.due && o.due <= today;
 /** Harder goals as the objective improves, so the second pass is never the same question reworded. */
 export function goalFor(state: MasteryState): 'recognise' | 'recall' | 'explain' | 'apply' {
-  if (state === 'right once' || state === 'mastered') return 'apply';
-  if (state === 'taught' || state === 'shaky' || state === 'misconception') return 'explain';
+  if (state === 'right once' || state === 'mastered') {
+    return 'apply';
+  }
+  if (state === 'taught' || state === 'shaky' || state === 'misconception') {
+    return 'explain';
+  }
   return 'recall';
 }
 /** One line per objective for prompts. */
@@ -390,27 +431,39 @@ export function breakCycles(objectives: Objective[]): Objective[] {
     const needs: string[] = [];
     for (const n of o.needs) {
       const target = byId.get(n);
-      if (!target || state.get(n) === 'visiting') continue;
-      if (!state.has(n)) visit(target);
+      if (!target || state.get(n) === 'visiting') {
+        continue;
+      }
+      if (!state.has(n)) {
+        visit(target);
+      }
       needs.push(n);
     }
     keep.set(o.id, needs);
     state.set(o.id, 'done');
   };
-  for (const o of objectives) if (!state.has(o.id)) visit(o);
+  for (const o of objectives) {
+    if (!state.has(o.id)) {
+      visit(o);
+    }
+  }
   return objectives.map((o) => ({ ...o, needs: keep.get(o.id) ?? [] }));
 }
 
 /** The short name shown on the map: the Label column, or the first few words of the title. */
 export function shortLabel(o: Objective, max = 40): string {
-  if (o.label?.trim()) return o.label.trim();
+  if (o.label?.trim()) {
+    return o.label.trim();
+  }
   // Titles start with a verb ("Explain the LDA posterior"); the map reads better without it.
   const words = o.title.trim().split(/\s+/),
     verbs =
       /^(explain|describe|list|state|name|compare|contrast|count|use|build|fit|write|choose|compute|derive|define|distinguish|identify|apply|interpret|justify|outline|show|prove|calculate|classify|handle|score|scrape|chain|clean|reshape|parallelise|parallelize|tokenise|tokenize|train|understand|know|recognise|recognize)$/i;
   let out = '';
   for (const w of words.length > 1 && verbs.test(words[0]!) ? words.slice(1) : words) {
-    if (out && `${out} ${w}`.length > max) return `${out}…`;
+    if (out && `${out} ${w}`.length > max) {
+      return `${out}…`;
+    }
     out = out ? `${out} ${w}` : w;
   }
   return out.length > max ? out.slice(0, max - 1) + '…' : out;

@@ -41,4 +41,6 @@ Qard discovers flashcards and source notes across ordinary Markdown files, skipp
 
 [Full guide and development instructions](https://github.com/kylianmarceau/qard-obsidian/blob/main/docs/GUIDE.md) · [Report an issue](https://github.com/kylianmarceau/qard-obsidian/issues) · [Support Qard](https://buymeacoffee.com/kylianmarceau)
 
+[Contributing](CONTRIBUTING.md) · [Architecture](docs/ARCHITECTURE.md)
+
 [MIT license](https://github.com/kylianmarceau/qard-obsidian/blob/main/LICENSE)

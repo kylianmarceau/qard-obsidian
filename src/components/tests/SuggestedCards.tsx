@@ -2,7 +2,10 @@ import { useState } from 'react';
 import type { QardServices } from '../../views/services';
 import { questions, sectionOf } from '../../tests/test-types';
 import { Markdown } from '../Markdown';
-import { Waiting, cardTarget, useTestFolder, type TestNav } from './common';
+import { Waiting } from '../common/FeedbackStatus';
+import { cardTarget } from './card-target';
+import { useTestFolder } from './useTestFolder';
+import { type TestNav } from '../../views/navigation';
 
 export function SuggestedCards({
   services,
@@ -18,7 +21,9 @@ export function SuggestedCards({
   const test = entry?.test,
     attempt = entry?.attempt,
     cards = attempt?.wrapup?.cards ?? [];
-  if (!test || !attempt) return <Waiting text="Loading…" />;
+  if (!test || !attempt) {
+    return <Waiting text="Loading…" />;
+  }
   const target = (i: number) => {
     const q = questions(test).find((x) => x.id === cards[i]!.questionId)!;
     return { q, ...cardTarget(services, q, test.title, sectionOf(test, q.id)!.title, test) };
@@ -59,7 +64,9 @@ export function SuggestedCards({
           disabled={busy !== undefined || !pending.length}
           onClick={() =>
             void (async () => {
-              for (const i of pending) await add(i);
+              for (const i of pending) {
+                await add(i);
+              }
             })()
           }
         >

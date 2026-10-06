@@ -67,3 +67,13 @@ An isolated browser preview using sample data verified answer selection and focu
 The 0.3.8 workflow stopped during `npm ci` because a lock file generated with npm 11 omitted Vite's optional esbuild peer dependencies expected by npm 10. No 0.3.8 GitHub release or install assets were published. The lock file was regenerated with npm 10.9.4; a clean installation with that version succeeded. Version 0.3.9 contains the same review fixes and the completed lock file. The npm version is recorded in `package.json` for future lock-file maintenance.
 
 After the clean installation, `npm run check` passed TypeScript, source and CSS lint with zero warnings, all 280 tests across 37 files, the build and release verification for 0.3.9.
+
+## Internal refactor — 6 October 2026
+
+Starting from `b72f3fa` on `codex/ui-polish`, `npm run check` passed formatting, strict TypeScript with unused-code checks, source lint with zero warnings, the official Obsidian stylesheet checks with zero warnings, **338 tests across 48 files**, the production build, and release-content verification. All 332 original tests remain; six new tests cover saved lesson transcripts and cancellation guards. A clean offline dependency installation with the recorded npm 10.9.4 version succeeded. The lock file retains all previous package entries and versions, adding only development-only Prettier.
+
+The formatting-only commit `72eaa7c` built byte-identical JavaScript. After the structural extraction, comparisons against the starting source confirmed unchanged compiled JSX expressions, compiled CSS, prompt templates, and runtime literal values. The runtime import graph has no cycles. [The audit](REFACTOR_AUDIT.md) records the module changes and retained boundaries.
+
+The three production files were backed up and installed locally in Life Vault, then Qard was disabled/re-enabled in **Obsidian 1.14.4 on macOS**. The deck library reopened with the same 427/421/1 card counts. The existing CSC3044S plan retained its October 19 exam, 421-card coverage total, and 30-card daily target; its October calendar and agenda rendered as before. Before/after calendar screenshots differed only within the pointer highlight. The installed assets match the build, and the hash of `data.json` is unchanged after reload. No sample data was added, no study reviews were performed, and no AI provider was contacted during this native check.
+
+Saved lesson Markdown is checked against fixtures captured from the original service. The full regression suite covers the existing study, writing, test, learning, exam, persistence, and lifecycle behavior; the native check above is a focused reload/preservation check, not a repeat of every integration flow.

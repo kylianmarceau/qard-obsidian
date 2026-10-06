@@ -76,8 +76,11 @@ export function StudySessionBuilder({
               },
             )
           : ready;
-      if (style === 'cram') await start(ordered, style);
-      else await start(ordered);
+      if (style === 'cram') {
+        await start(ordered, style);
+      } else {
+        await start(ordered);
+      }
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -244,7 +247,9 @@ function MixedCheckbox({
       aria-label={label}
       checked={checked}
       ref={(el) => {
-        if (el) el.indeterminate = mixed;
+        if (el) {
+          el.indeterminate = mixed;
+        }
       }}
       onChange={onChange}
     />

@@ -1,6 +1,6 @@
+import type { Screen } from './navigation';
 import { SavedSessions } from '../components/SavedSessions';
 import { ExamPlanner } from '../components/ExamPlanner';
-import type { SavedSession } from '../review/saved-session';
 import { SourceUpdates, SourceUpdatesRow } from '../components/SourceUpdates';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Layers, ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
@@ -25,45 +25,21 @@ import { TakeTest } from '../components/tests/TakeTest';
 import { TestResults } from '../components/tests/TestResults';
 import { ReviewAnswers } from '../components/tests/ReviewAnswers';
 import { SuggestedCards } from '../components/tests/SuggestedCards';
-import type { TestNav } from '../components/tests/common';
-import {
-  CourseView,
-  LearnBrowser,
-  MapCourse,
-  TodayRow,
-  TodayView,
-} from '../components/learn/LearnScreens';
+import type { TestNav } from './navigation';
+import { CourseView } from '../components/learn/CourseView';
+import { LearnBrowser } from '../components/learn/LearnBrowser';
+import { MapCourse } from '../components/learn/MapCourse';
+import { TodayRow, TodayView } from '../components/learn/TodayView';
 import { CheckView } from '../components/learn/CheckView';
 import { LessonView } from '../components/learn/LessonView';
-import type { LearnNav } from '../components/learn/common';
+import type { LearnNav } from './navigation';
 import { scheduler } from '../review/scheduler';
 import { ignoresStudyKey } from '../review/keyboard';
 import { RunningJobs } from '../components/jobs/RunningJobs';
 import { StatisticsView } from '../components/statistics/StatisticsView';
 import { UsageView } from '../components/usage/UsageView';
-import type { QardServices, UiRequest } from './services';
-type Screen =
-  | { kind: 'library' }
-  | { kind: 'deck'; deck: string }
-  | { kind: 'card'; card: QardCard }
-  | { kind: 'editor' | 'generate-cards'; draft?: Partial<CardDraft> }
-  | { kind: 'builder'; selection: Selection }
-  | {
-      kind: 'study';
-      cards: QardCard[];
-      serial: number;
-      style?: SessionStyle;
-      session?: SavedSession;
-      notice?: string;
-    }
-  | { kind: 'tests' }
-  | { kind: 'new-test'; prompt?: string; serial: number }
-  | { kind: 'plan' | 'take' | 'results' | 'test-cards'; folder: string }
-  | { kind: 'review'; folder: string; question?: string }
-  | { kind: 'exams' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates' }
-  | { kind: 'map-course'; folder?: string }
-  | { kind: 'check' | 'lesson'; path: string }
-  | { kind: 'course'; path: string; objective?: string; serial: number };
+import type { QardServices } from './services';
+import type { UiRequest } from './navigation';
 const LEARN_SCREENS = ['today', 'learn', 'map-course', 'course', 'check', 'lesson'];
 const TEST_LABEL: Record<string, string> = {
   plan: 'Plan',
@@ -79,26 +55,33 @@ export function QardApp({ services, request }: { services: QardServices; request
   const [issues, setIssues] = useState(false);
   const [sessionMessage, setSessionMessage] = useState('');
   useEffect(() => {
-    if (!request) return;
-    if (request.kind === 'builder')
+    if (!request) {
+      return;
+    }
+    if (request.kind === 'builder') {
       setScreen({
         kind: 'builder',
         selection: request.selection || { decks: [], topics: [], cards: [] },
       });
-    else if (request.kind === 'create') setScreen({ kind: 'editor', draft: request.draft });
-    else if (request.kind === 'new-test') setScreen({ kind: 'new-test', serial: request.serial });
-    else if (request.kind === 'tests') setScreen({ kind: 'tests' });
-    else if (
+    } else if (request.kind === 'create') {
+      setScreen({ kind: 'editor', draft: request.draft });
+    } else if (request.kind === 'new-test') {
+      setScreen({ kind: 'new-test', serial: request.serial });
+    } else if (request.kind === 'tests') {
+      setScreen({ kind: 'tests' });
+    } else if (
       request.kind === 'today' ||
       request.kind === 'learn' ||
       request.kind === 'usage' ||
       request.kind === 'statistics' ||
       request.kind === 'source-updates'
-    )
+    ) {
       setScreen({ kind: request.kind });
-    else if (request.kind === 'lesson' && request.path)
+    } else if (request.kind === 'lesson' && request.path) {
       setScreen({ kind: 'lesson', path: request.path });
-    else setScreen({ kind: 'library' });
+    } else {
+      setScreen({ kind: 'library' });
+    }
   }, [request]);
   const filtered = useMemo(
     () =>
@@ -118,7 +101,9 @@ export function QardApp({ services, request }: { services: QardServices; request
     setScreen({ kind: 'builder', selection });
   const start = useCallback(
     async (cards: QardCard[], style: SessionStyle = 'normal', examId?: string) => {
-      if (!cards.length) throw new Error('No cards are available for this session.');
+      if (!cards.length) {
+        throw new Error('No cards are available for this session.');
+      }
       const ready = await services.writer.ensureStable(cards);
       const session = await services.reviews.startSession(ready, style, examId);
       setSessionMessage('');
@@ -127,8 +112,9 @@ export function QardApp({ services, request }: { services: QardServices; request
     [services],
   );
   const resume = async (id: string) => {
-    if (services.index.getSnapshot().loading)
+    if (services.index.getSnapshot().loading) {
       throw new Error('Wait for your cards to finish loading.');
+    }
     const result = await services.reviews.resumeSession(id, services.index.getSnapshot().cards);
     const notice = result.skipped
       ? `${result.skipped} unavailable or ambiguous cards were skipped. Your remaining card order is preserved.`
@@ -153,7 +139,9 @@ export function QardApp({ services, request }: { services: QardServices; request
   const study = screen.kind === 'study';
   useEffect(() => {
     // StudyView owns focus and its shortcuts during a card session.
-    if (study) return;
+    if (study) {
+      return;
+    }
     const doc = services.host.ownerDocument;
     let focused = false;
     const setFocus = (enabled: boolean) => {
@@ -161,7 +149,9 @@ export function QardApp({ services, request }: { services: QardServices; request
       services.setFocus(enabled);
     };
     const handler = (event: KeyboardEvent) => {
-      if (!services.isActive() || ignoresStudyKey(event)) return;
+      if (!services.isActive() || ignoresStudyKey(event)) {
+        return;
+      }
       if (event.key.toLowerCase() === 'f') {
         event.preventDefault();
         event.stopPropagation();
@@ -173,7 +163,9 @@ export function QardApp({ services, request }: { services: QardServices; request
       }
     };
     const off = services.app.workspace.on('active-leaf-change', () => {
-      if (!services.isActive()) setFocus(false);
+      if (!services.isActive()) {
+        setFocus(false);
+      }
     });
     doc.addEventListener('keydown', handler, true);
     return () => {

@@ -90,7 +90,9 @@ export function addToLog(
     costCalls: t.costCalls + (u.costUsd === undefined ? 0 : 1),
   };
   const next = { ...log, [day]: today };
-  for (const d of Object.keys(next).sort().slice(0, -keepDays)) delete next[d];
+  for (const d of Object.keys(next).sort().slice(0, -keepDays)) {
+    delete next[d];
+  }
   return next;
 }
 
@@ -138,7 +140,9 @@ export function usageReport(log: UsageLog, from?: string): UsageReport {
     daily: UsageReport['daily'] = [];
   let totals = zero();
   for (const day of Object.keys(log).sort()) {
-    if (from && day < from) continue;
+    if (from && day < from) {
+      continue;
+    }
     let dayTotal = zero();
     for (const [key, t] of Object.entries(log[day]!)) {
       const [purpose = 'Other', , provider = '', name = 'default'] = key.split('|');

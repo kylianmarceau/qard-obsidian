@@ -22,7 +22,9 @@ export async function obsidianFetch(
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const headers: Record<string, string> = {};
   new Headers(init?.headers).forEach((value, key) => {
-    if (key !== 'content-length') headers[key] = value;
+    if (key !== 'content-length') {
+      headers[key] = value;
+    }
   });
   // The SDK aborts through the signal on its own timeout or a cancel; requestUrl ignores signals, so stop waiting instead.
   const response = await deadline(
@@ -51,7 +53,9 @@ export class AnthropicRunner implements AgentRunner {
   ) {}
   async run(task: AgentTask): Promise<unknown> {
     const apiKey = this.apiKey();
-    if (!apiKey) throw new Error('Add an Anthropic API key in Settings → Qard.');
+    if (!apiKey) {
+      throw new Error('Add an Anthropic API key in Settings → Qard.');
+    }
     const client = new Anthropic({
       apiKey,
       dangerouslyAllowBrowser: true,
@@ -66,7 +70,9 @@ export class AnthropicRunner implements AgentRunner {
     let usage = emptyUsage();
     // Usage is reported once per run, summed over the tool loop, including runs that end in an error after some turns.
     const report = () => {
-      if (usage.input || usage.output) task.onUsage?.(usage);
+      if (usage.input || usage.output) {
+        task.onUsage?.(usage);
+      }
     };
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -91,31 +97,40 @@ export class AnthropicRunner implements AgentRunner {
             { signal: task.signal },
           );
         } catch (error) {
-          if (error instanceof Anthropic.AuthenticationError)
+          if (error instanceof Anthropic.AuthenticationError) {
             throw new Error('The Anthropic API key was rejected. Check it in Settings → Qard.');
-          if (error instanceof Anthropic.RateLimitError)
+          }
+          if (error instanceof Anthropic.RateLimitError) {
             throw new Error('Rate limited by the Anthropic API. Wait a moment and try again.');
-          if (error instanceof Anthropic.APIError)
+          }
+          if (error instanceof Anthropic.APIError) {
             throw new Error(`Anthropic API error ${error.status ?? ''}: ${error.message}`);
+          }
           throw error;
         }
         usage = addUsage(usage, fromAnthropic(response.usage, response.model));
-        if (response.stop_reason === 'refusal') throw new Error('Claude declined this request.');
-        if (response.stop_reason === 'max_tokens')
+        if (response.stop_reason === 'refusal') {
+          throw new Error('Claude declined this request.');
+        }
+        if (response.stop_reason === 'max_tokens') {
           throw new Error('The reply was cut off. Try a shorter test.');
+        }
         messages.push({ role: 'assistant', content: response.content });
-        if (response.stop_reason === 'pause_turn') continue;
+        if (response.stop_reason === 'pause_turn') {
+          continue;
+        }
         const uses = response.content.filter(
           (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use',
         );
         if (uses.length) {
           const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-          for (const use of uses)
+          for (const use of uses) {
             results.push({
               type: 'tool_result',
               tool_use_id: use.id,
               content: await runVaultTool(this.vault, use.name, use.input, this.exclude),
             });
+          }
           messages.push({ role: 'user', content: results });
           continue;
         }

@@ -12,7 +12,9 @@ export function SourceUpdatesRow({
   open: () => void;
 }) {
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
-  if (!state.changes.length && !state.error) return null;
+  if (!state.changes.length && !state.error) {
+    return null;
+  }
   return (
     <button className="qard-resume" onClick={open}>
       <span className="qard-muted">Source updates</span>
@@ -308,13 +310,16 @@ export function changedPassage(before: string | null, after: string | null) {
     next = (after ?? '').split('\n');
   let start = 0,
     suffix = 0;
-  while (start < old.length && start < next.length && old[start] === next[start]) start++;
+  while (start < old.length && start < next.length && old[start] === next[start]) {
+    start++;
+  }
   while (
     suffix < old.length - start &&
     suffix < next.length - start &&
     old[old.length - 1 - suffix] === next[next.length - 1 - suffix]
-  )
+  ) {
     suffix++;
+  }
   const from = Math.max(0, start - 2);
   return {
     before: old.slice(from, Math.min(old.length, old.length - suffix + 2)).join('\n'),

@@ -67,22 +67,29 @@ export async function runVaultTool(
       .toLowerCase()
       .split(/\s+/)
       .filter(Boolean);
-    if (!words.length) return 'Give a query.';
+    if (!words.length) {
+      return 'Give a query.';
+    }
     const hits: string[] = [];
     for (const path of visible) {
       const text = await vault.read(path),
         lower = text.toLowerCase();
-      if (!words.every((w) => lower.includes(w) || path.toLowerCase().includes(w))) continue;
+      if (!words.every((w) => lower.includes(w) || path.toLowerCase().includes(w))) {
+        continue;
+      }
       const at = Math.max(0, lower.indexOf(words[0]!) - 80);
       hits.push(`${path}\n  …${text.slice(at, at + 220).replace(/\s+/g, ' ')}…`);
-      if (hits.length >= 15) break;
+      if (hits.length >= 15) {
+        break;
+      }
     }
     return hits.length ? hits.join('\n') : 'No matching notes.';
   }
   if (name === 'read_note') {
     const path = typeof args.path === 'string' ? args.path : '';
-    if (!visible.includes(path))
+    if (!visible.includes(path)) {
       return `No note at "${path}". Use list_notes or search_notes to find paths.`;
+    }
     const text = await vault.read(path);
     return text.length > MAX_NOTE
       ? text.slice(0, MAX_NOTE) + '\n\n[Truncated: the note is longer than this.]'

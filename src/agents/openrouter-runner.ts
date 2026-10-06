@@ -71,10 +71,15 @@ const headers = (key: string) => ({
 
 function failure(status: number, body: unknown): Error {
   const message = (body as Completion | undefined)?.error?.message ?? '';
-  if (status === 401)
+  if (status === 401) {
     return new Error('The OpenRouter API key was rejected. Check it in Settings → Qard.');
-  if (status === 402) return new Error('Your OpenRouter account is out of credits.');
-  if (status === 429) return new Error('Rate limited by OpenRouter. Wait a moment and try again.');
+  }
+  if (status === 402) {
+    return new Error('Your OpenRouter account is out of credits.');
+  }
+  if (status === 429) {
+    return new Error('Rate limited by OpenRouter. Wait a moment and try again.');
+  }
   return new Error(`OpenRouter error ${status}${message ? `: ${message}` : ''}`);
 }
 
@@ -90,7 +95,9 @@ export class OpenRouterRunner implements AgentRunner {
   ) {}
   async run(task: AgentTask): Promise<unknown> {
     const key = this.apiKey();
-    if (!key) throw new Error('Add an OpenRouter API key in Settings → Qard.');
+    if (!key) {
+      throw new Error('Add an OpenRouter API key in Settings → Qard.');
+    }
     const tools = task.vault !== false;
     // Not every model supports structured output, so the schema is also in the prompt and replies are validated anyway.
     const messages: Message[] = [
@@ -100,11 +107,15 @@ export class OpenRouterRunner implements AgentRunner {
     let structured = true,
       usage = emptyUsage();
     const report = () => {
-      if (usage.input || usage.output) task.onUsage?.(usage);
+      if (usage.input || usage.output) {
+        task.onUsage?.(usage);
+      }
     };
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
-        if (task.signal?.aborted) throw new Error(CANCELLED);
+        if (task.signal?.aborted) {
+          throw new Error(CANCELLED);
+        }
         const body = {
           model: this.model,
           messages,
@@ -138,20 +149,26 @@ export class OpenRouterRunner implements AgentRunner {
           turn--;
           continue;
         }
-        if (response.status !== 200) throw failure(response.status, response.json);
+        if (response.status !== 200) {
+          throw failure(response.status, response.json);
+        }
         const turnUsage = fromOpenRouter(
           (response.json as Completion).usage,
           (response.json as Completion).model ?? this.model,
         );
-        if (turnUsage) usage = addUsage(usage, turnUsage);
+        if (turnUsage) {
+          usage = addUsage(usage, turnUsage);
+        }
         const choice = (response.json as Completion).choices?.[0],
           message = choice?.message;
-        if (!message)
+        if (!message) {
           throw new Error(
             (response.json as Completion).error?.message || 'OpenRouter returned no reply.',
           );
-        if (choice.finish_reason === 'length')
+        }
+        if (choice.finish_reason === 'length') {
           throw new Error('The reply was cut off. Try a shorter request.');
+        }
         if (message.tool_calls?.length) {
           messages.push({
             role: 'assistant',
@@ -185,7 +202,9 @@ export class OpenRouterRunner implements AgentRunner {
 /** Models that can call tools, for the settings model picker. */
 export async function openRouterModels(http: Http = obsidianHttp): Promise<string[]> {
   const response = await http(`${BASE}/models`, { method: 'GET', headers: {} });
-  if (response.status !== 200) return [];
+  if (response.status !== 200) {
+    return [];
+  }
   const data =
     (response.json as { data?: { id?: unknown; supported_parameters?: unknown }[] } | undefined)
       ?.data ?? [];

@@ -498,7 +498,9 @@ function ActivityHeatmap({ days, today }: { days: ActivityDay[]; today: string }
                       Home: -i,
                       End: days.length - 1 - i,
                     }[e.key];
-                    if (delta === undefined) return;
+                    if (delta === undefined) {
+                      return;
+                    }
                     e.preventDefault();
                     const target =
                       days[
@@ -507,10 +509,11 @@ function ActivityHeatmap({ days, today }: { days: ActivityDay[]; today: string }
                           Math.min(days.filter((day) => !day.future).length - 1, i + delta),
                         )
                       ];
-                    if (target)
+                    if (target) {
                       e.currentTarget.parentElement
                         ?.querySelector<HTMLButtonElement>(`[data-day="${target.day}"]`)
                         ?.focus();
+                    }
                   }}
                 />
               );

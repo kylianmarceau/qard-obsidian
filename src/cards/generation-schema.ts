@@ -62,8 +62,9 @@ export const flashcardBatchSchema: Schema = {
 };
 export function readDestination(value: unknown, required = true): FlashcardDestination {
   const dest = value as FlashcardDestination | undefined;
-  if (!dest || typeof dest.deck !== 'string' || typeof dest.topic !== 'string')
+  if (!dest || typeof dest.deck !== 'string' || typeof dest.topic !== 'string') {
     throw new Error('Choose a deck and topic for the cards.');
+  }
   const deck = dest.deck.trim(),
     topic = dest.topic.trim();
   if (
@@ -71,8 +72,9 @@ export function readDestination(value: unknown, required = true): FlashcardDesti
     deck.length > 200 ||
     topic.length > 200 ||
     /[\r\n]/.test(deck + topic)
-  )
+  ) {
     throw new Error('Deck and topic must be single lines, up to 200 characters each.');
+  }
   return { deck, topic };
 }
 export function readFlashcardBatch(value: unknown, paths: string[]) {
@@ -87,21 +89,26 @@ export function readFlashcardBatch(value: unknown, paths: string[]) {
 }
 export function readFlashcards(value: unknown, paths: string[]): GeneratedContent[] {
   const result = check<{ cards: GeneratedContent[] }>(flashcardsSchema, value);
-  if (!result.cards.length)
+  if (!result.cards.length) {
     throw new Error('Return at least one useful flashcard based on the material.');
+  }
   const seen = new Set<string>();
   return result.cards.map((card, i) => {
     const front = card.front.trim(),
       back = card.back.trim(),
       source = card.source.trim();
-    if (front.length > 4000 || back.length > 12000)
+    if (front.length > 4000 || back.length > 12000) {
       throw new Error(`Card ${i + 1} is too long. Keep questions and answers concise.`);
+    }
     serializeCard('validation', front, back);
     const key = front.toLowerCase().replace(/\s+/g, ' ');
-    if (seen.has(key)) throw new Error(`Card ${i + 1} repeats a question. Write distinct cards.`);
+    if (seen.has(key)) {
+      throw new Error(`Card ${i + 1} repeats a question. Write distinct cards.`);
+    }
     seen.add(key);
-    if (source && !paths.includes(source))
+    if (source && !paths.includes(source)) {
       throw new Error(`Card ${i + 1} cites a note that does not exist: ${source}.`);
+    }
     const topic =
       card.topic === undefined
         ? undefined

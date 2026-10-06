@@ -27,15 +27,19 @@ export function CardSourceLinks({
     setError('');
     try {
       const [stable] = await services.writer.ensureStable([card]);
-      if (!stable) throw new Error('This card is no longer available.');
+      if (!stable) {
+        throw new Error('This card is no longer available.');
+      }
       const versions = await service.capture([path]);
-      if (versions.some((s) => s.text === null))
+      if (versions.some((s) => s.text === null)) {
         throw new Error('The note no longer exists. Choose it again.');
+      }
       const current = service.getSnapshot().links[stable.id];
-      if (current?.sources.some((s) => s.path === path))
+      if (current?.sources.some((s) => s.path === path)) {
         throw new Error(
           'This source is already linked. Review its changes before updating the link.',
         );
+      }
       await service.track(stable.id, [...(current?.sources ?? []), ...versions], true);
       await service.refresh();
       changed(stable);

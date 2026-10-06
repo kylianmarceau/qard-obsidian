@@ -52,7 +52,9 @@ export function runProcess(
       err = '',
       done = false;
     const finish = (fn: () => void) => {
-      if (done) return;
+      if (done) {
+        return;
+      }
       done = true;
       window.clearTimeout(timer);
       options.signal?.removeEventListener('abort', abort);
@@ -112,7 +114,9 @@ export function loginPath(host: NodeHost): Promise<string> {
   ]
     .filter(Boolean)
     .join(host.windows ? ';' : ':');
-  if (host.windows) return Promise.resolve(fallback);
+  if (host.windows) {
+    return Promise.resolve(fallback);
+  }
   cachedPath ??= runProcess(
     host,
     host.env.SHELL || '/bin/zsh',
@@ -132,14 +136,19 @@ export async function findBinary(
   name: string,
   override: string,
 ): Promise<string | undefined> {
-  if (override.trim()) return host.exists(override.trim()) ? override.trim() : undefined;
+  if (override.trim()) {
+    return host.exists(override.trim()) ? override.trim() : undefined;
+  }
   const path = await loginPath(host),
     names = host.windows ? [`${name}.cmd`, `${name}.exe`, name] : [name];
-  for (const dir of path.split(host.windows ? ';' : ':'))
+  for (const dir of path.split(host.windows ? ';' : ':')) {
     for (const file of names) {
       const candidate = `${dir.replace(/[\\/]$/, '')}${host.windows ? '\\' : '/'}${file}`;
-      if (dir && host.exists(candidate)) return candidate;
+      if (dir && host.exists(candidate)) {
+        return candidate;
+      }
     }
+  }
   return undefined;
 }
 
@@ -162,7 +171,9 @@ export const CLAUDE_CODE_MODELS: ModelChoice[] = [
 export function codexModels(host: NodeHost): ModelChoice[] {
   const file = `${host.env.CODEX_HOME || `${host.home}/.codex`}/models_cache.json`;
   try {
-    if (!host.exists(file)) return [];
+    if (!host.exists(file)) {
+      return [];
+    }
     const models =
       (
         JSON.parse(host.readFile(file)) as {
@@ -200,10 +211,11 @@ abstract class CliRunner implements AgentRunner {
   ) {}
   protected async command() {
     const bin = await findBinary(this.host, this.binary, this.override);
-    if (!bin)
+    if (!bin) {
       throw new Error(
         `${this.name} was not found. Install it, or set its path in Settings → Qard.`,
       );
+    }
     return { bin, path: await loginPath(this.host) };
   }
   protected input(task: AgentTask) {
@@ -235,8 +247,12 @@ export class ClaudeCodeRunner extends CliRunner {
             'Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch',
           ]),
     ];
-    if (this.model.trim()) args.push('--model', this.model.trim());
-    if (task.effort) args.push('--effort', task.effort);
+    if (this.model.trim()) {
+      args.push('--model', this.model.trim());
+    }
+    if (task.effort) {
+      args.push('--effort', task.effort);
+    }
     const out = await runProcess(this.host, bin, args, this.input(task), {
       cwd: this.vault,
       path,
@@ -256,16 +272,23 @@ export class ClaudeCodeRunner extends CliRunner {
       return extractJson(out);
     }
     const usage = fromClaudeCode(envelope);
-    if (usage) task.onUsage?.(usage);
-    if (envelope.is_error)
+    if (usage) {
+      task.onUsage?.(usage);
+    }
+    if (envelope.is_error) {
       throw new Error(
         typeof envelope.result === 'string' && envelope.result
           ? envelope.result
           : 'Claude Code returned an error.',
       );
+    }
     // --json-schema yields validated structured_output; older versions only return the text.
-    if (envelope.structured_output !== undefined) return envelope.structured_output;
-    if (typeof envelope.result !== 'string') throw new Error('Claude Code returned no result.');
+    if (envelope.structured_output !== undefined) {
+      return envelope.structured_output;
+    }
+    if (typeof envelope.result !== 'string') {
+      throw new Error('Claude Code returned no result.');
+    }
     return extractJson(envelope.result);
   }
 }
@@ -289,8 +312,12 @@ export class CodexRunner extends CliRunner {
       '--output-last-message',
       last,
     ];
-    if (this.model.trim()) args.push('--model', this.model.trim());
-    if (task.effort) args.push('-c', `model_reasoning_effort=${task.effort}`);
+    if (this.model.trim()) {
+      args.push('--model', this.model.trim());
+    }
+    if (task.effort) {
+      args.push('-c', `model_reasoning_effort=${task.effort}`);
+    }
     args.push('-');
     try {
       const out = await runProcess(this.host, bin, args, this.input(task), {
@@ -299,8 +326,12 @@ export class CodexRunner extends CliRunner {
         signal: task.signal,
       });
       const usage = fromCodexEvents(out);
-      if (usage) task.onUsage?.({ ...usage, model: this.model.trim() || undefined });
-      if (this.host.exists(last)) return extractJson(this.host.readFile(last));
+      if (usage) {
+        task.onUsage?.({ ...usage, model: this.model.trim() || undefined });
+      }
+      if (this.host.exists(last)) {
+        return extractJson(this.host.readFile(last));
+      }
       // Without the file, the final agent message is the last completed item in the event stream.
       const items = out
         .split('\n')
@@ -314,7 +345,9 @@ export class CodexRunner extends CliRunner {
         .filter((e) => e?.type === 'item.completed' && e.item?.type === 'agent_message');
       return extractJson(items.at(-1)?.item?.text ?? out);
     } finally {
-      if (this.host.exists(last)) this.host.remove(last);
+      if (this.host.exists(last)) {
+        this.host.remove(last);
+      }
     }
   }
 }

@@ -84,12 +84,16 @@ export function StudyView({
   }, [position]);
   useEffect(() => {
     const off = services.app.workspace.on('active-leaf-change', () => {
-      if (!services.isActive()) setFocus(false);
+      if (!services.isActive()) {
+        setFocus(false);
+      }
     });
     return () => services.app.workspace.offref(off);
   }, [services]);
   async function rate(rating: Rating) {
-    if (cram || !card || !revealed || lock.current || recording) return;
+    if (cram || !card || !revealed || lock.current || recording) {
+      return;
+    }
     lock.current = true;
     setBusy(true);
     setError('');
@@ -101,18 +105,23 @@ export function StudyView({
         session ? { id: session.id, position } : undefined,
       );
       // Two lapses on a card made for a mastered objective mark it as slipping.
-      if (rating === 1) void services.learn?.cardLapse(card.id).catch(() => {});
+      if (rating === 1) {
+        void services.learn?.cardLapse(card.id).catch(() => {});
+      }
       if (mounted.current) {
         setResults((old) => [...old, { cardId: card.id, rating }]);
         setPosition((i) => i + 1);
         setRevealed(false);
       }
     } catch (e) {
-      if (mounted.current)
+      if (mounted.current) {
         setError((e as Error).message || 'Could not save your review. Try again.');
+      }
     } finally {
       lock.current = false;
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
   const advance = async () => {
@@ -123,14 +132,17 @@ export function StudyView({
       confirmExit ||
       navigationLock.current ||
       lock.current
-    )
+    ) {
       return;
+    }
     navigationLock.current = true;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      if (session) await services.reviews.advanceCram({ id: session.id, position }, card.id);
+      if (session) {
+        await services.reviews.advanceCram({ id: session.id, position }, card.id);
+      }
       if (mounted.current) {
         actions.current.revealed = false;
         setRevealed(false);
@@ -138,11 +150,14 @@ export function StudyView({
       }
     } catch (e) {
       navigationLock.current = false;
-      if (mounted.current)
+      if (mounted.current) {
         setError((e as Error).message || 'Could not save your position. Try again.');
+      }
     } finally {
       lock.current = false;
-      if (mounted.current) setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   };
   async function repeatSaved(next: QardCard[]) {
@@ -161,14 +176,20 @@ export function StudyView({
   useEffect(() => {
     const doc = services.host.ownerDocument;
     const handler = (event: KeyboardEvent) => {
-      if (!services.isActive() || ignoresStudyKey(event)) return;
+      if (!services.isActive() || ignoresStudyKey(event)) {
+        return;
+      }
       const current = actions.current;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        if (current.focus) setFocus(false);
-        else if (card) setConfirmExit((v) => !v);
-        else exit();
+        if (current.focus) {
+          setFocus(false);
+        } else if (card) {
+          setConfirmExit((v) => !v);
+        } else {
+          exit();
+        }
         return;
       }
       if (event.key.toLowerCase() === 'f') {
@@ -183,26 +204,32 @@ export function StudyView({
         current.confirmExit ||
         lock.current ||
         navigationLock.current
-      )
+      ) {
         return;
+      }
       const key = event.key.toLowerCase();
       if (key === ' ' || (!cram && ['1', '2', '3', '4'].includes(key))) {
         event.preventDefault();
         event.stopPropagation();
         if (key === ' ') {
-          if (cram && current.revealed) void current.advance();
-          else if (cram) {
+          if (cram && current.revealed) {
+            void current.advance();
+          } else if (cram) {
             current.revealed = true;
             setRevealed(true);
-          } else setRevealed((v) => !v);
-        } else if (current.revealed) void current.rate(Number(key) as Rating);
+          } else {
+            setRevealed((v) => !v);
+          }
+        } else if (current.revealed) {
+          void current.rate(Number(key) as Rating);
+        }
       }
     };
     doc.addEventListener('keydown', handler, true);
     return () => doc.removeEventListener('keydown', handler, true);
   }, [services, card, exit, cram]);
   const onRecording = useCallback((value: boolean) => setRecording(value), []);
-  if (!card)
+  if (!card) {
     return (
       <div className="qard-summary">
         <CheckCircle2 size={32} />
@@ -263,12 +290,15 @@ export function StudyView({
         </button>
       </div>
     );
+  }
   return (
     <div className={'qard-study ' + (focus ? 'is-focused' : '')} ref={surface} tabIndex={-1}>
       <div className="qard-study-toolbar">
         <button
           onClick={() => {
-            if (focus) setFocus(false);
+            if (focus) {
+              setFocus(false);
+            }
             setConfirmExit(true);
           }}
         >

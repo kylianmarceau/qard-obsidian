@@ -20,7 +20,9 @@ export function DeleteItem({
     locked = useRef(false);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (confirm) dialog.current?.showModal();
+    if (confirm) {
+      dialog.current?.showModal();
+    }
   }, [confirm]);
   function close() {
     setConfirm(false);
@@ -28,7 +30,9 @@ export function DeleteItem({
     trigger.current?.focus();
   }
   async function commit() {
-    if (locked.current) return;
+    if (locked.current) {
+      return;
+    }
     locked.current = true;
     setBusy(true);
     setError('');
@@ -62,7 +66,9 @@ export function DeleteItem({
           aria-label={label}
           onCancel={(e) => {
             e.preventDefault();
-            if (!busy) close();
+            if (!busy) {
+              close();
+            }
           }}
         >
           <h2>{label}?</h2>

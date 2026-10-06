@@ -14,7 +14,9 @@ export function Markdown({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     let disposed = false;
     const child = new Component();
     services.owner.addChild(child);
@@ -25,7 +27,11 @@ export function Markdown({
       cls: replacing ? 'markdown-rendered qard-md-pending' : 'markdown-rendered',
     });
     const show = () => {
-      for (const old of Array.from(el.children)) if (old !== target) old.remove();
+      for (const old of Array.from(el.children)) {
+        if (old !== target) {
+          old.remove();
+        }
+      }
       target.classList.remove('qard-md-pending');
     };
     // Do not automatically request remote image URLs from a local study surface.
@@ -35,14 +41,19 @@ export function Markdown({
     );
     void MarkdownRenderer.render(services.app, local, target, path, child)
       .then(() => {
-        if (!disposed) show();
-        else child.unload();
+        if (!disposed) {
+          show();
+        } else {
+          child.unload();
+        }
       })
       .catch(() => {
         if (!disposed) {
           target.textContent = text;
           show();
-        } else child.unload();
+        } else {
+          child.unload();
+        }
       });
     return () => {
       disposed = true;
@@ -85,25 +96,37 @@ export function InlineMarkdown({
   const plain = !/[$`*_\\[]/.test(text);
   useEffect(() => {
     const el = ref.current;
-    if (!el || plain) return;
+    if (!el || plain) {
+      return;
+    }
     let disposed = false;
     const child = new Component();
     services.owner.addChild(child);
     const target = el.createSpan({ cls: 'qard-md-pending' });
     void MarkdownRenderer.render(services.app, text, target, path, child)
       .then(() => {
-        if (disposed) return;
+        if (disposed) {
+          return;
+        }
         // The renderer wraps text in a paragraph; a title needs just its contents.
         const only =
           target.children.length === 1 && target.firstElementChild?.tagName === 'P'
             ? target.firstElementChild
             : undefined;
-        if (only) target.replaceChildren(...Array.from(only.childNodes));
-        for (const old of Array.from(el.childNodes)) if (old !== target) old.remove();
+        if (only) {
+          target.replaceChildren(...Array.from(only.childNodes));
+        }
+        for (const old of Array.from(el.childNodes)) {
+          if (old !== target) {
+            old.remove();
+          }
+        }
         target.classList.remove('qard-md-pending');
       })
       .catch(() => {
-        if (!disposed) target.remove();
+        if (!disposed) {
+          target.remove();
+        }
       });
     return () => {
       disposed = true;

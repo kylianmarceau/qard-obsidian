@@ -85,7 +85,9 @@ export class FlashcardGenerationService {
   getSnapshot = () => this.snapshot;
   private publish(patch: Partial<GenerationSnapshot>) {
     this.snapshot = { ...this.snapshot, ...patch };
-    if (!this.disposed) this.listeners.forEach((fn) => fn());
+    if (!this.disposed) {
+      this.listeners.forEach((fn) => fn());
+    }
   }
   private persist() {
     const batch = this.snapshot.batch,
@@ -98,16 +100,23 @@ export class FlashcardGenerationService {
   async load() {
     try {
       const text = await this.storage.read(draftPath(safeFolder(this.folder())));
-      if (!text || this.snapshot.batch || this.disposed) return;
+      if (!text || this.snapshot.batch || this.disposed) {
+        return;
+      }
       const value = JSON.parse(text) as Batch | null;
-      if (!value) return;
+      if (!value) {
+        return;
+      }
       if (
         !/^[A-Za-z0-9_-]+$/.test(value.id) ||
         safeFolder(value.folder) !== safeFolder(this.folder())
-      )
+      ) {
         throw new Error('Invalid saved flashcard draft.');
+      }
       const request = this.validateRequest(value.request);
-      if (!Array.isArray(value.cards)) throw new Error('Invalid saved flashcard draft.');
+      if (!Array.isArray(value.cards)) {
+        throw new Error('Invalid saved flashcard draft.');
+      }
       // Drafts may be mid-edit; the writer validates content when the student adds them.
       if (
         value.cards.some(
@@ -121,20 +130,28 @@ export class FlashcardGenerationService {
             typeof c.added !== 'boolean',
         ) ||
         new Set(value.cards.map((c) => c.id)).size !== value.cards.length
-      )
+      ) {
         throw new Error('Invalid saved flashcard draft.');
-      if (value.destination) readDestination(value.destination, false);
-      if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean')
+      }
+      if (value.destination) {
+        readDestination(value.destination, false);
+      }
+      if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean') {
         throw new Error('Invalid saved destination.');
+      }
       for (const card of value.cards) {
-        if (card.sourceSnapshots !== undefined) readSourceSnapshots(card.sourceSnapshots);
-        if (card.topic !== undefined)
+        if (card.sourceSnapshots !== undefined) {
+          readSourceSnapshots(card.sourceSnapshots);
+        }
+        if (card.topic !== undefined) {
           readDestination({ deck: 'validation', topic: card.topic }, false);
-        if (value.destinationLocked || card.added)
+        }
+        if (value.destinationLocked || card.added) {
           readDestination({
             ...flashcardDestination(value),
             topic: card.topic ?? flashcardDestination(value).topic,
           });
+        }
       }
       this.publish({
         batch: { ...value, request },
@@ -162,13 +179,17 @@ export class FlashcardGenerationService {
       r.notes.some((p) => typeof p !== 'string') ||
       (r.folders !== undefined &&
         (!Array.isArray(r.folders) || r.folders.some((p) => typeof p !== 'string')))
-    )
+    ) {
       throw new Error('Invalid flashcard request.');
+    }
     const { deck, topic } = readDestination({ deck: r.deck ?? '', topic: r.topic ?? '' }, false),
       prompt = r.prompt.trim();
-    if (prompt.length > 10000) throw new Error('Keep the prompt under 10,000 characters.');
-    if (!prompt && !r.notes.length)
+    if (prompt.length > 10000) {
+      throw new Error('Keep the prompt under 10,000 characters.');
+    }
+    if (!prompt && !r.notes.length) {
       throw new Error('Describe the cards or choose at least one note.');
+    }
     const folders = r.folders?.map(safeFolder);
     return {
       prompt,
@@ -179,13 +200,17 @@ export class FlashcardGenerationService {
     };
   }
   async start(request: FlashcardRequest) {
-    if (this.snapshot.loading) throw new Error('Wait for saved drafts to load.');
-    if (this.controller || this.snapshot.saving)
+    if (this.snapshot.loading) {
+      throw new Error('Wait for saved drafts to load.');
+    }
+    if (this.controller || this.snapshot.saving) {
       throw new Error('Wait for the current flashcard job to finish.');
+    }
     const valid = this.validateRequest(request),
       available = this.paths();
-    if (valid.notes.some((p) => !available.includes(p)))
+    if (valid.notes.some((p) => !available.includes(p))) {
       throw new Error('A selected note no longer exists. Choose the notes again.');
+    }
     const batch: Batch = {
       id: crypto.randomUUID(),
       folder: safeFolder(this.folder()),
@@ -211,8 +236,9 @@ export class FlashcardGenerationService {
   }
   async generate() {
     const batch = this.snapshot.batch;
-    if (!batch || batch.cards.length || this.controller || this.snapshot.saving || this.disposed)
+    if (!batch || batch.cards.length || this.controller || this.snapshot.saving || this.disposed) {
       return;
+    }
     const controller = new AbortController(),
       startedAt = Date.now();
     this.controller = controller;
@@ -226,15 +252,19 @@ export class FlashcardGenerationService {
     cancelled.catch(() => {});
     try {
       await this.persist();
-      if (controller.signal.aborted) throw new Error(CANCELLED);
+      if (controller.signal.aborted) {
+        throw new Error(CANCELLED);
+      }
       const paths = this.paths();
-      if (batch.request.notes.some((p) => !paths.includes(p)))
+      if (batch.request.notes.some((p) => !paths.includes(p))) {
         throw new Error(
           'A selected note no longer exists. Start a new batch and choose the notes again.',
         );
+      }
       const versions = await this.captureSources?.(batch.request.notes);
-      if (versions?.some((s) => s.text === null))
+      if (versions?.some((s) => s.text === null)) {
         throw new Error('A selected source note is missing. Choose it again.');
+      }
       const infer = !batch.request.deck || !batch.request.topic;
       const result = await Promise.race([
         runValidated(
@@ -246,11 +276,12 @@ export class FlashcardGenerationService {
             effort: 'high',
           },
           (v) => {
-            if (!infer)
+            if (!infer) {
               return {
                 destination: readDestination(flashcardDestination(batch)),
                 cards: readFlashcards(v, paths),
               };
+            }
             const generated = readFlashcardBatch(v, paths);
             return {
               ...generated,
@@ -274,7 +305,9 @@ export class FlashcardGenerationService {
         ...(versions ?? []),
         ...((await this.captureSources?.(discovered, startedAt)) ?? []),
       ];
-      if (controller.signal.aborted || this.disposed) return;
+      if (controller.signal.aborted || this.disposed) {
+        return;
+      }
       this.publish({
         batch: {
           ...batch,
@@ -292,12 +325,14 @@ export class FlashcardGenerationService {
         },
       });
       await this.persist();
-      if (this.disposed) return;
+      if (this.disposed) {
+        return;
+      }
       this.publish({ job: undefined });
       this.timing('flashcards', Date.now() - startedAt);
       this.notify(`${result.cards.length} flashcards ready to review: ${result.destination.deck}`);
     } catch (e) {
-      if (!this.disposed)
+      if (!this.disposed) {
         this.publish({
           job: {
             kind: 'flashcards',
@@ -305,8 +340,11 @@ export class FlashcardGenerationService {
             error: controller.signal.aborted ? CANCELLED : message(e),
           },
         });
+      }
     } finally {
-      if (this.controller === controller) this.controller = undefined;
+      if (this.controller === controller) {
+        this.controller = undefined;
+      }
     }
   }
   cancel() {
@@ -321,8 +359,9 @@ export class FlashcardGenerationService {
       this.controller ||
       batch.destinationLocked ||
       batch.cards.some((c) => c.added)
-    )
+    ) {
       return;
+    }
     const destination = { ...flashcardDestination(batch), ...patch };
     try {
       readDestination(destination, false);
@@ -344,9 +383,13 @@ export class FlashcardGenerationService {
     patch: Partial<Pick<GeneratedDraft, 'front' | 'back' | 'selected' | 'topic'>>,
   ) {
     const batch = this.snapshot.batch;
-    if (!batch || this.snapshot.saving) return;
+    if (!batch || this.snapshot.saving) {
+      return;
+    }
     if (patch.topic !== undefined) {
-      if (batch.destinationLocked || batch.cards.some((c) => c.added)) return;
+      if (batch.destinationLocked || batch.cards.some((c) => c.added)) {
+        return;
+      }
       try {
         readDestination({ deck: 'validation', topic: patch.topic }, false);
       } catch (e) {
@@ -372,8 +415,9 @@ export class FlashcardGenerationService {
       this.controller ||
       batch.destinationLocked ||
       batch.cards.some((c) => c.added)
-    )
+    ) {
       return;
+    }
     const sources = [...new Set(batch.cards.map((c) => c.source).filter(Boolean))];
     const names = sources.map(noteTopic);
     const topics = new Map(
@@ -397,9 +441,13 @@ export class FlashcardGenerationService {
   }
   async addSelected() {
     const batch = this.snapshot.batch;
-    if (!batch || this.snapshot.saving || this.controller) return;
+    if (!batch || this.snapshot.saving || this.controller) {
+      return;
+    }
     const cards = batch.cards.filter((c) => c.selected && !c.added);
-    if (!cards.length) return;
+    if (!cards.length) {
+      return;
+    }
     this.publish({ saving: true, error: undefined });
     try {
       const destination = readDestination(flashcardDestination(batch));
@@ -437,7 +485,9 @@ export class FlashcardGenerationService {
     }
   }
   async clear() {
-    if (this.controller || this.snapshot.saving) return;
+    if (this.controller || this.snapshot.saving) {
+      return;
+    }
     const batch = this.snapshot.batch;
     const path = draftPath(batch?.folder ?? safeFolder(this.folder()));
     const next = this.writes.catch(() => {}).then(() => this.storage.write(path, 'null\n'));

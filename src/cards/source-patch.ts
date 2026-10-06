@@ -5,13 +5,15 @@ export function locateCard(source: string, card: QardCard): QardCard {
   const matches = card.stable
     ? parsed.filter((c) => c.stable && c.id === card.id)
     : parsed.filter((c) => !c.stable && sameContent(c, card));
-  if (matches.length !== 1)
+  if (matches.length !== 1) {
     throw new Error(
       'The card moved, was changed, or has an ambiguous ID. Reopen it from the library before editing.',
     );
+  }
   const match = matches[0]!;
-  if (!sameContent(match, card))
+  if (!sameContent(match, card)) {
     throw new Error('This card changed in your note. Reopen it to avoid overwriting your edits.');
+  }
   return match;
 }
 export function ensureIdInSource(
@@ -20,21 +22,29 @@ export function ensureIdInSource(
   id: string,
 ): { source: string; card: QardCard } {
   const current = locateCard(source, card);
-  if (current.stable) return { source, card: current };
+  if (current.stable) {
+    return { source, card: current };
+  }
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   const updated =
     source.slice(0, current.sourcePosition.calloutStart) +
     `<!-- qard-id: ${id} -->${eol}` +
     source.slice(current.sourcePosition.calloutStart);
   const found = parseCards(updated, card.sourceFile).cards.find((c) => c.id === id);
-  if (!found) throw new Error('Could not safely assign a card ID.');
+  if (!found) {
+    throw new Error('Could not safely assign a card ID.');
+  }
   return { source: updated, card: found };
 }
 export function serializeCard(id: string, front: string, back: string, eol = '\n'): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error('Invalid card ID.');
+  if (!/^[A-Za-z0-9_-]+$/.test(id)) {
+    throw new Error('Invalid card ID.');
+  }
   front = front.replace(/\r\n?/g, '\n').trim();
   back = back.replace(/\r\n?/g, '\n').trim();
-  if (!front || !back) throw new Error('Both the question and answer are required.');
+  if (!front || !back) {
+    throw new Error('Both the question and answer are required.');
+  }
   const [first, ...rest] = front.split('\n');
   const lines = [`<!-- qard-id: ${id} -->`, `> [!qard]- ${first}`];
   const content = rest.length
@@ -64,7 +74,9 @@ export function replaceCardInSource(
   const current = locateCard(source, original);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
   let replacement = serializeCard(id, front, back, eol);
-  if (!/[\r\n]$/.test(current.sourceText)) replacement = replacement.slice(0, -eol.length);
+  if (!/[\r\n]$/.test(current.sourceText)) {
+    replacement = replacement.slice(0, -eol.length);
+  }
   return (
     source.slice(0, current.sourcePosition.start) +
     replacement +

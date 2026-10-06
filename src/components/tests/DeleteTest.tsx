@@ -15,7 +15,9 @@ export function DeleteTest({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   async function remove() {
-    if (busy) return;
+    if (busy) {
+      return;
+    }
     setBusy(true);
     setError('');
     try {

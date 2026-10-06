@@ -22,7 +22,7 @@ export function CardPreview({
     [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  if (editing)
+  if (editing) {
     return (
       <CardEditor
         services={services}
@@ -34,6 +34,7 @@ export function CardPreview({
         }}
       />
     );
+  }
   async function remove() {
     setBusy(true);
     try {

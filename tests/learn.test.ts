@@ -11,20 +11,12 @@ import {
   newMasteryNote,
   type Objective,
 } from '../src/learn/mastery';
-import {
-  layoutGraph,
-  layoutTopic,
-  OBJECTIVE,
-  routeTo,
-  topicsOf,
-} from '../src/components/learn/CourseMap';
+import { layoutGraph, layoutTopic, OBJECTIVE, routeTo, topicsOf } from '../src/learn/course-graph';
 import { courseUpdateSchema } from '../src/learn/learn-schema';
-import {
-  LearnService,
-  insertUnderHeading,
-  summarise,
-  type LearnStorage,
-} from '../src/learn/learn-service';
+import { LearnService } from '../src/learn/learn-service';
+import { insertUnderHeading } from '../src/learn/note-edits';
+import { summarise } from '../src/learn/learning-evidence';
+import { type LearnStorage } from '../src/learn/learn-contracts';
 import {
   mapSchema,
   objectivesSchema,

@@ -11,7 +11,8 @@ import {
 import { extractJson, runValidated, type AgentRunner, type AgentTask } from '../src/agents/runner';
 import { runVaultTool } from '../src/agents/vault-tools';
 import { ClaudeCodeRunner, type NodeHost } from '../src/agents/cli-runner';
-import { TestService, type TestStorage } from '../src/tests/test-service';
+import { TestService } from '../src/tests/test-service';
+import { type TestStorage } from '../src/tests/test-contracts';
 import { DEFAULT_TEST_SETTINGS, readSettings, type TestSettings } from '../src/settings/settings';
 import { markPrompt, questionBlock } from '../src/tests/test-prompts';
 

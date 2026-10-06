@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { CalendarDays, ChevronDown, Plus } from 'lucide-react';
 import { examProgress, localDay, type ExamPlan } from '../exams/exam-plan';
 import { dayDistance, examTone } from '../exams/exam-calendar';
-import { LibraryHeader } from './tests/TestsBrowser';
+import { LibraryHeader } from './library/LibraryHeader';
 import { ExamEditor } from './exams/ExamEditor';
 import { ExamCalendar } from './exams/ExamCalendar';
 import type { QardCard } from '../cards/card-types';
@@ -38,7 +38,9 @@ export function ExamPlanner({
     [expanded, setExpanded] = useState('');
   const [focusPlan, setFocusPlan] = useState('');
   useEffect(() => {
-    if (view !== 'exams' || !focusPlan) return;
+    if (view !== 'exams' || !focusPlan) {
+      return;
+    }
     const card = [
       ...(workspace.current?.querySelectorAll<HTMLElement>('[data-exam-id]') ?? []),
     ].find((item) => item.dataset.examId === focusPlan);
@@ -61,8 +63,11 @@ export function ExamPlanner({
     setError('');
     try {
       const active = session(plan);
-      if (active) await resume(active.id);
-      else await start(progress(plan).queue, plan.id);
+      if (active) {
+        await resume(active.id);
+      } else {
+        await start(progress(plan).queue, plan.id);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -86,7 +91,7 @@ export function ExamPlanner({
     setExpanded(plan.id);
     setFocusPlan(plan.id);
   };
-  if (editing)
+  if (editing) {
     return (
       <ExamEditor
         key={editing === 'new' ? 'new' : editing.id}
@@ -95,6 +100,7 @@ export function ExamPlanner({
         done={() => setEditing(undefined)}
       />
     );
+  }
   return (
     <div className="qard-exam-workspace" ref={workspace}>
       <LibraryHeader

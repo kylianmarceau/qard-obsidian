@@ -6,7 +6,7 @@ import type { QardServices } from '../views/services';
 import { Markdown } from './Markdown';
 import { AgentLabel } from './jobs/AgentLabel';
 import { JobControls } from './jobs/JobControls';
-import { Check, JobError, Waiting } from './tests/common';
+import { Check, JobError, Waiting } from './common/FeedbackStatus';
 import { folderNotes, resolveTestNotes, testFolders, testNotePaths } from '../tests/test-sources';
 import { flashcardDestination, flashcardTopics } from '../cards/generation-service';
 
@@ -63,7 +63,9 @@ export function GenerateFlashcards({
     )
     .slice(0, 8);
   const run = async () => {
-    if (starting) return;
+    if (starting) {
+      return;
+    }
     setStarting(true);
     setError('');
     try {
@@ -72,10 +74,11 @@ export function GenerateFlashcards({
         excluded,
       );
       const selected = resolveTestNotes(latest, notes, folders);
-      if (!prompt.trim() && !selected.length)
+      if (!prompt.trim() && !selected.length) {
         throw new Error(
           'The selected sources no longer contain any Markdown notes. Choose another source or describe the cards.',
         );
+      }
       await service.start({
         ...context,
         prompt,

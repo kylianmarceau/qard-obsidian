@@ -30,16 +30,19 @@ export class QardSettingsTab extends PluginSettingTab {
   private models?: Promise<string[]>;
   /** Suggestions for a connection's model field. OpenRouter's list is fetched once per settings visit. */
   private async modelChoices(provider: AgentProvider): Promise<ModelChoice[]> {
-    if (provider === 'claude-code') return CLAUDE_CODE_MODELS;
+    if (provider === 'claude-code') {
+      return CLAUDE_CODE_MODELS;
+    }
     if (provider === 'codex') {
       const host = nodeHost();
       return host ? codexModels(host) : [];
     }
-    if (provider === 'openrouter')
+    if (provider === 'openrouter') {
       return (await (this.models ??= openRouterModels().catch(() => []))).map((m) => ({
         value: m,
         label: m,
       }));
+    }
     return [];
   }
   constructor(private qard: QardPlugin) {
@@ -70,7 +73,9 @@ export class QardSettingsTab extends PluginSettingTab {
           ...this.qard.reviews.getSnapshot().settings,
           [key]: value,
         });
-        if (key === 'scheduler') this.redraw();
+        if (key === 'scheduler') {
+          this.redraw();
+        }
       } catch {
         new Notice('Could not save that preference. Please reopen settings and try again.');
       }
@@ -210,7 +215,9 @@ export class QardSettingsTab extends PluginSettingTab {
   private patch(patch: (s: QardSettings) => QardSettings, redraw = false) {
     return this.qard.reviews.saveSettings(patch(this.qard.reviews.getSnapshot().settings)).then(
       () => {
-        if (redraw) this.redraw();
+        if (redraw) {
+          this.redraw();
+        }
       },
       () => {
         new Notice('Could not save that preference. Please reopen settings and try again.');
@@ -231,7 +238,9 @@ export class QardSettingsTab extends PluginSettingTab {
           x.setDisabled(!store);
           x.inputEl.addEventListener('change', () => {
             const key = x.getValue().trim();
-            if (!key || !store) return;
+            if (!key || !store) {
+              return;
+            }
             store.setSecret(id, key);
             x.setValue('');
             x.setPlaceholder('Saved. Enter a new key to replace it.');
@@ -313,14 +322,14 @@ export class QardSettingsTab extends PluginSettingTab {
               void save({ provider, model: defaultModel(provider, id) }, true);
             }),
         );
-        if (current.provider === 'anthropic')
+        if (current.provider === 'anthropic') {
           row.addDropdown((d) =>
             d
               .addOptions(API_MODELS)
               .setValue(API_MODELS[current.model] ? current.model : defaultModel('anthropic', id))
               .onChange((v) => void save({ ...current, model: v })),
           );
-        else
+        } else {
           row.addText((x) => {
             x.setValue(current.model).setPlaceholder(
               defaultModel(current.provider, id) || 'Default model',
@@ -335,10 +344,12 @@ export class QardSettingsTab extends PluginSettingTab {
             });
             x.inputEl.setAttribute('list', list.id);
             void this.modelChoices(current.provider).then((choices) => {
-              for (const c of choices)
+              for (const c of choices) {
                 list.createEl('option', { attr: { value: c.value, label: c.label } });
+              }
             });
           });
+        }
       },
     });
     return [
@@ -439,8 +450,11 @@ export class QardSettingsTab extends PluginSettingTab {
             x.inputEl.addEventListener('change', () => {
               try {
                 const folder = safeFolder(x.getValue());
-                if (folder) void save({ folder });
-                else throw new Error('Choose a folder for tests.');
+                if (folder) {
+                  void save({ folder });
+                } else {
+                  throw new Error('Choose a folder for tests.');
+                }
               } catch (e) {
                 new Notice((e as Error).message);
                 x.setValue(this.qard.reviews.getSnapshot().settings.tests.folder);
@@ -463,8 +477,11 @@ export class QardSettingsTab extends PluginSettingTab {
             x.inputEl.addEventListener('change', () => {
               try {
                 const folder = safeFolder(x.getValue());
-                if (folder) void this.patch((s) => ({ ...s, learn: { folder } }));
-                else throw new Error('Choose a folder.');
+                if (folder) {
+                  void this.patch((s) => ({ ...s, learn: { folder } }));
+                } else {
+                  throw new Error('Choose a folder.');
+                }
               } catch (e) {
                 new Notice((e as Error).message);
                 x.setValue(this.qard.reviews.getSnapshot().settings.learn.folder);
@@ -496,7 +513,9 @@ export class QardSettingsTab extends PluginSettingTab {
       new Setting(this.containerEl).setName(group.heading).setHeading();
       for (const definition of group.items) {
         const row = new Setting(this.containerEl).setName(definition.name);
-        if (definition.desc) row.setDesc(definition.desc);
+        if (definition.desc) {
+          row.setDesc(definition.desc);
+        }
         definition.render(row);
       }
     }

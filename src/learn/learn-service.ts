@@ -1,7 +1,24 @@
+import { formatLessonNote } from './lesson-note';
+import { insertUnderHeading } from './note-edits';
+import { summarise, scoreQuestion } from './learning-evidence';
+import type {
+  CourseJobRecord,
+  LearnSnapshot,
+  CourseUpdate,
+  CourseProposal,
+  LearnJobKind,
+  CardLinks,
+  LearnStorage,
+} from './learn-contracts';
 import type { SourceSnapshot } from '../cards/source-sync-types';
 import type { QardSettings } from '../settings/settings';
-import { tidyMermaid } from './mermaid';
-import { CANCELLED, runValidated, type AgentRole, type AgentRunner } from '../agents/runner';
+import {
+  CANCELLED,
+  guardRunner,
+  runValidated,
+  type AgentRole,
+  type AgentRunner,
+} from '../agents/runner';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import {
   markChoice,
@@ -9,7 +26,6 @@ import {
   questions as testQuestions,
   type AnswerState,
   type Attempt,
-  type Confidence,
   type PracticeTest,
   type Question,
   type QuestionMark,
@@ -71,7 +87,6 @@ import {
   stepPrompt,
   tutorMarkPrompt,
 } from './learn-prompts';
-import type { CardLink } from '../review/review-store';
 import type {
   CheckRecord,
   Lesson,
@@ -80,78 +95,6 @@ import type {
   Today,
   TodayItem,
 } from './learn-types';
-
-/** Vault access for learning files; the Obsidian adapter is vault-learn-storage.ts. */
-export interface LearnStorage {
-  read(path: string): Promise<string | null>;
-  write(path: string, text: string): Promise<void>;
-  /** Atomic read-modify-write of an existing note. */
-  process(path: string, fn: (text: string) => string): Promise<void>;
-  exists(path: string): boolean;
-  /** Files with this extension under a folder, recursively. */
-  files(folder: string, extension: string): string[];
-  /** Notes whose frontmatter has qard-mastery. */
-  masteryFiles(): string[];
-  modified(path: string): number | undefined;
-  /** Resolves a wikilink target to a vault path. */
-  resolve(link: string, from: string): string | undefined;
-  /** Moves one selected Qard learning file to Obsidian's configured trash. */
-  remove(path: string): Promise<void>;
-}
-export interface CardLinks {
-  get(cardId: string): CardLink | undefined;
-  set(cardId: string, link: CardLink): Promise<void>;
-}
-export type LearnJobKind =
-  | 'map-course'
-  | 'check-write'
-  | 'check-mark'
-  | 'probe'
-  | 'map'
-  | 'revise'
-  | 'steps'
-  | 'tutor'
-  | 'ask'
-  | 'close';
-export interface LearnJob {
-  kind: LearnJobKind;
-  id: string;
-  startedAt?: number;
-  error?: string;
-}
-export interface CourseProposal {
-  folder: string;
-  course: string;
-  objectives: Objective[];
-}
-export interface CourseUpdate {
-  mastery: string;
-  course: string;
-  notes: string[];
-  added: Objective[];
-  extended: {
-    id: string;
-    title: string;
-    notes: string[];
-    needs: string[];
-    group?: string;
-    label?: string;
-  }[];
-  outdated: { id: string; title: string; reason: string }[];
-}
-export interface LearnSnapshot {
-  revision: number;
-  jobs: Record<string, LearnJob>;
-}
-/** A course mapping or update in flight or failed, kept on disk so a reload restarts it and failures stay visible. */
-export interface CourseJobRecord {
-  kind: 'map' | 'update';
-  target: string;
-  request: string;
-  status: 'running' | 'failed';
-  startedAt: number;
-  error?: string;
-}
 
 const LESSONS_PER_DAY = 3;
 /** Lesson steps are written this many at a time, so the whole lesson is ready soon after the plan. */
@@ -167,61 +110,6 @@ const safeName = (text: string) =>
 /** Identifies a plan, so steps written for an older version of it are not reused. */
 const planKey = (map: { title: string; steps: { title: string }[] }) =>
   JSON.stringify([map.title, map.steps.map((s) => s.title)]);
-/** Scores are recomputed from the awarded rubric points, and extra fields (the tutor's reply) are dropped. */
-const scoreQuestion = (q: Question, m: QuestionMark): QuestionMark => ({
-  awarded: m.awarded,
-  annotations: m.annotations,
-  mistake: m.mistake,
-  feedback: m.feedback,
-  score: Math.min(
-    q.marks,
-    q.rubric.reduce((n, r, i) => n + (m.awarded[i] ? r.marks : 0), 0),
-  ),
-});
-
-/**
- * Sums a set of marked questions into one piece of evidence. A sure answer that was wrong (scored nothing,
- * or the marker called it a misconception) counts as sure, which makes a misconception; a sure but merely
- * incomplete answer does not. A pass that relied on a guess counts as a guess; all "I don't know" is unknown.
- */
-export function summarise(items: { q: Question; answer?: AnswerState; mark?: QuestionMark }[]): {
-  score: number;
-  marks: number;
-  confidence?: Confidence | 'unknown';
-} {
-  const score = items.reduce((n, i) => n + (i.mark?.score ?? 0), 0),
-    marks = items.reduce((n, i) => n + i.q.marks, 0);
-  const pass = marks > 0 && score / marks >= PASS;
-  if (items.length && items.every((i) => i.answer?.unknown))
-    return { score, marks, confidence: 'unknown' };
-  if (
-    !pass &&
-    items.some(
-      (i) =>
-        i.answer?.confidence === 'sure' &&
-        ((i.mark?.score ?? 0) === 0 || i.mark?.mistake === 'misconception'),
-    )
-  )
-    return { score, marks, confidence: 'sure' };
-  if (!pass)
-    return {
-      score,
-      marks,
-      confidence: items.some((i) => i.answer?.confidence === 'guess') ? 'guess' : 'unsure',
-    };
-  if (pass && items.some((i) => i.answer?.confidence === 'guess'))
-    return { score, marks, confidence: 'guess' };
-  const confidences = items.map((i) => i.answer?.confidence);
-  return {
-    score,
-    marks,
-    confidence: confidences.every((c) => c === 'sure')
-      ? 'sure'
-      : confidences.includes('unsure')
-        ? 'unsure'
-        : undefined,
-  };
-}
 
 export class LearnService {
   private listeners = new Set<() => void>();
@@ -282,9 +170,13 @@ export class LearnService {
     id: string,
     work: (signal: AbortSignal) => Promise<T>,
   ): Promise<T | undefined> {
-    if (this.isRemoved(target)) return undefined;
+    if (this.isRemoved(target)) {
+      return undefined;
+    }
     const k = key(target, kind, id);
-    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) return undefined;
+    if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) {
+      return undefined;
+    }
     const startedAt = this.now(),
       controller = new AbortController();
     this.controllers.set(k, controller);
@@ -300,11 +192,13 @@ export class LearnService {
       const result = await Promise.race([running, cancelled]);
       const jobs = { ...this.snapshot.jobs };
       delete jobs[k];
-      if (!this.disposed && this.controllers.get(k) === controller) this.publish(jobs);
+      if (!this.disposed && this.controllers.get(k) === controller) {
+        this.publish(jobs);
+      }
       this.timing(kind, this.now() - startedAt);
       return result;
     } catch (error) {
-      if (!this.disposed && this.controllers.get(k) === controller)
+      if (!this.disposed && this.controllers.get(k) === controller) {
         this.publish({
           ...this.snapshot.jobs,
           [k]: {
@@ -316,26 +210,20 @@ export class LearnService {
               : (error as Error).message || 'Something went wrong.',
           },
         });
+      }
       return undefined;
     } finally {
-      if (this.controllers.get(k) === controller) this.controllers.delete(k);
+      if (this.controllers.get(k) === controller) {
+        this.controllers.delete(k);
+      }
     }
   }
   private isRemoved(target: string) {
     return [...this.removed].some((p) => target === p || target.startsWith(p + '#'));
   }
   /** Even providers that ignore abort cannot return a late reply into deleted material. */
-  private activeRunner(signal: AbortSignal, role: AgentRole): AgentRunner {
-    const runner = this.runner(role);
-    return {
-      name: runner.name,
-      run: async (task) => {
-        if (signal.aborted) throw new Error(CANCELLED);
-        const reply = await runner.run(task);
-        if (signal.aborted) throw new Error(CANCELLED);
-        return reply;
-      },
-    };
+  private activeRunner(role: AgentRole, signal: AbortSignal): AgentRunner {
+    return guardRunner(this.runner(role), signal);
   }
   private stopTargets(targets: string[]) {
     const jobs = { ...this.snapshot.jobs };
@@ -361,12 +249,16 @@ export class LearnService {
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i]!;
       try {
-        if (this.storage.exists(path)) await this.storage.remove(path);
+        if (this.storage.exists(path)) {
+          await this.storage.remove(path);
+        }
       } catch (e) {
         for (const p of paths.slice(i)) {
           this.removed.delete(p);
           const current = this.checks.get(p) ?? this.lessons.get(p);
-          if (current) await this.save(p, current).catch(() => {});
+          if (current) {
+            await this.save(p, current).catch(() => {});
+          }
         }
         this.publish();
         throw e;
@@ -391,8 +283,9 @@ export class LearnService {
       !path.startsWith(root) ||
       !path.endsWith('.json') ||
       path.split(/[\\/]/).some((p) => p === '..' || p.startsWith('.'))
-    )
+    ) {
       throw new Error('Choose a Qard learning item.');
+    }
   }
   async removeLesson(path: string) {
     this.ownFile(path, 'Lessons');
@@ -400,7 +293,9 @@ export class LearnService {
     const note = path.replace(/\.json$/, '.md'),
       text = await this.storage.read(note);
     const paths = [path];
-    if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) paths.push(note);
+    if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) {
+      paths.push(note);
+    }
     await this.removePaths(paths);
   }
   async removeCheck(path: string) {
@@ -411,7 +306,9 @@ export class LearnService {
   }
   /** Trash only the mastery note and generated learning records; never the course's source folder. */
   async removeCourse(path: string) {
-    if (!this.storage.masteryFiles().includes(path)) throw new Error('Choose a Qard mastery file.');
+    if (!this.storage.masteryFiles().includes(path)) {
+      throw new Error('Choose a Qard mastery file.');
+    }
     await this.course(path);
     this.removed.add(path);
     this.stopTargets([path]);
@@ -424,7 +321,9 @@ export class LearnService {
       for (const l of lessons) {
         const note = l.path.replace(/\.json$/, '.md'),
           text = await this.storage.read(note);
-        if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) paths.push(note);
+        if (text && /^---\r?\n[\s\S]*?qard-lesson: true\r?\n/.test(text)) {
+          paths.push(note);
+        }
       }
       paths.push(this.proposalFile('update', path), path);
       await this.removePaths(paths);
@@ -453,13 +352,17 @@ export class LearnService {
     const next = previous
       .catch(() => {})
       .then(() => {
-        if (!this.isRemoved(path)) return this.storage.write(path, text);
+        if (!this.isRemoved(path)) {
+          return this.storage.write(path, text);
+        }
       });
     this.writes.set(path, next);
     return next;
   }
   private save(path: string, value: unknown) {
-    if (this.isRemoved(path)) return Promise.resolve();
+    if (this.isRemoved(path)) {
+      return Promise.resolve();
+    }
     return this.writeText(path, JSON.stringify(value, null, 2) + '\n');
   }
   private later(path: string, value: () => unknown) {
@@ -478,15 +381,21 @@ export class LearnService {
     const result: Mastery[] = [];
     for (const path of this.storage.masteryFiles().filter((p) => !this.isRemoved(p))) {
       const text = await this.storage.read(path);
-      if (text !== null) result.push(parseMastery(path, text));
+      if (text !== null) {
+        result.push(parseMastery(path, text));
+      }
     }
     return result.sort((a, b) => a.course.localeCompare(b.course));
   }
   async course(path: string): Promise<Mastery> {
-    if (this.isRemoved(path)) throw new Error('This course was deleted.');
+    if (this.isRemoved(path)) {
+      throw new Error('This course was deleted.');
+    }
     void this.loadProposals();
     const text = await this.storage.read(path);
-    if (text === null) throw new Error('This mastery file no longer exists.');
+    if (text === null) {
+      throw new Error('This mastery file no longer exists.');
+    }
     return parseMastery(path, text);
   }
   /** The course whose folder holds most of these notes. */
@@ -523,15 +432,18 @@ export class LearnService {
             | CourseJobRecord;
           if ('status' in value) {
             // Interrupted by a reload: start it again. Failed: keep it visible under Learn until retried or dismissed.
-            if (value.status === 'running')
+            if (value.status === 'running') {
               void (value.kind === 'map'
                 ? this.mapCourse(value.target, value.request)
                 : this.updateCourse(value.target, value.request));
-            else this.failures.set(`${value.kind}:${value.target}`, value);
-          } else if (value.kind === 'map' && !this.proposals.has(value.folder))
+            } else {
+              this.failures.set(`${value.kind}:${value.target}`, value);
+            }
+          } else if (value.kind === 'map' && !this.proposals.has(value.folder)) {
             this.proposals.set(value.folder, value);
-          else if (value.kind === 'update' && !this.updates.has(value.mastery))
+          } else if (value.kind === 'update' && !this.updates.has(value.mastery)) {
             this.updates.set(value.mastery, value);
+          }
         } catch {
           /* a broken file is skipped */
         }
@@ -576,7 +488,9 @@ export class LearnService {
     try {
       return await work();
     } catch (error) {
-      if (signal.aborted) throw error;
+      if (signal.aborted) {
+        throw error;
+      }
       const failed = record('failed', (error as Error).message || 'Something went wrong.');
       this.failures.set(`${kind}:${target}`, failed);
       await this.writeText(file, JSON.stringify(failed, null, 2) + '\n').catch(() => {});
@@ -587,7 +501,9 @@ export class LearnService {
     this.failures.delete(`${kind}:${target}`);
     this.publish();
     const file = this.proposalFile(kind, target);
-    if (this.storage.exists(file)) await this.storage.remove(file);
+    if (this.storage.exists(file)) {
+      await this.storage.remove(file);
+    }
   }
   /**
    * After Obsidian or Qard starts: restart course jobs a reload interrupted, and finish today's lessons (their steps
@@ -599,14 +515,18 @@ export class LearnService {
       .files(`${this.root()}/Lessons`, 'json')
       .filter((p) => !this.isRemoved(p))) {
       const l = await this.loadLesson(path).catch(() => undefined);
-      if (!l || this.now() - l.createdAt > 86_400_000) continue;
-      if (l.finishedAt && !l.close) void this.close(path);
-      else if (
+      if (!l || this.now() - l.createdAt > 86_400_000) {
+        continue;
+      }
+      if (l.finishedAt && !l.close) {
+        void this.close(path);
+      } else if (
         !l.finishedAt &&
         l.map &&
         (l.steps.length !== l.map.steps.length || l.steps.some((x) => !x))
-      )
+      ) {
         void this.prepareSteps(path);
+      }
     }
   }
   /** Turns the Writer's objectives into rows: clean unique ids, prerequisites remapped to them, no cycles. */
@@ -615,7 +535,9 @@ export class LearnService {
       day = this.today();
     const rows = replies.map((o) => {
       let id = slugId(o.id || o.title);
-      while (taken.has(id)) id += '-2';
+      while (taken.has(id)) {
+        id += '-2';
+      }
       taken.add(id);
       renamed.set(o.id, id);
       const notes = o.notes.map((n) => n.replace(/\.md$/, '').split('/').pop()!).filter(Boolean);
@@ -651,7 +573,7 @@ export class LearnService {
       this.courseJob('map', clean, request, signal, async () => {
         const notes = this.storage.files(clean, 'md');
         const result = await runValidated(
-          this.activeRunner(signal, 'writer'),
+          this.activeRunner('writer', signal),
           {
             signal,
             prompt: mapCoursePrompt(clean, notes, request, await this.profile()),
@@ -680,10 +602,13 @@ export class LearnService {
   }
   async acceptCourse(folder: string, keep: string[]): Promise<string> {
     const proposal = this.proposals.get(folder);
-    if (!proposal) throw new Error('There is no proposal for this folder.');
+    if (!proposal) {
+      throw new Error('There is no proposal for this folder.');
+    }
     const path = `${folder ? folder + '/' : ''}${safeName(proposal.course)} Mastery.md`;
-    if (this.storage.exists(path))
+    if (this.storage.exists(path)) {
       throw new Error(`${path} already exists. Open it instead, or delete it first.`);
+    }
     const kept = proposal.objectives
       .filter((o) => keep.includes(o.id))
       .map((o) => ({ ...o, needs: o.needs.filter((n) => keep.includes(n)) }));
@@ -696,7 +621,9 @@ export class LearnService {
     this.proposals.delete(folder);
     this.publish();
     const file = this.proposalFile('map', folder);
-    if (this.storage.exists(file)) await this.storage.remove(file);
+    if (this.storage.exists(file)) {
+      await this.storage.remove(file);
+    }
   }
 
   // ---- a growing course ---------------------------------------------
@@ -708,7 +635,9 @@ export class LearnService {
     const since = m.mapped
       ? Date.parse(m.mapped.length === 10 ? `${m.mapped}T23:59` : m.mapped)
       : NaN;
-    if (Number.isNaN(since)) return [];
+    if (Number.isNaN(since)) {
+      return [];
+    }
     const root = this.root() + '/';
     return this.storage
       .files(this.folderOf(m.path), 'md')
@@ -722,7 +651,9 @@ export class LearnService {
   }
   /** The writer proposes additions from new or changed notes. Existing rows are never renamed or rewritten. */
   updateCourse(mastery: string, request = '') {
-    if (!this.isRemoved(mastery)) this.removed.delete(this.proposalFile('update', mastery));
+    if (!this.isRemoved(mastery)) {
+      this.removed.delete(this.proposalFile('update', mastery));
+    }
     return this.track(mastery, 'map-course', '', (signal) =>
       this.courseJob('update', mastery, request, signal, async () => {
         const m = await this.course(mastery),
@@ -731,7 +662,7 @@ export class LearnService {
           ? changed
           : this.storage.files(this.folderOf(mastery), 'md').filter((p) => p !== mastery);
         const result = await runValidated(
-          this.activeRunner(signal, 'writer'),
+          this.activeRunner('writer', signal),
           {
             signal,
             prompt: updateCoursePrompt(m, notes, request),
@@ -787,7 +718,9 @@ export class LearnService {
     choice: { added: string[]; extended: string[]; remove: string[] },
   ) {
     const update = this.updates.get(mastery);
-    if (!update) throw new Error('There is no update to apply.');
+    if (!update) {
+      throw new Error('There is no update to apply.');
+    }
     const added = update.added.filter((o) => choice.added.includes(o.id)),
       extended = new Map(
         update.extended.filter((e) => choice.extended.includes(e.id)).map((e) => [e.id, e]),
@@ -798,7 +731,9 @@ export class LearnService {
         .filter((o) => !choice.remove.includes(o.id))
         .map((o) => {
           const e = extended.get(o.id);
-          if (!e) return o;
+          if (!e) {
+            return o;
+          }
           const notes = [...o.notes, ...e.notes];
           return {
             ...o,
@@ -821,7 +756,9 @@ export class LearnService {
     this.updates.delete(mastery);
     this.publish();
     const file = this.proposalFile('update', mastery);
-    if (this.storage.exists(file)) await this.storage.remove(file);
+    if (this.storage.exists(file)) {
+      await this.storage.remove(file);
+    }
   }
 
   // ---- evidence ------------------------------------------------------
@@ -831,12 +768,16 @@ export class LearnService {
     objective: string,
     evidence: Evidence,
   ): Promise<Objective | undefined> {
-    if (this.isRemoved(mastery) || !this.storage.exists(mastery)) return undefined;
+    if (this.isRemoved(mastery) || !this.storage.exists(mastery)) {
+      return undefined;
+    }
     let updated: Objective | undefined;
     await this.storage.process(mastery, (text) => {
       const m = parseMastery(mastery, text),
         o = m.objectives.find((x) => x.id === objective);
-      if (!o) return text;
+      if (!o) {
+        return text;
+      }
       updated = applyEvidence(o, evidence);
       return writeObjectives(
         text,
@@ -849,8 +790,9 @@ export class LearnService {
       !NEEDS_LESSON.includes(updated.state) &&
       updated.due &&
       updated.due <= addDays(this.today(), 14)
-    )
+    ) {
       void this.ensureCheck(mastery, objective);
+    }
     return updated;
   }
   async setState(mastery: string, objective: string, state: MasteryState, due?: string) {
@@ -865,29 +807,36 @@ export class LearnService {
   }
   /** Test questions tagged with objectives feed the mastery file once the test is marked. */
   async recordTest(test: PracticeTest, attempt: Attempt) {
-    if (!test.mastery) return;
+    if (!test.mastery) {
+      return;
+    }
     const byObjective = new Map<
       string,
       { q: Question; answer?: AnswerState; mark?: QuestionMark }[]
     >();
-    for (const q of testQuestions(test))
-      if (q.objective && attempt.marks[q.id])
+    for (const q of testQuestions(test)) {
+      if (q.objective && attempt.marks[q.id]) {
         byObjective.set(q.objective, [
           ...(byObjective.get(q.objective) ?? []),
           { q, answer: attempt.answers[q.id], mark: attempt.marks[q.id] },
         ]);
+      }
+    }
     const day = this.today();
-    for (const [objective, items] of byObjective)
+    for (const [objective, items] of byObjective) {
       await this.record(test.mastery, objective, {
         kind: 'test',
         day,
         label: items.map((i) => i.q.id).join('+'),
         ...summarise(items),
       });
+    }
   }
   async cardLapse(cardId: string) {
     const link = this.links.get(cardId);
-    if (!link) return;
+    if (!link) {
+      return;
+    }
     const lapses = link.lapses + 1;
     if (lapses >= 2) {
       await this.links.set(cardId, { ...link, lapses: 0 });
@@ -896,7 +845,9 @@ export class LearnService {
         day: this.today(),
         label: 'lapsed twice',
       });
-    } else await this.links.set(cardId, { ...link, lapses });
+    } else {
+      await this.links.set(cardId, { ...link, lapses });
+    }
   }
   linkCard(cardId: string, mastery: string, objective: string) {
     return this.links.set(cardId, { mastery, objective, lapses: 0 });
@@ -907,25 +858,32 @@ export class LearnService {
     const paths = this.storage
       .files(`${this.root()}/Checks`, 'json')
       .filter((p) => !this.isRemoved(p));
-    for (const path of paths)
+    for (const path of paths) {
       if (!this.checks.has(path)) {
         try {
           const text = await this.storage.read(path);
-          if (text && !this.isRemoved(path)) this.checks.set(path, JSON.parse(text) as CheckRecord);
+          if (text && !this.isRemoved(path)) {
+            this.checks.set(path, JSON.parse(text) as CheckRecord);
+          }
         } catch {
           /* a broken file is skipped */
         }
       }
+    }
     return paths.map((p) => this.checks.get(p)).filter((c): c is CheckRecord => !!c);
   }
   checkAt(path: string) {
     return this.checks.get(path);
   }
   async loadCheck(path: string) {
-    if (this.isRemoved(path)) throw new Error('This check was deleted.');
+    if (this.isRemoved(path)) {
+      throw new Error('This check was deleted.');
+    }
     if (!this.checks.has(path)) {
       const text = await this.storage.read(path);
-      if (!text || this.isRemoved(path)) throw new Error('This check no longer exists.');
+      if (!text || this.isRemoved(path)) {
+        throw new Error('This check no longer exists.');
+      }
       this.checks.set(path, JSON.parse(text) as CheckRecord);
       this.publish();
     }
@@ -942,7 +900,9 @@ export class LearnService {
   }
   /** A check written before its notes changed is rewritten, as long as nothing has been answered. */
   private stale(record: CheckRecord, o: Objective) {
-    if (Object.keys(record.answers).length) return false;
+    if (Object.keys(record.answers).length) {
+      return false;
+    }
     return o.notes.some((n) => {
       const path = this.storage.resolve(n, record.mastery);
       const t = path && this.storage.modified(path);
@@ -954,15 +914,19 @@ export class LearnService {
     return this.track(`${mastery}#${objective}`, 'check-write', '', async (signal) => {
       const m = await this.course(mastery),
         o = m.objectives.find((x) => x.id === objective);
-      if (!o) throw new Error(`No objective "${objective}" in ${m.course}.`);
+      if (!o) {
+        throw new Error(`No objective "${objective}" in ${m.course}.`);
+      }
       const existing = await this.pendingCheck(mastery, objective);
-      if (existing && !this.stale(this.checks.get(existing)!, o)) return existing;
+      if (existing && !this.stale(this.checks.get(existing)!, o)) {
+        return existing;
+      }
       const goal = goalFor(o.state),
         previous = (await this.loadChecks()).filter(
           (c) => c.mastery === mastery && c.objective === objective && c.finishedAt,
         );
       const written = await runValidated(
-        this.activeRunner(signal, 'writer'),
+        this.activeRunner('writer', signal),
         { signal, prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema },
         readQuestions,
       );
@@ -990,7 +954,9 @@ export class LearnService {
   }
   answerCheck(path: string, id: string, patch: Partial<AnswerState>) {
     const record = this.checks.get(path);
-    if (!record || record.finishedAt) return;
+    if (!record || record.finishedAt) {
+      return;
+    }
     const next = {
       ...record,
       answers: { ...record.answers, [id]: { ...record.answers[id], ...patch } },
@@ -1004,12 +970,17 @@ export class LearnService {
     return this.track(path, 'check-mark', '', async (signal) => {
       window.clearTimeout(this.timers.get(path));
       let record = this.checks.get(path);
-      if (!record || record.finishedAt) return;
+      if (!record || record.finishedAt) {
+        return;
+      }
       const marks: Record<string, QuestionMark> = {};
       for (const q of record.questions) {
         const a = record.answers[q.id];
-        if (a?.unknown) marks[q.id] = markUnknown(q);
-        else if (q.type === 'mcq') marks[q.id] = markChoice(q, a);
+        if (a?.unknown) {
+          marks[q.id] = markUnknown(q);
+        } else if (q.type === 'mcq') {
+          marks[q.id] = markChoice(q, a);
+        }
       }
       const typed = record.questions.filter((q) => !marks[q.id]);
       record = { ...record, marks, status: typed.length ? 'marking' : 'marked' };
@@ -1018,7 +989,7 @@ export class LearnService {
       try {
         if (typed.length) {
           const result = await runValidated(
-            this.activeRunner(signal, 'tutor'),
+            this.activeRunner('tutor', signal),
             {
               signal,
               prompt: markCheckPrompt(
@@ -1035,10 +1006,14 @@ export class LearnService {
                 typed.map((q) => ({ id: q.id, rubric: q.rubric.length })),
               ),
           );
-          for (const q of typed) marks[q.id] = scoreQuestion(q, result[q.id]!);
+          for (const q of typed) {
+            marks[q.id] = scoreQuestion(q, result[q.id]!);
+          }
         }
       } catch (error) {
-        if (signal.aborted) throw error;
+        if (signal.aborted) {
+          throw error;
+        }
         record = { ...record, status: 'error', error: (error as Error).message };
         this.checks.set(path, record);
         await this.save(path, record);
@@ -1067,9 +1042,13 @@ export class LearnService {
       ready = new Set<string>();
     await this.loadChecks();
     for (const m of await this.courses()) {
-      for (const id of readyToLearn(m)) ready.add(`${m.path}#${id}`);
+      for (const id of readyToLearn(m)) {
+        ready.add(`${m.path}#${id}`);
+      }
       for (const o of m.objectives) {
-        if (!isDue(o, day)) continue;
+        if (!isDue(o, day)) {
+          continue;
+        }
         const item: TodayItem = {
           mastery: m.path,
           course: m.course,
@@ -1078,8 +1057,11 @@ export class LearnService {
           state: o.state,
           due: o.due!,
         };
-        if (NEEDS_LESSON.includes(o.state)) lessons.push(item);
-        else checks.push({ ...item, check: await this.pendingCheck(m.path, o.id) });
+        if (NEEDS_LESSON.includes(o.state)) {
+          lessons.push(item);
+        } else {
+          checks.push({ ...item, check: await this.pendingCheck(m.path, o.id) });
+        }
       }
     }
     // Suggest only a few lessons: misconceptions first, then objectives whose prerequisites are already taught.
@@ -1095,7 +1077,11 @@ export class LearnService {
   }
   /** Writes checks that are due but missing (for example after a hand edit). */
   prepare(today: Today) {
-    for (const c of today.checks) if (!c.check) void this.ensureCheck(c.mastery, c.objective);
+    for (const c of today.checks) {
+      if (!c.check) {
+        void this.ensureCheck(c.mastery, c.objective);
+      }
+    }
   }
 
   // ---- lessons -------------------------------------------------------
@@ -1103,10 +1089,14 @@ export class LearnService {
     return this.lessons.get(path);
   }
   async loadLesson(path: string) {
-    if (this.isRemoved(path)) throw new Error('This lesson was deleted.');
+    if (this.isRemoved(path)) {
+      throw new Error('This lesson was deleted.');
+    }
     if (!this.lessons.has(path)) {
       const text = await this.storage.read(path);
-      if (!text || this.isRemoved(path)) throw new Error('This lesson no longer exists.');
+      if (!text || this.isRemoved(path)) {
+        throw new Error('This lesson no longer exists.');
+      }
       this.lessons.set(path, JSON.parse(text) as Lesson);
       this.publish();
     }
@@ -1115,27 +1105,37 @@ export class LearnService {
   /** What a lesson builds on, for warming up while it is prepared: its notes and its objective's prerequisites (and their notes). */
   async warmupFor(path: string): Promise<{ files: string[]; objectives: string[] }> {
     const lesson = this.lessons.get(path);
-    if (!lesson) return { files: [], objectives: [] };
+    if (!lesson) {
+      return { files: [], objectives: [] };
+    }
     const m = lesson.mastery ? await this.course(lesson.mastery).catch(() => undefined) : undefined,
       o = m?.objectives.find((x) => x.id === lesson.objective);
     const needs = o?.needs ?? [],
       files = new Set(lesson.notes);
-    for (const id of needs)
+    for (const id of needs) {
       for (const n of m!.objectives.find((x) => x.id === id)?.notes ?? []) {
         const p = this.storage.resolve(n, m!.path);
-        if (p) files.add(p);
+        if (p) {
+          files.add(p);
+        }
       }
+    }
     return { files: [...files], objectives: needs };
   }
   /** Opens a lesson and picks up any work a reload interrupted: the probe, the plan, unwritten steps or the wrap-up. */
   async openLesson(path: string) {
     const l = await this.loadLesson(path);
     if (l.finishedAt) {
-      if (!l.close) void this.close(path);
-    } else if (!l.probe) void this.probe(path);
-    else if (l.probe.submitted && !l.map) void this.submitProbe(path);
-    else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some((s) => !s)))
+      if (!l.close) {
+        void this.close(path);
+      }
+    } else if (!l.probe) {
+      void this.probe(path);
+    } else if (l.probe.submitted && !l.map) {
+      void this.submitProbe(path);
+    } else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some((s) => !s))) {
       await this.prepareSteps(path);
+    }
     return l;
   }
   async listLessons(): Promise<LessonSummary[]> {
@@ -1161,8 +1161,9 @@ export class LearnService {
     return result.sort((a, b) => b.created - a.created);
   }
   private setLesson(path: string, lesson: Lesson, immediate = true) {
-    if (this.isRemoved(path) || (lesson.mastery && this.isRemoved(lesson.mastery)))
+    if (this.isRemoved(path) || (lesson.mastery && this.isRemoved(lesson.mastery))) {
       throw new Error('This lesson or course was deleted.');
+    }
     this.lessons.set(path, lesson);
     this.publish();
     if (immediate) {
@@ -1174,7 +1175,9 @@ export class LearnService {
   }
   private lesson(path: string) {
     const l = this.lessons.get(path);
-    if (!l) throw new Error('This lesson is not loaded.');
+    if (!l) {
+      throw new Error('This lesson is not loaded.');
+    }
     return l;
   }
   private async context(lesson: Lesson) {
@@ -1191,7 +1194,9 @@ export class LearnService {
     const parts: string[] = [];
     for (const path of notes.slice(0, 4)) {
       const text = await this.storage.read(path);
-      if (!text || budget <= 0) continue;
+      if (!text || budget <= 0) {
+        continue;
+      }
       const part = text.length > budget ? text.slice(0, budget) + '\n[Truncated.]' : text;
       parts.push(`<note path="${path}">\n${part}\n</note>`);
       budget -= part.length;
@@ -1206,13 +1211,16 @@ export class LearnService {
     objective?: string;
   }): Promise<string> {
     let { mastery, objective, notes } = input;
-    if (!mastery && notes.length) mastery = (await this.courseFor(notes))?.path;
+    if (!mastery && notes.length) {
+      mastery = (await this.courseFor(notes))?.path;
+    }
     const m = mastery ? await this.course(mastery) : undefined,
       o = m?.objectives.find((x) => x.id === objective);
-    if (o)
+    if (o) {
       notes = [
         ...new Set([...notes, ...o.notes.map((n) => this.storage.resolve(n, m!.path) ?? n)]),
       ];
+    }
     const sourceSnapshots = await this.captureSources?.(notes);
     const lesson: Lesson = {
       ...(sourceSnapshots ? { sourceSnapshots } : {}),
@@ -1230,7 +1238,9 @@ export class LearnService {
     const base = `${this.root()}/Lessons/${this.today()} ${safeName(input.topic)}`;
     let path = `${base}.json`,
       n = 2;
-    while (this.storage.exists(path) || this.lessons.has(path)) path = `${base} ${n++}.json`;
+    while (this.storage.exists(path) || this.lessons.has(path)) {
+      path = `${base} ${n++}.json`;
+    }
     this.removed.delete(path);
     this.removed.delete(path.replace(/\.json$/, '.md'));
     await this.setLesson(path, lesson);
@@ -1242,7 +1252,7 @@ export class LearnService {
       const lesson = this.lesson(path),
         { m, o, sources } = await this.context(lesson);
       const result = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: probePrompt(lesson, m, o, sources),
@@ -1257,12 +1267,16 @@ export class LearnService {
         objective: m?.objectives.some((x) => x.id === q.objective) ? q.objective : undefined,
       }));
       await this.setLesson(path, { ...this.lesson(path), probe: { questions, answers: {} } });
-      if (!questions.length) void this.submitProbe(path);
+      if (!questions.length) {
+        void this.submitProbe(path);
+      }
     });
   }
   answerProbe(path: string, id: string, patch: Partial<AnswerState>) {
     const lesson = this.lesson(path);
-    if (!lesson.probe || lesson.probe.submitted) return;
+    if (!lesson.probe || lesson.probe.submitted) {
+      return;
+    }
     void this.setLesson(
       path,
       {
@@ -1283,15 +1297,18 @@ export class LearnService {
       const marks: Record<string, QuestionMark> = {};
       for (const q of probe.questions) {
         const a = probe.answers[q.id];
-        if (a?.unknown) marks[q.id] = markUnknown(q);
-        else if (q.type === 'mcq') marks[q.id] = markChoice(q, a);
+        if (a?.unknown) {
+          marks[q.id] = markUnknown(q);
+        } else if (q.type === 'mcq') {
+          marks[q.id] = markChoice(q, a);
+        }
       }
       lesson = { ...lesson, probe: { ...probe, submitted: true, marks } };
       await this.setLesson(path, lesson);
       const { m, o, sources } = await this.context(lesson);
       const typed = probe.questions.filter((q) => !marks[q.id]);
       const result = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: probeMapPrompt(lesson, m, o, sources),
@@ -1325,21 +1342,23 @@ export class LearnService {
       // Probe answers on known objectives are evidence too.
       if (lesson.mastery) {
         const day = this.today();
-        for (const q of probe.questions)
-          if (q.objective)
+        for (const q of probe.questions) {
+          if (q.objective) {
             await this.record(lesson.mastery, q.objective, {
               kind: 'probe',
               day,
               label: q.id,
               ...summarise([{ q, answer: probe.answers[q.id], mark: marks[q.id] }]),
             });
+          }
+        }
       }
     });
   }
   reviseMap(path: string, change: string) {
     return this.track(path, 'revise', '', async (signal) => {
       const map = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: reviseMapPrompt(this.lesson(path), change),
@@ -1359,7 +1378,9 @@ export class LearnService {
    */
   private async prepareSteps(path: string) {
     const lesson = this.lesson(path);
-    if (!lesson.map) return;
+    if (!lesson.map) {
+      return;
+    }
     const plan = planKey(lesson.map);
     if (lesson.stepsFor !== plan || lesson.steps.length !== lesson.map.steps.length) {
       const count = lesson.map.steps.length;
@@ -1375,7 +1396,9 @@ export class LearnService {
   }
   async acceptMap(path: string) {
     const lesson = this.lesson(path);
-    if (!lesson.map) return;
+    if (!lesson.map) {
+      return;
+    }
     await this.setLesson(path, { ...lesson, accepted: true, current: 0 });
     await this.prepareSteps(path);
   }
@@ -1390,17 +1413,23 @@ export class LearnService {
         for (;;) {
           const lesson = this.lesson(path),
             plan = lesson.stepsFor;
-          if (!lesson.map || !plan || this.disposed) return;
+          if (!lesson.map || !plan || this.disposed) {
+            return;
+          }
           const index = lesson.steps.findIndex((s, i) => !s && !busy.has(`${plan}#${i}`));
-          if (index < 0) return;
+          if (index < 0) {
+            return;
+          }
           busy.add(`${plan}#${index}`);
           const step = await runValidated(
-            this.activeRunner(signal, 'writer'),
+            this.activeRunner('writer', signal),
             { signal, prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema },
             readStep,
           );
           const latest = this.lesson(path);
-          if (latest.stepsFor !== plan) continue;
+          if (latest.stepsFor !== plan) {
+            continue;
+          }
           await this.setLesson(path, {
             ...latest,
             steps: latest.steps.map((s, i) =>
@@ -1428,7 +1457,9 @@ export class LearnService {
   answerStep(path: string, patch: Partial<AnswerState>) {
     const lesson = this.lesson(path),
       st = lesson.state[lesson.current];
-    if (!st || st.mark) return;
+    if (!st || st.mark) {
+      return;
+    }
     void this.patchStep(path, lesson.current, { answer: { ...st.answer, ...patch } }, false);
   }
   /** "I don't know" and right multiple-choice answers need no call; everything else goes to the tutor. */
@@ -1437,19 +1468,23 @@ export class LearnService {
       index = lesson.current,
       step = lesson.steps[index],
       st = lesson.state[index];
-    if (!step || !st) return Promise.resolve(undefined);
+    if (!step || !st) {
+      return Promise.resolve(undefined);
+    }
     return this.track(path, 'tutor', String(index), async (signal) => {
       const q = step.check,
         a = st.answer;
-      if (a?.unknown)
+      if (a?.unknown) {
         return this.patchStep(path, index, {
           mark: markUnknown(q),
           reply: 'No problem. Read the explanation, then look at the model answer.',
         });
-      if (q.type === 'mcq' && a?.choice === q.answer)
+      }
+      if (q.type === 'mcq' && a?.choice === q.answer) {
         return this.patchStep(path, index, { mark: markChoice(q, a), reply: 'Right.' });
+      }
       const result = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: tutorMarkPrompt(lesson, step, a),
@@ -1471,10 +1506,12 @@ export class LearnService {
       index = lesson.current,
       step = lesson.steps[index],
       st = lesson.state[index];
-    if (!step || !st?.mark || st.retry) return Promise.resolve(undefined);
+    if (!step || !st?.mark || st.retry) {
+      return Promise.resolve(undefined);
+    }
     return this.track(path, 'tutor', `${index}-retry`, async (signal) => {
       const result = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: tutorMarkPrompt(lesson, step, { ...st.answer, text, unknown: false }, st),
@@ -1496,7 +1533,7 @@ export class LearnService {
       const st = lesson.state[index],
         sources = await this.sources(lesson.notes);
       const { answer } = await runValidated(
-        this.activeRunner(signal, 'tutor'),
+        this.activeRunner('tutor', signal),
         {
           signal,
           prompt: askPrompt(
@@ -1513,14 +1550,16 @@ export class LearnService {
         readAnswer,
       );
       const latest = this.lesson(path).state[index];
-      if (latest)
+      if (latest) {
         await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
+      }
     });
   }
   async go(path: string, index: number) {
     const lesson = this.lesson(path);
-    if (index >= 0 && index < lesson.steps.length && lesson.steps[index])
+    if (index >= 0 && index < lesson.steps.length && lesson.steps[index]) {
       await this.setLesson(path, { ...lesson, current: index });
+    }
   }
   /** Records the lesson (at most "taught"), then the writer suggests cards and a note edit, and the next check is written. */
   async finishLesson(path: string) {
@@ -1547,7 +1586,7 @@ export class LearnService {
     return this.track(path, 'close', '', async (signal) => {
       const lesson = this.lesson(path);
       const result = await runValidated(
-        this.activeRunner(signal, 'writer'),
+        this.activeRunner('writer', signal),
         { signal, prompt: closePrompt(lesson), schema: closeSchema },
         readClose,
       );
@@ -1573,29 +1612,11 @@ export class LearnService {
     });
   }
   private async writeLessonNote(path: string, lesson: Lesson, summary: string) {
-    const notePath = path.replace(/\.json$/, '.md'),
-      day = isoDay(lesson.createdAt);
-    const steps = lesson.steps
-      .map((s, i) => {
-        if (!s) return '';
-        const st = lesson.state[i],
-          a = st?.answer;
-        const answer = a?.unknown
-          ? "_I didn't know._"
-          : s.check.type === 'mcq'
-            ? (s.check.options?.[a?.choice ?? -1] ?? '_No answer._')
-            : a?.text?.trim() || '_No answer._';
-        return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map((x) => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
-      })
-      .filter(Boolean)
-      .join('\n\n');
-    const mastery = lesson.mastery
-      ? ` · [[${lesson.mastery.replace(/\.md$/, '')}|${lesson.course ?? 'Mastery'}]]${lesson.objective ? ` · \`${lesson.objective}\`` : ''}`
-      : '';
-    const body = `---\nqard-lesson: true\n${lesson.objective ? `qard-objective: ${lesson.objective}\n` : ''}---\n\n# ${lesson.map?.title ?? lesson.topic}\n\n${day}${mastery}\n\n## Summary\n\n${summary.trim()}\n\n## Plan\n\n${lesson.map?.plan ?? ''}\n\n\`\`\`mermaid\n${tidyMermaid(lesson.map?.mermaid ?? '')}\n\`\`\`\n\n## Steps\n\n${steps}\n`;
-    await this.writeText(notePath, body);
-    return notePath;
+    const note = formatLessonNote(path, lesson, summary);
+    await this.writeText(note.path, note.text);
+    return note.path;
   }
+
   async lessonCard(
     path: string,
     index: number,
@@ -1603,24 +1624,34 @@ export class LearnService {
     cardId?: string,
   ) {
     const lesson = this.lesson(path);
-    if (!lesson.close) return;
+    if (!lesson.close) {
+      return;
+    }
     const cardState = { ...lesson.close.cardState };
-    if (state) cardState[index] = state;
-    else delete cardState[index];
+    if (state) {
+      cardState[index] = state;
+    } else {
+      delete cardState[index];
+    }
     await this.setLesson(path, { ...lesson, close: { ...lesson.close, cardState } });
-    if (cardId && lesson.mastery && lesson.objective)
+    if (cardId && lesson.mastery && lesson.objective) {
       await this.linkCard(cardId, lesson.mastery, lesson.objective);
+    }
   }
   /** Adds the suggested paragraph at the end of its heading's section, or the end of the note. */
   async noteEdit(path: string, accept: boolean) {
     const lesson = this.lesson(path),
       edit = lesson.close?.noteEdit;
-    if (!lesson.close || !edit) return;
+    if (!lesson.close || !edit) {
+      return;
+    }
     if (accept) {
       const target = this.storage.exists(edit.path)
         ? edit.path
         : this.storage.resolve(edit.path.replace(/\.md$/, ''), path);
-      if (!target) throw new Error(`Could not find ${edit.path}.`);
+      if (!target) {
+        throw new Error(`Could not find ${edit.path}.`);
+      }
       await this.storage.process(target, (text) =>
         insertUnderHeading(text, edit.heading, edit.text),
       );
@@ -1644,27 +1675,4 @@ export class LearnService {
     void this.flush();
     this.listeners.clear();
   }
-}
-
-export function insertUnderHeading(text: string, heading: string, addition: string): string {
-  const eol = text.includes('\r\n') ? '\r\n' : '\n',
-    lines = text.replace(/\s*$/, '').split(/\r?\n/),
-    block = addition.trim().split(/\r?\n/);
-  const wanted = heading
-    .trim()
-    .replace(/^#+\s*/, '')
-    .toLowerCase();
-  const at = wanted
-    ? lines.findIndex((l) => /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(l)?.[2]?.toLowerCase() === wanted)
-    : -1;
-  if (at < 0) return [...lines, '', ...block, ''].join(eol);
-  const level = /^#+/.exec(lines[at]!)![0].length;
-  let end = lines.findIndex((l, i) => i > at && (/^(#{1,6})\s/.exec(l)?.[1]?.length ?? 7) <= level);
-  if (end < 0) end = lines.length;
-  let insert = end;
-  while (insert > at + 1 && !lines[insert - 1]!.trim()) insert--;
-  const after = lines.slice(end);
-  return [...lines.slice(0, insert), '', ...block, '', ...after, ...(after.length ? [''] : [])]
-    .join(eol)
-    .replace(/(\r?\n)+$/, eol);
 }

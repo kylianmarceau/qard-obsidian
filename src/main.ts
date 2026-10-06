@@ -41,6 +41,14 @@ export default class QardPlugin extends Plugin {
       new Notice('Could not load review data. Reload the plugin before reviewing.');
       throw new Error('Unable to load Qard review metadata');
     }
+    this.initializeServices();
+    this.registerWorkspace();
+    this.registerCommands();
+    this.addSettingTab(new QardSettingsTab(this));
+    this.app.workspace.onLayoutReady(() => this.startBackgroundWork());
+  }
+
+  private initializeServices() {
     this.index = new VaultIndexer(this.app, this);
     this.writer = new CardWriter(this.app, this.index);
     const settings = () => this.reviews.getSnapshot().settings;
@@ -130,6 +138,9 @@ export default class QardPlugin extends Plugin {
       timing,
       captureSources,
     );
+  }
+
+  private registerWorkspace() {
     addIcon(
       'qard',
       '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>',
@@ -138,6 +149,9 @@ export default class QardPlugin extends Plugin {
     this.addRibbonIcon('qard', 'Open study workspace', () => {
       void this.open().catch((e) => new Notice(String(e)));
     });
+  }
+
+  private registerCommands() {
     this.addCommand({ id: 'open', name: 'Open study workspace', callback: () => this.open() });
     this.addCommand({
       id: 'new-practice-test',
@@ -171,8 +185,12 @@ export default class QardPlugin extends Plugin {
       name: 'Teach me this note',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== 'md') return false;
-        if (!checking) void this.teach(file);
+        if (!file || file.extension !== 'md') {
+          return false;
+        }
+        if (!checking) {
+          void this.teach(file);
+        }
         return true;
       },
     });
@@ -181,17 +199,21 @@ export default class QardPlugin extends Plugin {
       name: 'Study selected deck(s)',
       callback: () => this.openBuilder({ decks: [], topics: [], cards: [] }),
     });
-    for (const scope of ['deck', 'topic', 'note'] as const)
+    for (const scope of ['deck', 'topic', 'note'] as const) {
       this.addCommand({
         id: `study-this-${scope}`,
         name: `Study this ${scope}`,
         checkCallback: (checking) => {
           const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-          if (!view?.file) return false;
+          if (!view?.file) {
+            return false;
+          }
           const cards = this.index
             .getSnapshot()
             .cards.filter((c) => c.sourceFile === view.file!.path);
-          if (!cards.length) return false;
+          if (!cards.length) {
+            return false;
+          }
           if (!checking) {
             const line = view.editor?.getCursor().line ?? 0;
             const topic = topicAtLine(view.editor.getValue(), view.file.path, line);
@@ -206,12 +228,15 @@ export default class QardPlugin extends Plugin {
           return true;
         },
       });
+    }
     this.addCommand({
       id: 'create-card-from-selection',
       name: 'Create card from selection',
       editorCheckCallback: (checking, editor, view) => {
         const selection = editor.getSelection();
-        if (!view.file || !selection.trim()) return false;
+        if (!view.file || !selection.trim()) {
+          return false;
+        }
         if (!checking) {
           const file = view.file,
             source = editor.getValue(),
@@ -244,46 +269,53 @@ export default class QardPlugin extends Plugin {
       name: 'Import from Spaced Repetition',
       callback: () => this.openImport(),
     });
-    this.addSettingTab(new QardSettingsTab(this));
-    this.app.workspace.onLayoutReady(() => {
-      if (this.disposed) return;
-      let sourceTimer: number | undefined;
-      const scanSources = () => {
-        window.clearTimeout(sourceTimer);
-        sourceTimer = window.setTimeout(() => {
-          void this.sourceSync.refresh();
-        }, 350);
-      };
-      this.registerEvent(
-        this.app.vault.on('modify', (file) => {
-          if (file instanceof TFile && file.extension === 'md') scanSources();
-        }),
-      );
-      this.registerEvent(
-        this.app.vault.on('create', (file) => {
-          if (file instanceof TFile && file.extension === 'md') scanSources();
-        }),
-      );
-      this.registerEvent(this.app.vault.on('delete', () => scanSources()));
-      this.registerEvent(
-        this.app.vault.on('rename', (file, oldPath) => {
-          void this.sourceSync.rename(oldPath, file.path).catch(() => scanSources());
-        }),
-      );
-      const offSourceIndex = this.index.subscribe(scanSources);
-      this.register(() => {
-        window.clearTimeout(sourceTimer);
-        offSourceIndex();
-      });
-      void this.index
-        .start()
-        .then(() => this.sourceSync.refresh())
-        .catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
-      // Pick up background work that a reload of Obsidian or Qard interrupted.
-      void this.learn.resumeBackground().catch(() => {});
-      void this.tests.resume().catch(() => {});
-    });
   }
+
+  private startBackgroundWork() {
+    if (this.disposed) {
+      return;
+    }
+    let sourceTimer: number | undefined;
+    const scanSources = () => {
+      window.clearTimeout(sourceTimer);
+      sourceTimer = window.setTimeout(() => {
+        void this.sourceSync.refresh();
+      }, 350);
+    };
+    this.registerEvent(
+      this.app.vault.on('modify', (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          scanSources();
+        }
+      }),
+    );
+    this.registerEvent(
+      this.app.vault.on('create', (file) => {
+        if (file instanceof TFile && file.extension === 'md') {
+          scanSources();
+        }
+      }),
+    );
+    this.registerEvent(this.app.vault.on('delete', () => scanSources()));
+    this.registerEvent(
+      this.app.vault.on('rename', (file, oldPath) => {
+        void this.sourceSync.rename(oldPath, file.path).catch(() => scanSources());
+      }),
+    );
+    const offSourceIndex = this.index.subscribe(scanSources);
+    this.register(() => {
+      window.clearTimeout(sourceTimer);
+      offSourceIndex();
+    });
+    void this.index
+      .start()
+      .then(() => this.sourceSync.refresh())
+      .catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
+    // Pick up background work that a reload of Obsidian or Qard interrupted.
+    void this.learn.resumeBackground().catch(() => {});
+    void this.tests.resume().catch(() => {});
+  }
+
   async open() {
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
     if (!leaf) {
@@ -292,7 +324,9 @@ export default class QardPlugin extends Plugin {
     }
     await this.app.workspace.revealLeaf(leaf);
     this.app.workspace.setActiveLeaf(leaf, { focus: true });
-    if (!(leaf.view instanceof QardView)) throw new Error('Qard workspace could not be opened.');
+    if (!(leaf.view instanceof QardView)) {
+      throw new Error('Qard workspace could not be opened.');
+    }
     return leaf.view;
   }
   openImport() {
@@ -315,8 +349,9 @@ export default class QardPlugin extends Plugin {
   }
   async openSource(card: QardCard) {
     const file = this.app.vault.getAbstractFileByPath(card.sourceFile);
-    if (!(file instanceof TFile))
+    if (!(file instanceof TFile)) {
       throw new Error('Source note no longer exists. Reopen the card from the library.');
+    }
     const fresh =
       parseCards(await this.app.vault.read(file), file.path).cards.find((c) => c.id === card.id) ||
       card;
@@ -338,7 +373,9 @@ export default class QardPlugin extends Plugin {
     this.selectionModals.forEach((modal) => modal.close());
     this.selectionModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach((leaf) => {
-      if (leaf.view instanceof QardView) leaf.view.release();
+      if (leaf.view instanceof QardView) {
+        leaf.view.release();
+      }
     });
     this.sourceSync?.dispose();
     this.flashcards?.dispose();

@@ -7,7 +7,7 @@ import { NewTest } from '../src/components/tests/NewTest';
 import { CardIndex } from '../src/cards/card-index';
 import { ReviewStore } from '../src/review/review-store';
 import type { QardServices } from '../src/views/services';
-import type { TestNav } from '../src/components/tests/common';
+import type { TestNav } from '../src/views/navigation';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let host: HTMLElement, root: Root, services: QardServices, files: TFile[];
 const file = (path: string) =>

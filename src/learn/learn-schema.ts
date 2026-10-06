@@ -105,16 +105,21 @@ function questionErrors(list: Question[], where: string): string[] {
   const errors: string[] = [],
     ids = new Set<string>();
   for (const q of list) {
-    if (ids.has(q.id)) errors.push(`${where}: question id ${q.id} is used twice`);
+    if (ids.has(q.id)) {
+      errors.push(`${where}: question id ${q.id} is used twice`);
+    }
     ids.add(q.id);
-    if (!q.rubric.length) errors.push(`${q.id} has no rubric`);
-    else if (Math.abs(q.rubric.reduce((n, r) => n + r.marks, 0) - q.marks) > 1e-6)
+    if (!q.rubric.length) {
+      errors.push(`${q.id} has no rubric`);
+    } else if (Math.abs(q.rubric.reduce((n, r) => n + r.marks, 0) - q.marks) > 1e-6) {
       errors.push(`${q.id}: rubric marks must add up to ${q.marks}`);
+    }
     if (
       q.type === 'mcq' &&
       (!q.options || q.options.length < 2 || q.answer === undefined || !q.options[q.answer])
-    )
+    ) {
       errors.push(`${q.id}: multiple choice needs options and a valid answer index`);
+    }
   }
   return errors;
 }

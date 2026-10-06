@@ -18,14 +18,23 @@ export function tidyMermaid(source: string): string {
       line
         .split(LINK)
         .map((part, i) => {
-          if (i % 2) return part;
-          const m = NODE.exec(part);
-          if (!m || CLOSE[m[2]!] !== m[4]) return part;
-          const label = m[3]!;
-          if (label.startsWith('"') && label.endsWith('"')) return part;
-          if (m[2] !== '{' && SHAPED.test(label) && !/[[\](){}]/.test(label.slice(1, -1)))
+          if (i % 2) {
             return part;
-          if (!/[[\](){}|"<>#;]/.test(label)) return part;
+          }
+          const m = NODE.exec(part);
+          if (!m || CLOSE[m[2]!] !== m[4]) {
+            return part;
+          }
+          const label = m[3]!;
+          if (label.startsWith('"') && label.endsWith('"')) {
+            return part;
+          }
+          if (m[2] !== '{' && SHAPED.test(label) && !/[[\](){}]/.test(label.slice(1, -1))) {
+            return part;
+          }
+          if (!/[[\](){}|"<>#;]/.test(label)) {
+            return part;
+          }
           return `${m[1]}${m[2]}"${label.replace(/"/g, '#quot;')}"${m[4]}${m[5]}`;
         })
         .join(''),

@@ -7,17 +7,11 @@ import { isoDay } from '../../learn/mastery';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { AskThread, type CardTarget } from '../common/AskThread';
-import { JobError, Waiting } from '../tests/common';
-import {
-  AnswerInput,
-  MarkedAnswer,
-  StateChip,
-  TutorHint,
-  answered,
-  relativeDay,
-  useLearn,
-  type LearnNav,
-} from './common';
+import { JobError, Waiting } from '../common/FeedbackStatus';
+import { AnswerInput, MarkedAnswer, answered } from '../common/QuestionAnswer';
+import { StateChip, TutorHint, relativeDay } from './learning-status';
+import { useLearn } from './useLearn';
+import { type LearnNav } from '../../views/navigation';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 import { JobControls } from '../jobs/JobControls';
 import { tidyMermaid } from '../../learn/mermaid';
@@ -35,11 +29,15 @@ function LessonTrail({
   const { revision } = useLearn(services);
   const [objective, setObjective] = useState<Objective>();
   useEffect(() => {
-    if (!lesson.mastery || !lesson.objective) return;
+    if (!lesson.mastery || !lesson.objective) {
+      return;
+    }
     let live = true;
     services.learn.course(lesson.mastery).then(
       (m) => {
-        if (live) setObjective(m.objectives.find((o) => o.id === lesson.objective));
+        if (live) {
+          setObjective(m.objectives.find((o) => o.id === lesson.objective));
+        }
       },
       () => {},
     );
@@ -47,7 +45,9 @@ function LessonTrail({
       live = false;
     };
   }, [services, lesson.mastery, lesson.objective, revision]);
-  if (!lesson.mastery) return null;
+  if (!lesson.mastery) {
+    return null;
+  }
   const open = () => nav.course(lesson.mastery!, lesson.objective);
   return (
     <nav className="qard-lesson-trail" aria-label="Where this lesson sits in the course">
@@ -110,35 +110,40 @@ export function LessonView({
       .then(setWarmup, (e) => setError((e as Error).message));
   }, [services, path]);
   const lesson = services.learn.lessonAt(path);
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
-  if (!lesson) return <Waiting text="Loading…" />;
+  }
+  if (!lesson) {
+    return <Waiting text="Loading…" />;
+  }
   const trail = <LessonTrail services={services} nav={nav} lesson={lesson} />;
   const context: WaitContext = { kind: 'lesson', prefer: warmup };
-  if (lesson.finishedAt)
+  if (lesson.finishedAt) {
     return (
       <>
         {trail}
         <LessonClose services={services} nav={nav} path={path} lesson={lesson} />
       </>
     );
-  if (lesson.accepted)
+  }
+  if (lesson.accepted) {
     return (
       <>
         {trail}
         <LessonSteps services={services} path={path} lesson={lesson} context={context} />
       </>
     );
+  }
   // While the tutor finds where to start and plans, warm up on what the lesson builds on.
   const probing = job(path, 'probe'),
     planning = job(path, 'map');
   const waitingProbe = !lesson.probe && !probing?.error,
     waitingPlan = !!lesson.probe?.submitted && !lesson.map && !planning?.error;
-  if (waitingProbe || waitingPlan || hold.held)
+  if (waitingProbe || waitingPlan || hold.held) {
     return (
       <>
         {trail}
@@ -159,13 +164,15 @@ export function LessonView({
         <TutorHint services={services} />
       </>
     );
-  if (lesson.map)
+  }
+  if (lesson.map) {
     return (
       <>
         {trail}
         <LessonMapView services={services} path={path} lesson={lesson} />
       </>
     );
+  }
   return (
     <>
       {trail}
@@ -187,7 +194,7 @@ function LessonProbe({
   const probing = job(path, 'probe'),
     mapping = job(path, 'map'),
     probe = lesson.probe;
-  if (!probe)
+  if (!probe) {
     return (
       <div className="qard-doc">
         {probing?.error ? (
@@ -205,7 +212,8 @@ function LessonProbe({
         )}
       </div>
     );
-  if (probe.submitted)
+  }
+  if (probe.submitted) {
     return (
       <div className="qard-doc">
         {mapping?.error ? (
@@ -221,6 +229,7 @@ function LessonProbe({
         )}
       </div>
     );
+  }
   return (
     <div className="qard-test">
       <div className="qard-test-heading">
@@ -540,7 +549,9 @@ function LessonSteps({
                     className="qard-panel"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      if (retry.trim()) void services.learn.retryStep(path, retry);
+                      if (retry.trim()) {
+                        void services.learn.retryStep(path, retry);
+                      }
                     }}
                   >
                     <textarea
@@ -592,8 +603,9 @@ function LessonSteps({
             cancel={() => services.learn.cancel(path, 'ask', String(index))}
             card={lessonCardTarget(services, lesson)}
             onCard={(id) => {
-              if (lesson.mastery && lesson.objective)
+              if (lesson.mastery && lesson.objective) {
                 void services.learn.linkCard(id, lesson.mastery, lesson.objective);
+              }
             }}
           />
         </>
@@ -647,11 +659,15 @@ function LessonClose({
     [busy, setBusy] = useState<number>(),
     [error, setError] = useState('');
   useEffect(() => {
-    if (!lesson.mastery || !lesson.objective) return;
+    if (!lesson.mastery || !lesson.objective) {
+      return;
+    }
     let live = true;
     services.learn.course(lesson.mastery).then(
       (m) => {
-        if (live) setObjective(m.objectives.find((o) => o.id === lesson.objective));
+        if (live) {
+          setObjective(m.objectives.find((o) => o.id === lesson.objective));
+        }
       },
       () => {},
     );
@@ -662,7 +678,7 @@ function LessonClose({
   const closing = job(path, 'close'),
     close = lesson.close,
     where = lesson.notes[0] ?? path;
-  if (!close)
+  if (!close) {
     return (
       <div className="qard-doc">
         {closing?.error ? (
@@ -685,6 +701,7 @@ function LessonClose({
         )}
       </div>
     );
+  }
   const target = lessonCardTarget(services, lesson);
   async function add(i: number) {
     setBusy(i);

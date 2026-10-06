@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ChevronRight, ClipboardCheck, Plus, Search } from 'lucide-react';
 import type { Deck } from '../cards/card-types';
 import { DeckBadge } from './DeckBadge';
-import { LibraryHeader } from './tests/TestsBrowser';
+import { LibraryHeader } from './library/LibraryHeader';
 export function DeckBrowser({
   decks,
   search,

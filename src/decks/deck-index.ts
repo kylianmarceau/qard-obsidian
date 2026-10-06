@@ -11,7 +11,9 @@ export function buildDecks(cards: QardCard[]): Deck[] {
       decks.set(card.deck, deck);
     }
     deck.cards.push(card);
-    if (!deck.files.includes(card.sourceFile)) deck.files.push(card.sourceFile);
+    if (!deck.files.includes(card.sourceFile)) {
+      deck.files.push(card.sourceFile);
+    }
     let topic = deck.topics.find((t) => t.name === card.topic);
     if (!topic) {
       topic = { name: card.topic, cards: [] };

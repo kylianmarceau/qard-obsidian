@@ -6,12 +6,13 @@ import { Component } from 'obsidian';
 import { ReviewAnswers } from '../src/components/tests/ReviewAnswers';
 import { DeleteTest } from '../src/components/tests/DeleteTest';
 import { TakeTest } from '../src/components/tests/TakeTest';
-import { TestService, type TestStorage } from '../src/tests/test-service';
+import { TestService } from '../src/tests/test-service';
+import { type TestStorage } from '../src/tests/test-contracts';
 import { ReviewStore } from '../src/review/review-store';
 import { CardIndex } from '../src/cards/card-index';
 import { DEFAULT_TEST_SETTINGS } from '../src/settings/settings';
 import type { QardServices } from '../src/views/services';
-import type { TestNav } from '../src/components/tests/common';
+import type { TestNav } from '../src/views/navigation';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const TEST = {

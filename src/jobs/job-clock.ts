@@ -36,7 +36,9 @@ export class JobClock {
     return `${kind}|${r.provider}|${r.model}`;
   }
   record(kind: string, ms: number) {
-    if (ms > 500) void this.save(this.key(kind), ms).catch(() => {});
+    if (ms > 500) {
+      void this.save(this.key(kind), ms).catch(() => {});
+    }
   }
   /** Typical duration in ms, or undefined before the first run. */
   estimate(kind: string): number | undefined {
@@ -50,10 +52,16 @@ export function timeLeft(
   startedAt: number | undefined,
   now = Date.now(),
 ): string | undefined {
-  if (estimate === undefined || startedAt === undefined) return undefined;
+  if (estimate === undefined || startedAt === undefined) {
+    return undefined;
+  }
   const left = estimate - (now - startedAt);
-  if (overdue(estimate, startedAt, now)) return 'taking longer than usual';
-  if (left < 10_000) return 'almost ready';
+  if (overdue(estimate, startedAt, now)) {
+    return 'taking longer than usual';
+  }
+  if (left < 10_000) {
+    return 'almost ready';
+  }
   return left < 60_000
     ? `about ${Math.round(left / 10_000) * 10} s left`
     : `about ${Math.round(left / 60_000)} min left`;
@@ -64,7 +72,9 @@ export function overdue(
   startedAt: number | undefined,
   now = Date.now(),
 ): boolean {
-  if (startedAt === undefined) return false;
+  if (startedAt === undefined) {
+    return false;
+  }
   const limit = estimate === undefined ? 5 * 60_000 : Math.max(2 * estimate, estimate + 90_000);
   return now - startedAt > limit;
 }

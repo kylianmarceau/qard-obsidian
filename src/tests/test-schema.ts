@@ -44,8 +44,9 @@ export function validate(schema: Schema, value: unknown, path = 'result'): strin
         ? value.flatMap((item, i) => validate(schema.items, item, `${path}[${i}]`))
         : [`${path} must be an array`];
     case 'object': {
-      if (!value || typeof value !== 'object' || Array.isArray(value))
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return [`${path} must be an object`];
+      }
       const record = value as Record<string, unknown>;
       return [
         ...schema.required
@@ -140,8 +141,12 @@ export const disputeSchema = obj({
 
 export function check<T>(schema: Schema, value: unknown, extra: (v: T) => string[] = () => []): T {
   const errors = validate(schema, value);
-  if (!errors.length) errors.push(...extra(value as T));
-  if (errors.length) throw new SchemaError(errors);
+  if (!errors.length) {
+    errors.push(...extra(value as T));
+  }
+  if (errors.length) {
+    throw new SchemaError(errors);
+  }
   return value as T;
 }
 export class SchemaError extends Error {
@@ -155,20 +160,29 @@ export function readTest(v: unknown): Omit<PracticeTest, 'version' | 'createdAt'
   return check<Omit<PracticeTest, 'version' | 'createdAt'>>(testSchema, v, (t) => {
     const errors: string[] = [],
       ids = new Set<string>();
-    if (!t.sections.length) errors.push('result.sections is empty');
-    for (const s of t.sections)
+    if (!t.sections.length) {
+      errors.push('result.sections is empty');
+    }
+    for (const s of t.sections) {
       for (const q of s.questions) {
-        if (ids.has(q.id)) errors.push(`question id ${q.id} is used twice`);
+        if (ids.has(q.id)) {
+          errors.push(`question id ${q.id} is used twice`);
+        }
         ids.add(q.id);
-        if (!q.rubric.length) errors.push(`${q.id} has no rubric`);
-        if (Math.abs(q.rubric.reduce((n, r) => n + r.marks, 0) - q.marks) > 1e-6)
+        if (!q.rubric.length) {
+          errors.push(`${q.id} has no rubric`);
+        }
+        if (Math.abs(q.rubric.reduce((n, r) => n + r.marks, 0) - q.marks) > 1e-6) {
           errors.push(`${q.id}: rubric marks must add up to ${q.marks}`);
+        }
         if (
           q.type === 'mcq' &&
           (!q.options || q.options.length < 2 || q.answer === undefined || !q.options[q.answer])
-        )
+        ) {
           errors.push(`${q.id}: multiple choice needs options and a valid answer index`);
+        }
       }
+    }
     return errors;
   });
 }

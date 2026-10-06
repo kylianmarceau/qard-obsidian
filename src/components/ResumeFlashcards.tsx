@@ -18,10 +18,14 @@ export function ResumeFlashcards({
     service.subscribe,
     service.getSnapshot,
   );
-  if (!batch) return null;
+  if (!batch) {
+    return null;
+  }
   const remaining = batch.cards.filter((c) => !c.added).length;
   const running = !!job && !job.error;
-  if (batch.cards.length && !remaining && !running && !saving && !error && !job?.error) return null;
+  if (batch.cards.length && !remaining && !running && !saving && !error && !job?.error) {
+    return null;
+  }
   const needsAttention = !!error || !!job?.error;
   const label = needsAttention
     ? 'Continue flashcards'

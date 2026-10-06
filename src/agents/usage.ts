@@ -30,7 +30,9 @@ export function fromClaudeCode(envelope: {
   modelUsage?: Record<string, unknown>;
 }): Usage | undefined {
   const u = envelope.usage;
-  if (!u) return undefined;
+  if (!u) {
+    return undefined;
+  }
   const model = envelope.modelUsage ? Object.keys(envelope.modelUsage)[0] : undefined;
   return {
     input: n(u.input_tokens),
@@ -51,7 +53,9 @@ export function fromCodexEvents(jsonl: string): Usage | undefined {
     } catch {
       continue;
     }
-    if (event.type !== 'turn.completed' || !event.usage) continue;
+    if (event.type !== 'turn.completed' || !event.usage) {
+      continue;
+    }
     const u = event.usage,
       cached = n(u.cached_input_tokens);
     total = addUsage(total ?? emptyUsage(), {
@@ -84,7 +88,9 @@ export function fromOpenRouter(
   u: Record<string, unknown> | undefined,
   model: string,
 ): Usage | undefined {
-  if (!u) return undefined;
+  if (!u) {
+    return undefined;
+  }
   const details = (u.prompt_tokens_details ?? {}) as Record<string, unknown>,
     cached = n(details.cached_tokens);
   return {

@@ -1,4 +1,6 @@
 import { expect, it, vi } from 'vitest';
+import QardPlugin from '../src/main';
+import { QardView } from '../src/views/QardView';
 vi.mock('obsidian', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   Plugin: class {},
@@ -15,8 +17,6 @@ vi.mock('../src/views/QardView', () => ({
 vi.mock('../src/settings/SettingsTab', () => ({ QardSettingsTab: class {} }));
 vi.mock('../src/views/SelectionModal', () => ({ SelectionModal: class {} }));
 vi.mock('../src/views/ImportModal', () => ({ ImportModal: class {} }));
-import QardPlugin from '../src/main';
-import { QardView } from '../src/views/QardView';
 
 it('unload releases UI resources without detaching or relocating workspace tabs', () => {
   const plugin = Object.create(QardPlugin.prototype) as QardPlugin;

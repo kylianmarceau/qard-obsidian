@@ -21,7 +21,9 @@ export function AgentLabel({ services, role }: { services: QardServices; role: A
       ? `${s.agents.roles[role].provider}\u0000${s.agents.roles[role].model}`
       : '';
   });
-  if (!key) return null;
+  if (!key) {
+    return null;
+  }
   const [provider = '', model = ''] = key.split('\u0000');
   const name = model.trim() || defaultModel(provider as AgentProvider, role) || 'default model';
   return (

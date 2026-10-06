@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import { InlineMarkdown, Markdown } from '../Markdown';
-import { JobError, Waiting, useTestFolder, type TestNav } from './common';
+import { JobError, Waiting } from '../common/FeedbackStatus';
+import { useTestFolder } from './useTestFolder';
+import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
 export function PlanView({
@@ -20,16 +22,21 @@ export function PlanView({
   const planning = job('plan'),
     writing = job('generate');
   useEffect(() => {
-    if (entry?.test && !hold.held) nav.take(folder);
+    if (entry?.test && !hold.held) {
+      nav.take(folder);
+    }
   }, [entry?.test, folder, nav, hold.held]);
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
+  }
   const plan = entry?.plan;
-  if (!entry) return <Waiting text="Loading…" />;
+  if (!entry) {
+    return <Waiting text="Loading…" />;
+  }
   const waitingPlan = !plan && !planning?.error,
     waitingTest = !!writing && !writing.error;
   if (waitingPlan || waitingTest || hold.held) {
@@ -45,7 +52,9 @@ export function PlanView({
         onEngage={hold.engage}
         onContinue={() => {
           hold.release();
-          if (entry?.test) nav.take(folder);
+          if (entry?.test) {
+            nav.take(folder);
+          }
         }}
         context={{
           kind: 'test',
@@ -60,12 +69,13 @@ export function PlanView({
       />
     );
   }
-  if (!plan)
+  if (!plan) {
     return (
       <div className="qard-doc">
         <JobError job={planning} dismiss={() => services.tests.dismiss(folder, 'plan')} />
       </div>
     );
+  }
   const revising = !!planning && !planning.error;
   return (
     <article className="qard-doc">

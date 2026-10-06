@@ -26,7 +26,9 @@ const validDate = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(new Date(value).getTime());
 const counter = (value: number) => Number.isSafeInteger(value) && value >= 0;
 export function validFsrs(value: unknown): value is FsrsCard {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
   const c = value as FsrsCard;
   return (
     c.version === 1 &&
@@ -79,14 +81,16 @@ export function initializeFsrs(
     validFsrs(state.fsrs) &&
     state.fsrs.reps === state.reviewCount &&
     state.fsrs.last_review === state.lastReviewed
-  )
+  ) {
     return state;
+  }
   const events = history.filter((e) => e.cardId === state.cardId).sort((a, b) => a.at - b.at);
   let memory: Card, source: FsrsCard['source'];
   if (events.length === state.reviewCount && events[events.length - 1]?.at === state.lastReviewed) {
     memory = createEmptyCard(events[0]!.at);
-    for (const e of events)
+    for (const e of events) {
       memory = engine(e.desiredRetention ?? target).next(memory, e.at, e.rating).card;
+    }
     source = 'reviews';
   } else {
     const last = validDate(state.lastReviewed)
@@ -111,7 +115,9 @@ export function initializeFsrs(
     memory.scheduled_days = Math.max(0, state.interval);
     source = 'schedule';
   }
-  if (validDate(state.due)) memory.due = new Date(state.due);
+  if (validDate(state.due)) {
+    memory.due = new Date(state.due);
+  }
   return { ...state, lastReviewed: memory.last_review!.getTime(), fsrs: pack(memory, source) };
 }
 export function migrateFsrs(
@@ -146,7 +152,9 @@ export function reviewWithFsrs(
   const card =
     prepared?.fsrs && validFsrs(prepared.fsrs) ? unpack(prepared.fsrs) : createEmptyCard(now);
   // A device clock moving backwards must not feed negative elapsed time into the memory model.
-  if (card.last_review && card.last_review.getTime() > now) card.last_review = new Date(now);
+  if (card.last_review && card.last_review.getTime() > now) {
+    card.last_review = new Date(now);
+  }
   const next = engine(target).next(card, now, rating).card;
   return {
     cardId,
@@ -162,8 +170,12 @@ export function reviewWithFsrs(
 }
 export function intervalLabel(days: number): string {
   const minutes = Math.max(1, Math.round(days * 1440));
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 1440) return `${Math.round(minutes / 60)} hr`;
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  if (minutes < 1440) {
+    return `${Math.round(minutes / 60)} hr`;
+  }
   const n = Math.round(days);
   return `${n} ${n === 1 ? 'day' : 'days'}`;
 }
@@ -198,11 +210,17 @@ export function memoryStatistics(
     belowTarget = 0;
   const model = engine(target);
   for (const card of cards) {
-    if (!card.stable || card.duplicateId || seen.has(card.id)) continue;
+    if (!card.stable || card.duplicateId || seen.has(card.id)) {
+      continue;
+    }
     seen.add(card.id);
-    if (states[card.id]?.needsContentCheck) continue;
+    if (states[card.id]?.needsContentCheck) {
+      continue;
+    }
     const c = states[card.id]?.fsrs;
-    if (!validFsrs(c) || c.last_review > now) continue;
+    if (!validFsrs(c) || c.last_review > now) {
+      continue;
+    }
     const difficulty = ((c.difficulty - 1) / 9) * 100;
     const recall = model.get_retrievability(unpack(c), now, false);
     difficulties.push(difficulty);
@@ -210,8 +228,12 @@ export function memoryStatistics(
     recalls.push(recall);
     const bin = Math.min(9, Math.floor(difficulty / 10));
     bins[bin] = bins[bin]! + 1;
-    if (c.source === 'schedule') estimated++;
-    if (recall < target - 1e-9) belowTarget++;
+    if (c.source === 'schedule') {
+      estimated++;
+    }
+    if (recall < target - 1e-9) {
+      belowTarget++;
+    }
   }
   return {
     count: recalls.length,

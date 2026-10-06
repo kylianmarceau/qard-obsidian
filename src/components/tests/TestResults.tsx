@@ -3,7 +3,9 @@ import type { QardServices } from '../../views/services';
 import { questions, scoreOf } from '../../tests/test-types';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
-import { JobError, Waiting, scoreTone, useTestFolder, type TestNav } from './common';
+import { JobError, Waiting, scoreTone } from '../common/FeedbackStatus';
+import { useTestFolder } from './useTestFolder';
+import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
 export function TestResults({
@@ -17,18 +19,21 @@ export function TestResults({
 }) {
   const { entry, error, job } = useTestFolder(services, folder);
   const hold = useHold();
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
+  }
   const test = entry?.test,
     attempt = entry?.attempt;
-  if (!test) return <Waiting text="Loading…" />;
+  if (!test) {
+    return <Waiting text="Loading…" />;
+  }
   const total = scoreOf(test, attempt);
   const failed = test.sections.filter((s) => attempt?.sections[s.id]?.status === 'error');
-  if (failed.length && !total.marked)
+  if (failed.length && !total.marked) {
     return (
       <div className="qard-results">
         {failed.map((s) => (
@@ -46,9 +51,10 @@ export function TestResults({
         ))}
       </div>
     );
+  }
   // While marking, review anything except this test's own material.
   const marking = services.tests.jobsFor(folder).find((j) => j.kind === 'mark' && !j.error);
-  if (!total.marked || hold.held)
+  if (!total.marked || hold.held) {
     return (
       <WhileYouWait
         services={services}
@@ -69,6 +75,7 @@ export function TestResults({
         cancel={() => marking && services.tests.cancel(folder, 'mark', marking.id)}
       />
     );
+  }
   const wrapup = attempt?.wrapup,
     summary = job('wrapup'),
     all = questions(test);

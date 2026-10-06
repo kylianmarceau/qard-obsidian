@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { QardServices } from '../../views/services';
-import type { TestNav } from '../tests/common';
-import type { LearnNav } from '../learn/common';
+import type { TestNav } from '../../views/navigation';
+import type { LearnNav } from '../../views/navigation';
 import { overdue, roleOf, timeLeft } from '../../jobs/job-clock';
 import { AgentLabel } from './AgentLabel';
 import { InlineMarkdown } from '../Markdown';
@@ -54,7 +54,7 @@ export function useRunningJobs(
     services.flashcards?.getSnapshot ?? noSnapshot,
   );
   const jobs: RunningJob[] = [];
-  if (generation.job && !generation.job.error && flashcards)
+  if (generation.job && !generation.job.error && flashcards) {
     jobs.push({
       key: 'flashcards',
       kind: 'flashcards',
@@ -64,8 +64,11 @@ export function useRunningJobs(
       open: flashcards,
       cancel: () => services.flashcards?.cancel(),
     });
+  }
   for (const [key, job] of Object.entries(tests.jobs)) {
-    if (job.error || !TEST_LABELS[job.kind]) continue;
+    if (job.error || !TEST_LABELS[job.kind]) {
+      continue;
+    }
     const [folder = '', , id = ''] = key.split('|'),
       entry = services.tests.get(folder),
       cancel = () => services.tests.cancel(folder, job.kind, id);
@@ -85,7 +88,9 @@ export function useRunningJobs(
     });
   }
   for (const [key, job] of Object.entries(learn.jobs)) {
-    if (job.error || !LEARN_LABELS[job.kind]) continue;
+    if (job.error || !LEARN_LABELS[job.kind]) {
+      continue;
+    }
     const [target = '', , id = ''] = key.split('|'),
       cancel = () => services.learn.cancel(target, job.kind, id);
     if (job.kind === 'map-course') {
@@ -130,7 +135,9 @@ export function useRunningJobs(
 export function useTick(active: boolean) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      return;
+    }
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, [active]);
@@ -157,9 +164,13 @@ export function RunningJobs({
     [open, setOpen] = useState(false);
   const now = useTick(open && jobs.length > 0);
   useEffect(() => {
-    if (!jobs.length) setOpen(false);
+    if (!jobs.length) {
+      setOpen(false);
+    }
   }, [jobs.length]);
-  if (!jobs.length) return null;
+  if (!jobs.length) {
+    return null;
+  }
   return (
     <div className="qard-jobs">
       <button className="qard-jobs-button" aria-expanded={open} onClick={() => setOpen(!open)}>

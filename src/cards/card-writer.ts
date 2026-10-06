@@ -24,8 +24,9 @@ export function safeFolder(folder: string): string {
   if (
     /^(?:[\\/]|[A-Za-z]:)/.test(folder) ||
     folder.split(/[\\/]/).some((part) => part === '..' || part.startsWith('.'))
-  )
+  ) {
     throw new Error('Choose a normal vault folder, without hidden folders or parent paths.');
+  }
   return normalizePath(folder.trim()).replace(/^\.$/, '');
 }
 export class CardWriter {
@@ -36,18 +37,20 @@ export class CardWriter {
   ) {}
   private file(path: string) {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof TFile))
+    if (!(file instanceof TFile)) {
       throw new Error('The source note no longer exists. Reopen the card from the library.');
+    }
     return file;
   }
   private unique(card: QardCard) {
     if (
       card.duplicateId ||
       (card.stable && this.index.getSnapshot().cards.filter((c) => c.id === card.id).length > 1)
-    )
+    ) {
       throw new Error(
         'This ID is used by more than one card. Open the source and remove the copied ID before reviewing or editing.',
       );
+    }
   }
   async ensureStable(cards: QardCard[]): Promise<QardCard[]> {
     const groups = new Map<string, QardCard[]>();
@@ -62,8 +65,9 @@ export class CardWriter {
         const current = parseCards(await this.app.vault.read(file), path).cards;
         for (const card of group) {
           const found = current.filter((c) => c.id === card.id);
-          if (found.length !== 1)
+          if (found.length !== 1) {
             throw new Error('A selected card changed. Rebuild the session from the latest notes.');
+          }
           resolved.set(card.id, found[0]!);
         }
       } else {
@@ -130,18 +134,23 @@ export class CardWriter {
     const deck = target.deck.trim(),
       topic = target.topic.trim() || 'General',
       folder = safeFolder(target.folder);
-    if (!deck || /[\r\n]/.test(deck + topic))
+    if (!deck || /[\r\n]/.test(deck + topic)) {
       throw new Error('Deck and topic names must be nonempty single lines.');
-    if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) throw new Error('Invalid batch ID.');
-    if (!cards.length || new Set(cards.map((c) => c.id)).size !== cards.length)
+    }
+    if (!/^[A-Za-z0-9_-]+$/.test(target.batchId)) {
+      throw new Error('Invalid batch ID.');
+    }
+    if (!cards.length || new Set(cards.map((c) => c.id)).size !== cards.length) {
       throw new Error('Choose distinct cards to add.');
+    }
     // Validate the whole batch before making any changes.
     const topicOf = (card: (typeof cards)[number]) =>
       card.topic === undefined ? topic : card.topic.trim();
     cards.forEach((c) => {
       const name = topicOf(c);
-      if (!name || name.length > 200 || /[\r\n]/.test(name))
+      if (!name || name.length > 200 || /[\r\n]/.test(name)) {
         throw new Error('Card topics must be nonempty single lines, up to 200 characters each.');
+      }
       serializeCard(c.id, c.front, c.back);
     });
     const slug =
@@ -151,19 +160,28 @@ export class CardWriter {
         .trim()
         .slice(0, 80) || 'Cards';
     const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
-    for (const card of cards)
-      if (card.source) await this.trackSources?.(card.id, [card.source], card.sourceSnapshots);
+    for (const card of cards) {
+      if (card.source) {
+        await this.trackSources?.(card.id, [card.source], card.sourceSnapshots);
+      }
+    }
     const append = (source: string) => {
       const existing = parseCards(source, path).cards;
       for (const card of cards) {
         const matches = existing.filter((c) => c.id === card.id);
-        if (matches.length > 1 || matches.some((c) => c.deck !== deck || c.topic !== topicOf(card)))
+        if (
+          matches.length > 1 ||
+          matches.some((c) => c.deck !== deck || c.topic !== topicOf(card))
+        ) {
           throw new Error(
             'A saved card changed its deck, topic or ID. Check the generated note before retrying.',
           );
+        }
       }
       const pending = cards.filter((c) => !existing.some((old) => old.id === c.id));
-      if (!pending.length) return source;
+      if (!pending.length) {
+        return source;
+      }
       const eol = source.includes('\r\n') ? '\r\n' : '\n';
       const groups = new Map<string, typeof cards>();
       for (const card of pending) {
@@ -187,44 +205,55 @@ export class CardWriter {
             parsed.filter((p) => p.id === c.id && p.deck === deck && p.topic === topicOf(c))
               .length !== 1,
         )
-      )
+      ) {
         throw new Error(
           'The generated note changed or has an unfinished Markdown block. Reopen its source before adding cards.',
         );
+      }
       return next;
     };
     let file = this.app.vault.getAbstractFileByPath(path);
-    if (file && !(file instanceof TFile))
+    if (file && !(file instanceof TFile)) {
       throw new Error('A folder is using the generated note path.');
-    if (file instanceof TFile) await this.app.vault.process(file, append);
-    else {
+    }
+    if (file instanceof TFile) {
+      await this.app.vault.process(file, append);
+    } else {
       const source = append(`---\nqard-deck: ${JSON.stringify(deck)}\n---\n`);
       let built = '';
       for (const part of folder.split('/').filter(Boolean)) {
         built = built ? `${built}/${part}` : part;
-        if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built);
+        if (!this.app.vault.getAbstractFileByPath(built)) {
+          await this.app.vault.createFolder(built);
+        }
       }
       file = await this.app.vault.create(path, source);
     }
-    if (!(file instanceof TFile)) throw new Error('The generated note could not be created.');
+    if (!(file instanceof TFile)) {
+      throw new Error('The generated note could not be created.');
+    }
     await this.index.refresh(file);
     const parsed = parseCards(await this.app.vault.read(file), path).cards;
     return cards.map((c) => {
       const found = parsed.find((p) => p.id === c.id);
-      if (!found) throw new Error('A saved card could not be read back. Check the generated note.');
+      if (!found) {
+        throw new Error('A saved card could not be read back. Check the generated note.');
+      }
       return found;
     });
   }
   async create(draft: CardDraft): Promise<QardCard> {
     const deck = draft.deck.trim(),
       topic = draft.topic.trim() || 'General';
-    if (!deck || /[\r\n]/.test(deck + topic))
+    if (!deck || /[\r\n]/.test(deck + topic)) {
       throw new Error('Deck and topic names must be nonempty single lines.');
+    }
     const id = crypto.randomUUID();
     // Validate before creating directories or notes.
     serializeCard(id, draft.front, draft.back);
-    if (draft.generatedFrom?.length)
+    if (draft.generatedFrom?.length) {
       await this.trackSources?.(id, draft.generatedFrom, draft.sourceSnapshots);
+    }
     let file: TFile | undefined;
     if (draft.sourceFile) {
       const existing = this.file(draft.sourceFile);
@@ -234,7 +263,9 @@ export class CardWriter {
         this.app.metadataCache.getFileCache(existing)?.frontmatter?.['qard-deck'];
       const existingDeck =
         typeof cacheDeck === 'string' ? cacheDeck.trim() : cards[0]?.deck || existing.basename;
-      if (existingDeck === deck) file = existing;
+      if (existingDeck === deck) {
+        file = existing;
+      }
     }
     if (file) {
       await this.app.vault.process(file, (source) => {
@@ -242,20 +273,22 @@ export class CardWriter {
         const override: unknown = this.app.metadataCache.getFileCache(file!)?.frontmatter?.[
           'qard-topic'
         ];
-        if (typeof override === 'string' && override.trim() !== topic)
+        if (typeof override === 'string' && override.trim() !== topic) {
           throw new Error(
             `This note fixes its topic to “${override}”. Choose that topic or create the card in a new note.`,
           );
+        }
         const next =
           source +
           (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) +
           `# ${topic}${eol}${eol}` +
           serializeCard(id, draft.front, draft.back, eol);
         const created = parseCards(next, file!.path).cards.find((c) => c.id === id);
-        if (!created || created.deck !== deck || created.topic !== topic)
+        if (!created || created.deck !== deck || created.topic !== topic) {
           throw new Error(
             'This note changed or has an unfinished Markdown block. Fix its source or choose a new note before adding a card.',
           );
+        }
         return next;
       });
     } else {
@@ -266,7 +299,9 @@ export class CardWriter {
       let built = '';
       for (const part of folder.split('/').filter(Boolean)) {
         built = built ? `${built}/${part}` : part;
-        if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built);
+        if (!this.app.vault.getAbstractFileByPath(built)) {
+          await this.app.vault.createFolder(built);
+        }
       }
       const slug =
         deck
@@ -277,7 +312,9 @@ export class CardWriter {
       const base = [folder, slug].filter(Boolean).join('/');
       let path = base + '.md',
         n = 2;
-      while (this.app.vault.getAbstractFileByPath(path)) path = `${base} ${n++}.md`;
+      while (this.app.vault.getAbstractFileByPath(path)) {
+        path = `${base} ${n++}.md`;
+      }
       file = await this.app.vault.create(
         path,
         `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${serializeCard(id, draft.front, draft.back)}`,
@@ -285,10 +322,11 @@ export class CardWriter {
     }
     await this.index.refresh(file);
     const card = this.index.getSnapshot().cards.find((c) => c.id === id);
-    if (!card)
+    if (!card) {
       throw new Error(
         'The note was saved but could not be indexed. Check its frontmatter and callout syntax.',
       );
+    }
     return card;
   }
 }

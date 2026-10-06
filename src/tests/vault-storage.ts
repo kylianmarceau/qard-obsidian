@@ -1,12 +1,14 @@
 import { TFile, TFolder, normalizePath, type App } from 'obsidian';
-import type { TestStorage } from './test-service';
+import type { TestStorage } from './test-contracts';
 
 /** Test folders through the Vault API, so sync and file explorers see every change. */
 export class VaultTestStorage implements TestStorage {
   constructor(private app: App) {}
   async folders(root: string) {
     const folder = this.app.vault.getAbstractFileByPath(normalizePath(root));
-    if (!(folder instanceof TFolder)) return [];
+    if (!(folder instanceof TFolder)) {
+      return [];
+    }
     return folder.children
       .filter(
         (c): c is TFolder =>
@@ -36,8 +38,9 @@ export class VaultTestStorage implements TestStorage {
       !folder.children.some(
         (f) => f instanceof TFile && ['test.json', 'plan.json', 'request.json'].includes(f.name),
       )
-    )
+    ) {
       throw new Error('The test folder no longer exists or contains no test files.');
+    }
     await this.app.fileManager.trashFile(folder);
   }
   async write(path: string, text: string) {
@@ -46,10 +49,15 @@ export class VaultTestStorage implements TestStorage {
     let built = '';
     for (const part of parts.slice(0, -1)) {
       built = built ? `${built}/${part}` : part;
-      if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built);
+      if (!this.app.vault.getAbstractFileByPath(built)) {
+        await this.app.vault.createFolder(built);
+      }
     }
     const file = this.app.vault.getAbstractFileByPath(target);
-    if (file instanceof TFile) await this.app.vault.modify(file, text);
-    else await this.app.vault.create(target, text);
+    if (file instanceof TFile) {
+      await this.app.vault.modify(file, text);
+    } else {
+      await this.app.vault.create(target, text);
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { TFile, TFolder, normalizePath, type App } from 'obsidian';
-import type { LearnStorage } from './learn-service';
+import type { LearnStorage } from './learn-contracts';
 import { isStudyNote, studyNotes } from '../vault-access';
 
 /** Mastery files, checks and lessons through the Vault API, so sync and file explorers see every change. */
@@ -22,30 +22,41 @@ export class VaultLearnStorage implements LearnStorage {
     let built = '';
     for (const part of parts.slice(0, -1)) {
       built = built ? `${built}/${part}` : part;
-      if (!this.app.vault.getAbstractFileByPath(built)) await this.app.vault.createFolder(built);
+      if (!this.app.vault.getAbstractFileByPath(built)) {
+        await this.app.vault.createFolder(built);
+      }
     }
     const f = this.file(target);
-    if (f) await this.app.vault.modify(f, text);
-    else await this.app.vault.create(target, text);
+    if (f) {
+      await this.app.vault.modify(f, text);
+    } else {
+      await this.app.vault.create(target, text);
+    }
   }
   async process(path: string, fn: (text: string) => string) {
     const f = this.file(path);
-    if (!f) throw new Error(`${path} no longer exists.`);
+    if (!f) {
+      throw new Error(`${path} no longer exists.`);
+    }
     await this.app.vault.process(f, fn);
   }
   files(folder: string, extension: string) {
     const root = this.app.vault.getAbstractFileByPath(normalizePath(folder));
-    if (!(root instanceof TFolder)) return [];
+    if (!(root instanceof TFolder)) {
+      return [];
+    }
     const found: string[] = [];
     const walk = (f: TFolder) => {
       for (const c of f.children) {
-        if (c instanceof TFolder) walk(c);
-        else if (
+        if (c instanceof TFolder) {
+          walk(c);
+        } else if (
           c instanceof TFile &&
           c.extension === extension &&
           (extension !== 'md' || isStudyNote(c.path))
-        )
+        ) {
           found.push(c.path);
+        }
       }
     };
     walk(root);
@@ -60,13 +71,17 @@ export class VaultLearnStorage implements LearnStorage {
   }
   async remove(path: string) {
     const f = this.file(path);
-    if (f) await this.app.fileManager.trashFile(f);
+    if (f) {
+      await this.app.fileManager.trashFile(f);
+    }
   }
   modified(path: string) {
     return this.file(path)?.stat.mtime;
   }
   resolve(link: string, from: string) {
-    if (this.file(link)) return link;
+    if (this.file(link)) {
+      return link;
+    }
     return this.app.metadataCache.getFirstLinkpathDest(link.replace(/\.md$/, ''), from)?.path;
   }
 }

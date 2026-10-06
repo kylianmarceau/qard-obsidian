@@ -16,6 +16,16 @@ export default defineConfig([
     files: ['src/**/*.{ts,tsx}'],
     languageOptions: { parserOptions: { projectService: true } },
     rules: {
+      curly: ['error', 'all'],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        // Lazy desktop requires use typeof import() without loading Node APIs on mobile.
+        {
+          prefer: 'type-imports',
+          fixStyle: 'separate-type-imports',
+          disallowTypeAnnotations: false,
+        },
+      ],
       'obsidianmd/ui/sentence-case': ['warn', { brands: ['Qard', 'Spaced Repetition', 'FSRS'] }],
     },
   },

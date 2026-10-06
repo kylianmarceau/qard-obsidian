@@ -38,13 +38,20 @@ export function selectCards(
         !decks.has(card.deck) &&
         !topics.has(topicKey(card.deck, card.topic)) &&
         !ids.has(card.id)
-      )
+      ) {
         return false;
+      }
       // Deliberately before any scheduling lookup: All means all matching cards.
-      if (options.mode === 'all') return true;
+      if (options.mode === 'all') {
+        return true;
+      }
       const state = states[card.id];
-      if (options.mode === 'new') return !state?.reviewCount;
-      if (options.mode === 'due') return scheduler.isDue(state, now);
+      if (options.mode === 'new') {
+        return !state?.reviewCount;
+      }
+      if (options.mode === 'due') {
+        return scheduler.isDue(state, now);
+      }
       return state?.lastRating === 1 || state?.lastRating === 2;
     })
     .sort(

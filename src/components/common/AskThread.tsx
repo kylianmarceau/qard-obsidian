@@ -4,7 +4,7 @@ import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentRole } from '../../agents/runner';
 import { Markdown } from '../Markdown';
-import { Waiting } from '../tests/common';
+import { Waiting } from './FeedbackStatus';
 import { AgentLabel } from '../jobs/AgentLabel';
 
 export interface AskItem {
@@ -75,7 +75,9 @@ export function AskThread({
   const isOpen = (i: number) => open[i] ?? (i === items.length - 1 && !pending);
   const send = (question: string) => {
     const q = question.trim();
-    if (!q || busy) return;
+    if (!q || busy) {
+      return;
+    }
     setPending(q);
     setText('');
     setOpen({});
@@ -156,7 +158,9 @@ export function AskThread({
                     done={(id) => {
                       setAdded(new Set(added).add(i));
                       setEditing(undefined);
-                      if (id) onCard?.(id);
+                      if (id) {
+                        onCard?.(id);
+                      }
                     }}
                     cancel={() => setEditing(undefined)}
                   />

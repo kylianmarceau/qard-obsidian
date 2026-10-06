@@ -18,7 +18,7 @@ export function JobControls({
   start?: () => void;
 }) {
   const now = useTick(!!job && !job.error);
-  if (!job)
+  if (!job) {
     return start ? (
       <div className="qard-job-controls is-stuck" role="status">
         <span>Nothing is working on this right now.</span>
@@ -27,7 +27,10 @@ export function JobControls({
         </button>
       </div>
     ) : null;
-  if (job.error || !cancel) return null;
+  }
+  if (job.error || !cancel) {
+    return null;
+  }
   const stuck = overdue(services.jobs?.estimate(job.kind), job.startedAt, now);
   const minutes = job.startedAt ? Math.floor((now - job.startedAt) / 60_000) : 0;
   return (

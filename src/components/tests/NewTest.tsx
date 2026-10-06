@@ -8,7 +8,8 @@ import {
   testNotePaths,
 } from '../../tests/test-sources';
 import type { QardServices } from '../../views/services';
-import { Check, type TestNav } from './common';
+import { Check } from '../common/FeedbackStatus';
+import { type TestNav } from '../../views/navigation';
 
 /** One prompt box. Sources are optional: flashcard decks, notes and whole course folders. */
 export function NewTest({
@@ -66,7 +67,9 @@ export function NewTest({
   const chosenDecks = useCards ? decks : [];
   const empty = !chosenDecks.length && !attached.length;
   async function start() {
-    if (busy) return;
+    if (busy) {
+      return;
+    }
     setBusy(true);
     setError('');
     const deckFiles = index.decks
@@ -85,10 +88,11 @@ export function NewTest({
       sources: [...new Set([...deckFiles, ...selected])],
     };
     try {
-      if (!request.prompt && !request.sources.length)
+      if (!request.prompt && !request.sources.length) {
         throw new Error(
           'The selected sources no longer contain any Markdown notes. Choose another source or enter a prompt.',
         );
+      }
       planFirst
         ? nav.plan(await services.tests.plan(request))
         : nav.take(await services.tests.generate({ request }));

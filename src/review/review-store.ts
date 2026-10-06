@@ -49,7 +49,9 @@ export class ReviewStore {
   private listeners = new Set<() => void>();
   constructor(private persist: (data: PluginData) => Promise<void>) {}
   load(raw: unknown) {
-    if (!raw || typeof raw !== 'object') return;
+    if (!raw || typeof raw !== 'object') {
+      return;
+    }
     const value = raw as Partial<PluginData>;
     const states: Record<string, ReviewState> = Object.create(null) as Record<string, ReviewState>;
     for (const [id, state] of Object.entries(value.states || {})) {
@@ -63,8 +65,9 @@ export class ReviewStore {
         state.interval >= 0 &&
         Number.isFinite(state.ease) &&
         state.ease > 0
-      )
+      ) {
         states[id] = { ...state, cardId: id };
+      }
     }
     const history = Array.isArray(value.history)
       ? value.history.filter(
@@ -82,24 +85,31 @@ export class ReviewStore {
         link &&
         typeof link.mastery === 'string' &&
         typeof link.objective === 'string'
-      )
+      ) {
         links[id] = {
           mastery: link.mastery,
           objective: link.objective,
           lapses: Number.isFinite(link.lapses) ? link.lapses : 0,
         };
+      }
     }
     const timings: Record<string, number[]> = {};
-    for (const [k, list] of Object.entries(value.timings || {}))
-      if (Array.isArray(list))
+    for (const [k, list] of Object.entries(value.timings || {})) {
+      if (Array.isArray(list)) {
         timings[k] = list.filter((n) => Number.isFinite(n) && n > 0).slice(-9);
+      }
+    }
     const usage: UsageLog = {};
-    for (const [day, entries] of Object.entries(value.usage || {}))
-      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && entries && typeof entries === 'object')
+    for (const [day, entries] of Object.entries(value.usage || {})) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && entries && typeof entries === 'object') {
         usage[day] = entries;
+      }
+    }
     const settings = readSettings(value.settings);
     // An existing vault opts in; a vault without saved plugin data starts with FSRS.
-    if (!value.settings?.scheduler) settings.scheduler = 'simple';
+    if (!value.settings?.scheduler) {
+      settings.scheduler = 'simple';
+    }
     this.data = {
       version: 1,
       settings,
@@ -157,10 +167,12 @@ export class ReviewStore {
     });
   }
   review(cardId: string, rating: Rating, now = Date.now(), step?: SessionStep) {
-    if (!/^[A-Za-z0-9_-]+$/.test(cardId))
+    if (!/^[A-Za-z0-9_-]+$/.test(cardId)) {
       return Promise.reject(new Error('A stable card ID is required before reviewing.'));
-    if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime()))
+    }
+    if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime())) {
       return Promise.reject(new Error('A valid rating and review date are required.'));
+    }
     return this.change((data) => {
       const sessions = step
         ? this.advanceSession(data.sessions, step, cardId, rating, now)
@@ -203,8 +215,9 @@ export class ReviewStore {
   }
   /** Adds migrated schedules. Existing Qard states always win. */
   requireContentCheck(cardId: string, now = Date.now()) {
-    if (!/^[A-Za-z0-9_-]+$/.test(cardId))
+    if (!/^[A-Za-z0-9_-]+$/.test(cardId)) {
       return Promise.reject(new Error('A stable card ID is required.'));
+    }
     return this.change((data) => {
       const state = data.states[cardId] ?? {
         cardId,
@@ -232,15 +245,19 @@ export class ReviewStore {
         s.reviewCount >= 0 &&
         s.interval >= 0,
     );
-    if (!valid.length) return Promise.resolve();
+    if (!valid.length) {
+      return Promise.resolve();
+    }
     return this.change((data) => {
       const next = Object.assign(Object.create(null) as Record<string, ReviewState>, data.states);
-      for (const state of valid)
-        if (!next[state.cardId])
+      for (const state of valid) {
+        if (!next[state.cardId]) {
           next[state.cardId] =
             data.settings.scheduler === 'fsrs'
               ? initializeFsrs(state, [], data.settings.desiredRetention)
               : state;
+        }
+      }
       return { ...data, states: next };
     });
   }
@@ -275,8 +292,9 @@ export class ReviewStore {
       !cards.length ||
       cards.some((c) => !c.stable || c.duplicateId || !stableId(c.id)) ||
       new Set(cards.map((c) => c.id)).size !== cards.length
-    )
+    ) {
       throw new Error('These cards need unique, stable IDs before saving a session.');
+    }
     const now = Date.now(),
       decks = [...new Set(cards.map((c) => c.deck))];
     const session: SavedSession = {
@@ -297,7 +315,9 @@ export class ReviewStore {
     let resolved: ReturnType<typeof resolveSession> | undefined;
     await this.change((data) => {
       const session = data.sessions.find((s) => s.id === id);
-      if (!session) throw new Error('This session has already finished or was discarded.');
+      if (!session) {
+        throw new Error('This session has already finished or was discarded.');
+      }
       resolved = resolveSession(session, cards);
       const next = resolved.session;
       return {
@@ -317,10 +337,16 @@ export class ReviewStore {
     now: number,
   ) {
     const session = sessions.find((s) => s.id === step.id);
-    if (!session || session.position !== step.position || session.cardIds[step.position] !== cardId)
+    if (
+      !session ||
+      session.position !== step.position ||
+      session.cardIds[step.position] !== cardId
+    ) {
       throw new Error('This session changed in another view. Return to Qard and resume it.');
-    if ((session.style === 'normal') !== (rating !== undefined))
+    }
+    if ((session.style === 'normal') !== (rating !== undefined)) {
       throw new Error('The session mode changed. Resume it from Qard.');
+    }
     const next = {
       ...session,
       position: session.position + 1,
@@ -341,10 +367,11 @@ export class ReviewStore {
     return this.change((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== id) }));
   }
   saveExam(plan: ExamPlan) {
-    if (!validExam(plan))
+    if (!validExam(plan)) {
       return Promise.reject(
         new Error('Choose a name, valid exam date, study days, daily target and study material.'),
       );
+    }
     return this.change((data) => ({
       ...data,
       exams: [...data.exams.filter((p) => p.id !== plan.id), readExams([plan])[0]!],

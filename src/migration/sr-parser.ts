@@ -109,7 +109,9 @@ export function parseSchedules(body: string): (SrSchedule | undefined)[] {
     .filter(Boolean)
     .map((entry) => {
       const m = entry.trim().match(/^(\d{4})-(\d{2})-(\d{2}),(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/);
-      if (!m) return undefined;
+      if (!m) {
+        return undefined;
+      }
       // SR schedules by calendar day, so the card is due from local midnight.
       const due = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
       return Number.isFinite(due)
@@ -135,7 +137,9 @@ export function scanSrNote(
     metadata: Record<string, unknown> = {};
   if (lines[0]?.text.replace(/^\uFEFF/, '') === '---') {
     const end = lines.findIndex((line, i) => i > 0 && /^(---|\.\.\.)\s*$/.test(line.text));
-    if (end < 0) return undefined;
+    if (end < 0) {
+      return undefined;
+    }
     const doc = parseDocument(
       lines
         .slice(1, end)
@@ -143,7 +147,7 @@ export function scanSrNote(
         .join('\n'),
     );
     const value: unknown = doc.errors.length ? undefined : doc.toJS({ maxAliasCount: 20 });
-    if (doc.errors.length)
+    if (doc.errors.length) {
       return settings.tags.some((tag) => source.includes(tag))
         ? {
             path,
@@ -153,8 +157,10 @@ export function scanSrNote(
             ],
           }
         : undefined;
-    if (value && typeof value === 'object' && !Array.isArray(value))
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
       metadata = value as Record<string, unknown>;
+    }
     start = end + 1;
   }
   const rawTags = Array.isArray(metadata.tags)
@@ -168,11 +174,13 @@ export function scanSrNote(
 
   // Existing Qard callouts are opaque, which also makes a second import a no-op.
   const opaque = new Set<number>();
-  for (const card of parseCards(source, path).cards)
+  for (const card of parseCards(source, path).cards) {
     lines.forEach((line, i) => {
-      if (line.start >= card.sourcePosition.start && line.start < card.sourcePosition.end)
+      if (line.start >= card.sourcePosition.start && line.start < card.sourcePosition.end) {
         opaque.add(i);
+      }
     });
+  }
   const singles = [
     [settings.singleLineReversed, true],
     [settings.singleLine, false],
@@ -221,7 +229,7 @@ export function scanSrNote(
       }
       const first = lines[block[0]!]!,
         final = lines[block[block.length - 1]!]!;
-      if (front && back)
+      if (front && back) {
         note.cards.push(
           (card = {
             reversed,
@@ -233,22 +241,24 @@ export function scanSrNote(
             schedules,
           }),
         );
-      else
+      } else {
         note.skipped.push({
           line: block[0]!,
           reason: front ? 'Card has no answer.' : 'Card has no question.',
         });
+      }
     } else if (block.length) {
       const body = text(0, block.length);
       if (
         (settings.clozeHighlight && /==[^=\n]+==/.test(body)) ||
         (settings.clozeBold && /\*\*[^*\n]+\*\*/.test(body)) ||
         (settings.clozeCurly && /\{\{[^}\n]+\}\}/.test(body))
-      )
+      ) {
         note.skipped.push({
           line: block[0]!,
           reason: 'Cloze card. Qard has no cloze cards, so this text is left as it is.',
         });
+      }
     }
     block = [];
     separator = -1;
@@ -259,7 +269,11 @@ export function scanSrNote(
   for (let i = start; i < lines.length; i++) {
     const line = lines[i]!.text,
       trimmed = line.trim();
-    if (!fence && !comment) for (const m of line.matchAll(tagPattern)) tags.push(m[1]!);
+    if (!fence && !comment) {
+      for (const m of line.matchAll(tagPattern)) {
+        tags.push(m[1]!);
+      }
+    }
     if (opaque.has(i)) {
       flush();
       lastCard = undefined;
@@ -267,11 +281,15 @@ export function scanSrNote(
     }
     if (fence) {
       block.push(i);
-      if (closesFence(line, fence)) fence = '';
+      if (closesFence(line, fence)) {
+        fence = '';
+      }
       continue;
     }
     if (comment) {
-      if (line.includes('-->')) comment = false;
+      if (line.includes('-->')) {
+        comment = false;
+      }
       continue;
     }
     const schedule = line.match(scheduleComment);
@@ -294,8 +312,11 @@ export function scanSrNote(
       continue;
     }
     if (!trimmed) {
-      if (!(settings.endMarker && separator >= 0)) flush();
-      else block.push(i);
+      if (!(settings.endMarker && separator >= 0)) {
+        flush();
+      } else {
+        block.push(i);
+      }
       continue;
     }
     if (settings.endMarker && separator >= 0 && trimmed === settings.endMarker) {
@@ -306,7 +327,9 @@ export function scanSrNote(
     }
     if (/^\s*<!--/.test(line)) {
       flush();
-      if (!line.includes('-->')) comment = true;
+      if (!line.includes('-->')) {
+        comment = true;
+      }
       continue;
     }
     if (
@@ -351,11 +374,12 @@ export function scanSrNote(
         if (front && back) {
           note.cards.push(card);
           lastCard = { card, line: i };
-        } else
+        } else {
           note.skipped.push({
             line: i,
             reason: front ? 'Card has no answer.' : 'Card has no question.',
           });
+        }
         continue;
       }
     }
@@ -363,13 +387,19 @@ export function scanSrNote(
   }
   flush();
 
-  if (tags.some((t) => matchesTag(t, settings.ignoreTags))) return undefined;
+  if (tags.some((t) => matchesTag(t, settings.ignoreTags))) {
+    return undefined;
+  }
   const deckTag = tags.find((t) => matchesTag(t, settings.tags));
-  if (!deckTag) return undefined;
+  if (!deckTag) {
+    return undefined;
+  }
   const root = matchesTag(deckTag, settings.tags)!;
   const folder = path.split('/').slice(0, -1).join('/');
   const deck = settings.foldersToDecks ? folder : deckTag.slice(root.length + 1);
-  if (deck && typeof metadata['qard-deck'] !== 'string') note.deck = deck;
+  if (deck && typeof metadata['qard-deck'] !== 'string') {
+    note.deck = deck;
+  }
   return note;
 }
 
@@ -407,12 +437,13 @@ export function convertSrNote(
         source.slice(card.end, card.end + 1).match(/[\r\n]/) &&
         next &&
         !/^[ \t]*(\r?\n|$)/.test(next)
-      )
+      ) {
         text += eol;
+      }
       edits.push({ start: card.start, end: card.end, text });
       for (const p of pending) {
         ids.push(p.id);
-        if (p.schedule)
+        if (p.schedule) {
           states.push({
             cardId: p.id,
             due: p.schedule.due,
@@ -422,29 +453,34 @@ export function convertSrNote(
             lapses: 0,
             lastReviewed: Math.min(now, p.schedule.due - p.schedule.interval * DAY),
           });
+        }
       }
     } catch (e) {
       skipped.push({ line: card.line, reason: (e as Error).message });
     }
   }
   let next = source;
-  for (const edit of [...edits].sort((a, b) => b.start - a.start))
+  for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
     next = next.slice(0, edit.start) + edit.text + next.slice(edit.end);
+  }
   if (note.deck && edits.length) {
     const line = `qard-deck: ${JSON.stringify(note.deck)}`;
     const lines = sourceLines(next);
     if (lines[0]?.text.replace(/^\uFEFF/, '') === '---') {
       const close = lines.findIndex((l, i) => i > 0 && /^(---|\.\.\.)\s*$/.test(l.text));
       next = next.slice(0, lines[close]!.start) + line + eol + next.slice(lines[close]!.start);
-    } else next = `---${eol}${line}${eol}---${eol}` + next;
+    } else {
+      next = `---${eol}${line}${eol}---${eol}` + next;
+    }
   }
   const found = new Set(
     parseCards(next, note.path)
       .cards.filter((c) => c.stable)
       .map((c) => c.id),
   );
-  if (!ids.every((id) => found.has(id)))
+  if (!ids.every((id) => found.has(id))) {
     throw new Error('The converted note did not index cleanly, so it was not changed.');
+  }
   skipped.sort((a, b) => a.line - b.line);
   return { source: next, states, converted: ids.length, skipped };
 }

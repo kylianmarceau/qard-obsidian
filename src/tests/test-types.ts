@@ -154,7 +154,9 @@ export function markUnknown(q: Question): QuestionMark {
 }
 /** Multiple choice never needs an agent. */
 export function markChoice(q: Question, answer: AnswerState | undefined): QuestionMark {
-  if (answer?.unknown) return markUnknown(q);
+  if (answer?.unknown) {
+    return markUnknown(q);
+  }
   const right = answer?.choice !== undefined && answer.choice === q.answer;
   return {
     score: right ? q.marks : 0,

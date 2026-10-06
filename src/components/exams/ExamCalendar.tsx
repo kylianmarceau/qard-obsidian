@@ -123,7 +123,9 @@ export function ExamCalendar({
                           : event.key === 'ArrowUp'
                             ? -7
                             : undefined;
-                  if (delta === undefined) return;
+                  if (delta === undefined) {
+                    return;
+                  }
                   event.preventDefault();
                   const next = new Date(`${day}T12:00:00`);
                   next.setDate(next.getDate() + delta);

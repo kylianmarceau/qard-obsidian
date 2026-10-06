@@ -7,15 +7,10 @@ import { ignoresStudyKey } from '../../review/keyboard';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { AskThread } from '../common/AskThread';
-import {
-  Check,
-  JobError,
-  Waiting,
-  cardTarget,
-  scoreTone,
-  useTestFolder,
-  type TestNav,
-} from './common';
+import { Check, JobError, Waiting, scoreTone } from '../common/FeedbackStatus';
+import { cardTarget } from './card-target';
+import { useTestFolder } from './useTestFolder';
+import { type TestNav } from '../../views/navigation';
 
 const MISTAKE: Record<string, string> = {
   misconception: 'Misconception',
@@ -48,7 +43,9 @@ export function ReviewAnswers({
   const q = all.find((x) => x.id === current) ?? visible[0] ?? all[0];
   const position = q ? visible.indexOf(q) : -1;
   const go = (id?: string) => {
-    if (id) setCurrent(id);
+    if (id) {
+      setCurrent(id);
+    }
   };
   const nav2 = useRef({ prev: () => {}, next: () => {} });
   nav2.current = {
@@ -58,7 +55,9 @@ export function ReviewAnswers({
   useEffect(() => {
     const doc = services.host.ownerDocument;
     const handler = (event: KeyboardEvent) => {
-      if (!services.isActive() || ignoresStudyKey(event)) return;
+      if (!services.isActive() || ignoresStudyKey(event)) {
+        return;
+      }
       if (event.key === 'j' || event.key === 'ArrowDown') {
         event.preventDefault();
         nav2.current.next();
@@ -71,13 +70,16 @@ export function ReviewAnswers({
     doc.addEventListener('keydown', handler, true);
     return () => doc.removeEventListener('keydown', handler, true);
   }, [services]);
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
-  if (!test || !attempt || !q) return <Waiting text="Loading…" />;
+  }
+  if (!test || !attempt || !q) {
+    return <Waiting text="Loading…" />;
+  }
   return (
     <div className="qard-review">
       <aside className="qard-review-rail" aria-label="Questions">
@@ -208,12 +210,13 @@ function QuestionReview({
     askJob = job('ask', q.id),
     disputeJob = job('dispute', q.id);
   const running = (j?: { error?: string }) => !!j && !j.error;
-  if (!mark)
+  if (!mark) {
     return (
       <main className="qard-review-main">
         <p className="qard-muted">This answer hasn't been marked yet.</p>
       </main>
     );
+  }
   return (
     <main className="qard-review-main">
       <section className="qard-review-head">
@@ -312,7 +315,9 @@ function QuestionReview({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (retryText.trim()) void services.tests.retry(folder, q.id, retryText);
+                if (retryText.trim()) {
+                  void services.tests.retry(folder, q.id, retryText);
+                }
               }}
             >
               <textarea

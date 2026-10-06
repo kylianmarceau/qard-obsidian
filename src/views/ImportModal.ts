@@ -71,7 +71,9 @@ export class ImportModal extends Modal {
           'card',
         )} from ${plural(chosen.length, 'note')} selected.`,
       );
-      if (convert) convert.disabled = !chosen.length || this.busy;
+      if (convert) {
+        convert.disabled = !chosen.length || this.busy;
+      }
     };
     new Setting(list).setName('Select all').addToggle((t) =>
       t.setValue(importable.every((n) => this.selected.has(n.path))).onChange((v) => {
@@ -81,22 +83,33 @@ export class ImportModal extends Modal {
     );
     for (const note of importable) {
       const parts = [plural(cardCount(note), 'card')];
-      if (note.scheduled) parts.push(`${note.scheduled} scheduled`);
-      if (note.deck) parts.push(`deck “${note.deck}”`);
-      if (note.skipped.length) parts.push(`${note.skipped.length} skipped`);
-      if (note.copyOf) parts.push(`same cards as ${note.copyOf}`);
+      if (note.scheduled) {
+        parts.push(`${note.scheduled} scheduled`);
+      }
+      if (note.deck) {
+        parts.push(`deck “${note.deck}”`);
+      }
+      if (note.skipped.length) {
+        parts.push(`${note.skipped.length} skipped`);
+      }
+      if (note.copyOf) {
+        parts.push(`same cards as ${note.copyOf}`);
+      }
       new Setting(list)
         .setName(note.path)
         .setDesc(parts.join(' · '))
         .addToggle((t) =>
           t.setValue(this.selected.has(note.path)).onChange((v) => {
-            if (v) this.selected.add(note.path);
-            else this.selected.delete(note.path);
+            if (v) {
+              this.selected.add(note.path);
+            } else {
+              this.selected.delete(note.path);
+            }
             update();
           }),
         );
     }
-    if (importable.some((n) => n.scheduled))
+    if (importable.some((n) => n.scheduled)) {
       new Setting(el)
         .setName('Keep review schedule')
         .setDesc(
@@ -107,6 +120,7 @@ export class ImportModal extends Modal {
             this.keepSchedule = v;
           }),
         );
+    }
     this.renderSkipped(
       el,
       this.notes.flatMap((n) => n.skipped.map((s) => ({ path: n.path, ...s }))),
@@ -125,18 +139,25 @@ export class ImportModal extends Modal {
     el: HTMLElement,
     skipped: { path: string; line: number; reason: string }[],
   ) {
-    if (!skipped.length) return;
+    if (!skipped.length) {
+      return;
+    }
     const details = el.createEl('details', { cls: 'qard-import-skipped' });
     details.createEl('summary', {
       text: `${plural(skipped.length, 'item')} will be left unchanged`,
     });
     const list = details.createEl('ul');
-    for (const s of skipped.slice(0, 200))
+    for (const s of skipped.slice(0, 200)) {
       list.createEl('li', { text: `${s.path}:${s.line + 1} — ${s.reason}` });
-    if (skipped.length > 200) list.createEl('li', { text: `…and ${skipped.length - 200} more.` });
+    }
+    if (skipped.length > 200) {
+      list.createEl('li', { text: `…and ${skipped.length - 200} more.` });
+    }
   }
   private async run() {
-    if (this.busy || !this.settings) return;
+    if (this.busy || !this.settings) {
+      return;
+    }
     this.busy = true;
     const paths = this.notes
       .filter((n) => n.cards.length && this.selected.has(n.path))
@@ -168,7 +189,9 @@ export class ImportModal extends Modal {
         text: `${plural(result.failures.length, 'note')} could not be converted and were not changed:`,
       });
       const list = el.createEl('ul');
-      for (const f of result.failures) list.createEl('li', { text: `${f.path} — ${f.message}` });
+      for (const f of result.failures) {
+        list.createEl('li', { text: `${f.path} — ${f.message}` });
+      }
     }
     this.renderSkipped(el, result.skipped);
     new Setting(el)

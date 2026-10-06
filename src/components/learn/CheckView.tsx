@@ -6,17 +6,11 @@ import { isoDay } from '../../learn/mastery';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { JobControls } from '../jobs/JobControls';
-import { JobError, Waiting, scoreTone } from '../tests/common';
-import {
-  AnswerInput,
-  MarkedAnswer,
-  StateChip,
-  TutorHint,
-  answered,
-  relativeDay,
-  useLearn,
-  type LearnNav,
-} from './common';
+import { JobError, Waiting, scoreTone } from '../common/FeedbackStatus';
+import { AnswerInput, MarkedAnswer, answered } from '../common/QuestionAnswer';
+import { StateChip, TutorHint, relativeDay } from './learning-status';
+import { useLearn } from './useLearn';
+import { type LearnNav } from '../../views/navigation';
 
 const GOAL: Record<string, string> = {
   recognise: 'Tell apart',
@@ -45,11 +39,15 @@ export function CheckView({
   }, [services, path]);
   const record = services.learn.checkAt(path);
   useEffect(() => {
-    if (!record?.finishedAt) return;
+    if (!record?.finishedAt) {
+      return;
+    }
     let live = true;
     services.learn.course(record.mastery).then(
       (m) => {
-        if (live) setObjective(m.objectives.find((o) => o.id === record.objective));
+        if (live) {
+          setObjective(m.objectives.find((o) => o.id === record.objective));
+        }
       },
       () => {},
     );
@@ -57,13 +55,16 @@ export function CheckView({
       live = false;
     };
   }, [services, record?.finishedAt, record?.mastery, record?.objective, revision]);
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
-  if (!record) return <Waiting text="Loading…" />;
+  }
+  if (!record) {
+    return <Waiting text="Loading…" />;
+  }
   const marking = job(path, 'check-mark'),
     done = !!record.finishedAt,
     busy = !!marking && !marking.error;
@@ -76,9 +77,13 @@ export function CheckView({
     }
     const today = await services.learn.todayList(),
       following = today.checks.find((c) => c.check && c.check !== path);
-    if (following) nav.check(following.check!);
-    else if (today.cards) nav.studyDue();
-    else nav.today();
+    if (following) {
+      nav.check(following.check!);
+    } else if (today.cards) {
+      nav.studyDue();
+    } else {
+      nav.today();
+    }
   }
   return (
     <div className="qard-test">

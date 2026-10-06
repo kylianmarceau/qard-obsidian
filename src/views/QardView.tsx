@@ -2,7 +2,8 @@ import { ItemView, type WorkspaceLeaf } from 'obsidian';
 import { createRoot, type Root } from 'react-dom/client';
 import { QardApp } from './QardApp';
 import type QardPlugin from '../main';
-import type { QardServices, UiRequest } from './services';
+import type { QardServices } from './services';
+import type { UiRequest } from './navigation';
 export const VIEW_TYPE = 'qard-workspace';
 export class QardView extends ItemView {
   private root?: Root;
@@ -55,11 +56,14 @@ export class QardView extends ItemView {
     this.render();
   }
   private render() {
-    if (this.root && this.services)
+    if (this.root && this.services) {
       this.root.render(<QardApp services={this.services} request={this.request} />);
+    }
   }
   setFocus(enabled: boolean) {
-    if (!this.host || !this.home || enabled === this.focus) return;
+    if (!this.host || !this.home || enabled === this.focus) {
+      return;
+    }
     this.focus = enabled;
     const body = this.host.ownerDocument.body;
     if (enabled) {
@@ -70,7 +74,9 @@ export class QardView extends ItemView {
     } else {
       this.host.removeClass('qard-focus-overlay');
       this.home.appendChild(this.host);
-      if (!body.querySelector('.qard-focus-overlay')) body.removeClass('qard-focus-active');
+      if (!body.querySelector('.qard-focus-overlay')) {
+        body.removeClass('qard-focus-active');
+      }
     }
   }
   release() {

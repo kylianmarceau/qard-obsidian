@@ -9,8 +9,9 @@ export class VoiceRecorder {
     return typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   }
   async start() {
-    if (!VoiceRecorder.supported())
+    if (!VoiceRecorder.supported()) {
       throw new Error('Voice recording is unavailable in this version of Obsidian.');
+    }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     if (this.disposed) {
       stream.getTracks().forEach((t) => t.stop());
@@ -21,7 +22,9 @@ export class VoiceRecorder {
       this.recorder = new MediaRecorder(stream);
       this.chunks = [];
       this.recorder.ondataavailable = (event) => {
-        if (event.data.size) this.chunks.push(event.data);
+        if (event.data.size) {
+          this.chunks.push(event.data);
+        }
       };
       this.recorder.onstop = () => {
         const blob = this.disposed
@@ -55,7 +58,9 @@ export class VoiceRecorder {
   }
   dispose() {
     this.disposed = true;
-    if (this.recorder?.state !== 'inactive') this.recorder?.stop();
+    if (this.recorder?.state !== 'inactive') {
+      this.recorder?.stop();
+    }
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = undefined;
     this.pendingStop?.(undefined);

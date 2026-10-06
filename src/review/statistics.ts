@@ -80,12 +80,13 @@ export function readStatistics(raw: unknown, history: ReviewEvent[]): StudyStati
   }
   const stats = emptyStatistics();
   stats.partialHistory = history.length >= 10000;
-  for (const e of history)
+  for (const e of history) {
     if (/^[A-Za-z0-9_-]+$/.test(e.cardId) && Number.isFinite(new Date(e.at).getTime())) {
       const day = isoDay(e.at);
       stats.daily[day] = increment(stats.daily[day], e.rating);
       stats.cards[e.cardId] = increment(stats.cards[e.cardId], e.rating);
     }
+  }
   return stats;
 }
 
@@ -93,11 +94,14 @@ export function ratingSummary(stats: StudyStatistics, today: string, days?: numb
   const start = days ? addDays(today, 1 - days) : '';
   let ratings: RatingCounts = [0, 0, 0, 0],
     activeDays = 0;
-  for (const [day, counts] of Object.entries(stats.daily))
+  for (const [day, counts] of Object.entries(stats.daily)) {
     if (day >= start && day <= today) {
       ratings = sumRatings(ratings, counts);
-      if (countRatings(counts)) activeDays++;
+      if (countRatings(counts)) {
+        activeDays++;
+      }
     }
+  }
   const total = countRatings(ratings);
   return {
     ratings,
@@ -140,7 +144,9 @@ export function yearActivity(stats: StudyStatistics, year: number, today: string
       activeDays++;
       streak++;
       longest = Math.max(longest, streak);
-    } else streak = 0;
+    } else {
+      streak = 0;
+    }
   }
   return { days, total, activeDays, longest, average: activeDays ? total / activeDays : 0 };
 }
@@ -179,12 +185,18 @@ export function cardStatistics(
     }
     const seen = (state?.reviewCount ?? 0) > 0;
     const isDue = scheduled && seen && scheduler.isDue(state, now);
-    if (seen) reviewed++;
-    if (isDue) due++;
+    if (seen) {
+      reviewed++;
+    }
+    if (isDue) {
+      due++;
+    }
     if (scheduled && seen) {
       const dueDay = isDue ? today : state?.due !== undefined ? isoDay(state.due) : today;
       const i = forecast.findIndex((_, index) => addDays(today, index) === dueDay);
-      if (i >= 0) forecast[i] = forecast[i]! + 1;
+      if (i >= 0) {
+        forecast[i] = forecast[i]! + 1;
+      }
     }
     const deck = decks.get(c.deck) ?? {
       name: c.deck,
@@ -194,8 +206,12 @@ export function cardStatistics(
       ratings: [0, 0, 0, 0],
     };
     deck.total++;
-    if (seen) deck.reviewed++;
-    if (isDue) deck.due++;
+    if (seen) {
+      deck.reviewed++;
+    }
+    if (isDue) {
+      deck.due++;
+    }
     deck.ratings = sumRatings(deck.ratings, counts);
     decks.set(c.deck, deck);
   }

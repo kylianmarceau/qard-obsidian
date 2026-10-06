@@ -19,7 +19,9 @@ export interface SessionStep {
 export const stableId = (id: unknown): id is string =>
   typeof id === 'string' && /^[A-Za-z0-9_-]+$/.test(id);
 export function readSessions(raw: unknown): SavedSession[] {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const seen = new Set<string>();
   return (raw as SavedSession[])
     .filter((s: SavedSession) => {
@@ -40,8 +42,9 @@ export function readSessions(raw: unknown): SavedSession[] {
         !Number.isFinite(s.updatedAt) ||
         !Array.isArray(s.results) ||
         s.results.some((r) => !r || !stableId(r.cardId) || ![1, 2, 3, 4].includes(r.rating))
-      )
+      ) {
         return false;
+      }
       seen.add(s.id);
       return true;
     })
@@ -62,7 +65,9 @@ export function resolveSession(session: SavedSession, cards: QardCard[]) {
   const byId = new Map<string, QardCard>();
   const ambiguous = new Set<string>();
   for (const card of cards) {
-    if (!card.stable || card.duplicateId || byId.has(card.id)) ambiguous.add(card.id);
+    if (!card.stable || card.duplicateId || byId.has(card.id)) {
+      ambiguous.add(card.id);
+    }
     byId.set(card.id, card);
   }
   const available = (id: string) => byId.has(id) && !ambiguous.has(id);

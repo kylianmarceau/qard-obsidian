@@ -14,7 +14,7 @@ Qard does not read or write the system clipboard. **Select answer** opens a read
 
 ## CSS
 
-`npm run lint:css` uses `stylelint-config-obsidianmd` and fails on warnings. It targets Electron 30 to match the reported Obsidian 1.6.5 review baseline, which is more conservative than Qard’s minimum Obsidian 1.7.2 version. All official Obsidian-specific rules remain active. Two general stylesheet style rules are disabled: compact declaration blocks follow this repository’s existing format, and descending-specificity checks cannot distinguish independent component states and intentional overrides. No clipboard, compatibility, !important or :has warning is suppressed.
+`npm run lint:css` uses `stylelint-config-obsidianmd` and fails on warnings. It targets Electron 30 to match the reported Obsidian 1.6.5 review baseline, which is more conservative than Qard’s minimum Obsidian 1.7.2 version. All official Obsidian-specific rules remain active. The general descending-specificity rule is disabled because it cannot distinguish independent component states and intentional overrides. Declaration formatting follows Prettier; all other configured stylesheet checks remain active. No clipboard, compatibility, !important or :has warning is suppressed.
 
 ## Dependencies
 

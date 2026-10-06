@@ -7,8 +7,8 @@ export type AgentRole = 'tutor' | 'writer' | 'marker';
 /**
  * vault: false when the prompt already holds everything needed, so API runners skip the note tools.
  * effort: how hard to think, where the provider supports it.
+ * onUsage: the run's token usage, summed over its turns, when reported by the provider.
  */
-/** onUsage receives the run's token usage (summed over its turns) when the provider reports it. */
 export interface AgentTask {
   prompt: string;
   schema: Schema;
@@ -66,7 +66,9 @@ export async function runValidated<T>(
   try {
     return read(first);
   } catch (error) {
-    if (task.signal?.aborted) throw new Error(CANCELLED);
+    if (task.signal?.aborted) {
+      throw new Error(CANCELLED);
+    }
     const again = await runner.run({
       ...task,
       prompt: `${task.prompt}\n\nYour previous reply was rejected: ${(error as Error).message}\nPrevious reply:\n${JSON.stringify(first).slice(0, 20000)}\nReturn a corrected reply.`,
@@ -76,6 +78,23 @@ export async function runValidated<T>(
 }
 
 export const CANCELLED = 'Cancelled.';
+/** Ignore replies from providers that finish after the caller cancels the job. */
+export function guardRunner(runner: AgentRunner, signal: AbortSignal): AgentRunner {
+  return {
+    name: runner.name,
+    run: async (task) => {
+      if (signal.aborted) {
+        throw new Error(CANCELLED);
+      }
+      const result = await runner.run(task);
+      if (signal.aborted) {
+        throw new Error(CANCELLED);
+      }
+      return result;
+    },
+  };
+}
+
 /** One API request (one turn of a tool loop). Replies usually take seconds; a stalled connection otherwise waits forever. */
 export const REQUEST_TIMEOUT = 5 * 60_000;
 /** Settles when work does, or rejects on timeout or cancel. Obsidian's requestUrl can't be aborted, so this stops waiting for it. */
@@ -85,7 +104,9 @@ export function deadline<T>(
   ms = REQUEST_TIMEOUT,
   what = 'The provider',
 ): Promise<T> {
-  if (signal?.aborted) return Promise.reject(new Error(CANCELLED));
+  if (signal?.aborted) {
+    return Promise.reject(new Error(CANCELLED));
+  }
   return new Promise<T>((resolve, reject) => {
     const done = () => {
       window.clearTimeout(timer);

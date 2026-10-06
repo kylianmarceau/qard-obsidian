@@ -12,7 +12,9 @@ export function VoiceAnswer({ onBusy }: { onBusy: (busy: boolean) => void }) {
     () => () => {
       alive.current = false;
       recorder.current?.dispose();
-      if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+      if (blobUrl.current) {
+        URL.revokeObjectURL(blobUrl.current);
+      }
       onBusy(false);
     },
     [onBusy],
@@ -40,15 +42,20 @@ export function VoiceAnswer({ onBusy }: { onBusy: (busy: boolean) => void }) {
   }
   async function stop() {
     const blob = await recorder.current?.stop();
-    if (!alive.current) return;
-    if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
+    if (!alive.current) {
+      return;
+    }
+    if (blobUrl.current) {
+      URL.revokeObjectURL(blobUrl.current);
+    }
     blobUrl.current = blob ? URL.createObjectURL(blob) : '';
     setUrl(blobUrl.current);
     setStatus('idle');
     onBusy(false);
   }
-  if (!VoiceRecorder.supported())
+  if (!VoiceRecorder.supported()) {
     return <p className="qard-muted">Voice recording is unavailable on this device.</p>;
+  }
   return (
     <div className="qard-voice" data-qard-keyboard-ignore="true">
       {status === 'recording' ? (

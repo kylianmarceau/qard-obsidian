@@ -7,7 +7,8 @@ import { scheduler } from '../../review/scheduler';
 import { questions } from '../../tests/test-types';
 import { timeLeft } from '../../jobs/job-clock';
 import { InlineMarkdown, Markdown } from '../Markdown';
-import { Waiting, useTestFolder } from '../tests/common';
+import { Waiting } from '../common/FeedbackStatus';
+import { useTestFolder } from '../tests/useTestFolder';
 import { CheckView } from '../learn/CheckView';
 import { useTick } from './RunningJobs';
 import { AgentLabel } from './AgentLabel';
@@ -67,7 +68,9 @@ export function cardsFor(
         (a, b) =>
           Number(scheduler.isDue(states[b.id], now)) - Number(scheduler.isDue(states[a.id], now)),
       );
-    if (warm.length) return { cards: warm.slice(0, 8), warmup: true };
+    if (warm.length) {
+      return { cards: warm.slice(0, 8), warmup: true };
+    }
   }
   return { cards: due.slice(0, 12), warmup: false };
 }
@@ -78,7 +81,9 @@ async function findRetry(services: QardServices, context: WaitContext): Promise<
     const entry = await services.tests.load(t.folder).catch(() => undefined),
       test = entry?.test,
       attempt = entry?.attempt;
-    if (!test || !attempt) continue;
+    if (!test || !attempt) {
+      continue;
+    }
     const q = questions(test).find(
       (x) =>
         x.type !== 'mcq' &&
@@ -86,7 +91,9 @@ async function findRetry(services: QardServices, context: WaitContext): Promise<
         !attempt.review[x.id]?.retry &&
         !avoid.has(x.source?.path ?? ''),
     );
-    if (q) return { folder: t.folder, question: q.id };
+    if (q) {
+      return { folder: t.folder, question: q.id };
+    }
   }
   return undefined;
 }
@@ -133,7 +140,9 @@ export function WhileYouWait({
       services.learn?.todayList().catch(() => undefined),
       findRetry(services, ctx).catch(() => undefined),
     ]).then(([today, retry]) => {
-      if (!live) return;
+      if (!live) {
+        return;
+      }
       const due = today?.checks.find((c) => c.check);
       setOptions({
         cards,
@@ -152,16 +161,25 @@ export function WhileYouWait({
       ? services.jobs.estimate(job.kind)! - (Date.now() - job.startedAt)
       : undefined;
   const available = useMemo(() => {
-    if (!options) return [];
+    if (!options) {
+      return [];
+    }
     const list: { id: Activity; label: string }[] = [];
-    if (options.check) list.push({ id: 'check', label: `Check · ${options.check.title}` });
-    if (options.cards.length)
+    if (options.check) {
+      list.push({ id: 'check', label: `Check · ${options.check.title}` });
+    }
+    if (options.cards.length) {
       list.push({
         id: 'cards',
         label: `${options.warmup ? 'Warm-up' : 'Cards'} · ${options.cards.length}`,
       });
-    if (options.retry) list.push({ id: 'retry', label: 'Retry a missed point' });
-    if (context.prefer?.files?.length) list.push({ id: 'notes', label: 'Read the notes' });
+    }
+    if (options.retry) {
+      list.push({ id: 'retry', label: 'Retry a missed point' });
+    }
+    if (context.prefer?.files?.length) {
+      list.push({ id: 'notes', label: 'Read the notes' });
+    }
     return list;
   }, [options, context.prefer?.files?.length]);
   const fallback =
@@ -297,17 +315,20 @@ function MiniReview({
     [revealed, setRevealed] = useState(false),
     [error, setError] = useState('');
   const card = cards[index];
-  if (!card)
+  if (!card) {
     return (
       <p className="qard-wait-done">
         <CheckIcon size={15} /> {cards.length} {cards.length === 1 ? 'card' : 'cards'} reviewed.
       </p>
     );
+  }
   async function rate(rating: Rating) {
     setError('');
     try {
       await services.reviews.review(card!.id, rating);
-      if (rating === 1) void services.learn?.cardLapse(card!.id).catch(() => {});
+      if (rating === 1) {
+        void services.learn?.cardLapse(card!.id).catch(() => {});
+      }
       setIndex((i) => i + 1);
       setRevealed(false);
     } catch (e) {
@@ -382,7 +403,9 @@ function RetryPoint({
   const test = entry?.test,
     attempt = entry?.attempt,
     q = test ? questions(test).find((x) => x.id === question) : undefined;
-  if (!test || !attempt || !q) return <Waiting text="Loading…" />;
+  if (!test || !attempt || !q) {
+    return <Waiting text="Loading…" />;
+  }
   const mark = attempt.marks[q.id],
     retry = attempt.review[q.id]?.retry,
     running = job('retry', q.id);
@@ -422,7 +445,9 @@ function RetryPoint({
           className="qard-wait-retry"
           onSubmit={(e) => {
             e.preventDefault();
-            if (text.trim()) void services.tests.retry(folder, q.id, text);
+            if (text.trim()) {
+              void services.tests.retry(folder, q.id, text);
+            }
           }}
         >
           <textarea

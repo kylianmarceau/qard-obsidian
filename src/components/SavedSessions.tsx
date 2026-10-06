@@ -30,14 +30,18 @@ export function SavedSessions({
       if (remove) {
         await services.reviews.discardSession(id);
         setDiscard('');
-      } else await resume(id);
+      } else {
+        await resume(id);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy('');
     }
   }
-  if (!sessions.length) return null;
+  if (!sessions.length) {
+    return null;
+  }
   return (
     <section className="qard-saved-sessions" aria-label="Saved flashcard sessions">
       <h2>Continue studying</h2>

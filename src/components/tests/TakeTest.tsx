@@ -4,7 +4,9 @@ import type { QardServices } from '../../views/services';
 import type { Confidence, Question, SectionStatus } from '../../tests/test-types';
 import { scoreOf } from '../../tests/test-types';
 import { InlineMarkdown, Markdown } from '../Markdown';
-import { JobError, Waiting, useTestFolder, type TestNav } from './common';
+import { JobError, Waiting } from '../common/FeedbackStatus';
+import { useTestFolder } from './useTestFolder';
+import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 import { AgentLabel } from '../jobs/AgentLabel';
 
@@ -41,21 +43,25 @@ export function TakeTest({
   useEffect(() => {
     top.current?.scrollIntoView({ block: 'start' });
   }, [index]);
-  if (error)
+  if (error) {
     return (
       <p className="qard-error" role="alert">
         {error}
       </p>
     );
+  }
   const writing = job('generate');
-  if (!entry) return <Waiting text="Loading…" />;
-  if (!test && writing?.error)
+  if (!entry) {
+    return <Waiting text="Loading…" />;
+  }
+  if (!test && writing?.error) {
     return (
       <div className="qard-doc">
         <JobError job={writing} retry={() => void services.tests.generate({ folder })} />
       </div>
     );
-  if (!test || hold.held)
+  }
+  if (!test || hold.held) {
     return (
       <WhileYouWait
         services={services}
@@ -77,7 +83,10 @@ export function TakeTest({
         cancel={() => services.tests.cancel(folder, 'generate')}
       />
     );
-  if (index === undefined) return null;
+  }
+  if (index === undefined) {
+    return null;
+  }
   const section = test.sections[index]!,
     status: SectionStatus = attempt?.sections[section.id]?.status ?? 'open';
   // Exam mode keeps every answer editable until Finish; section mode locks a section once submitted.
@@ -186,7 +195,9 @@ export function TakeTest({
           <button
             className="qard-primary"
             onClick={() => {
-              if (marking === 'section') void services.tests.submit(folder, section.id);
+              if (marking === 'section') {
+                void services.tests.submit(folder, section.id);
+              }
               setIndex(index + 1);
             }}
           >
