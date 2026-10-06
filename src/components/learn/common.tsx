@@ -1,9 +1,9 @@
-import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { QardServices } from '../../views/services';
-import type { AnnotationKind, AnswerState, Confidence, Question, QuestionMark } from '../../tests/test-types';
+import type { AnswerState, Confidence, Question, QuestionMark } from '../../tests/test-types';
 import type { MasteryState } from '../../learn/mastery';
 import type { LearnJob, LearnJobKind } from '../../learn/learn-service';
-import { placeAnnotations } from '../../tests/annotate';
+import { AnswerFeedback, MarkScheme } from '../common/AnswerFeedback';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { scoreTone } from '../tests/common';
 
@@ -53,20 +53,14 @@ export function AnswerInput({ services, question: q, answer, onChange, locked, p
 }
 export const answered = (q: Question, a?: AnswerState) => !!a && (a.unknown || (q.type === 'mcq' ? a.choice !== undefined : !!a.text?.trim()));
 
-const KIND: Record<AnnotationKind, string> = { correct: 'Correct', wrong: 'Incorrect', vague: 'Too vague', missing: 'Missing', insight: 'Good insight' };
 /** A marked answer: underlines linked to the marker's notes, the mark scheme, and the model answer on request. */
 export function MarkedAnswer({ services, question: q, answer, mark, path }: { services: QardServices; question: Question; answer?: AnswerState; mark: QuestionMark; path: string }) {
-  const placed = useMemo(() => placeAnnotations(answer?.text ?? '', mark.annotations), [answer?.text, mark.annotations]);
-  const [selected, setSelected] = useState<number>(), [model, setModel] = useState(mark.score < q.marks);
+  const [model, setModel] = useState(false);
   return <div className="qard-marked">
     <div className="qard-marked-head"><span className="qard-muted"><InlineMarkdown text={mark.feedback} path={path} services={services}/></span><span className={'qard-review-score ' + scoreTone(mark.score, q.marks)}>{mark.score}/{q.marks}</span></div>
-    {answer?.unknown ? <p className="qard-muted">You said you didn't know.</p>
-      : q.type === 'mcq' ? q.options?.map((o, i) => <div key={i} className={'qard-mcq-row' + (answer?.choice === i ? ' is-chosen' : '')}><span className={i === q.answer ? 'is-full' : answer?.choice === i ? 'is-zero' : ''}>{i === q.answer ? '✓' : answer?.choice === i ? '✕' : ''}</span><Markdown text={o} path={path} services={services}/></div>)
-      : <div className="qard-review-answer is-compact">
-        {answer?.text?.trim() ? <div className="qard-marked-text">{placed.segments.map((s, i) => s.kind ? <span key={i}>{s.text && <span className={`qard-seg qard-seg-${s.kind}` + (selected === s.note ? ' is-selected' : '')}>{s.text}</span>}<button className={`qard-pin qard-pin-${s.kind}`} aria-label={`Note ${s.note}: ${KIND[s.kind]}`} onClick={() => setSelected(selected === s.note ? undefined : s.note)}>{s.kind === 'missing' ? '+' : ''}{s.note}</button></span> : <span key={i}>{s.text}</span>)}</div> : <p className="qard-muted">(No answer)</p>}
-        {placed.notes.length > 0 && <div className="qard-notes">{placed.notes.map(n => <button key={n.n} className={`qard-note qard-note-${n.kind}` + (selected === n.n ? ' is-selected' : '')} aria-pressed={selected === n.n} onClick={() => setSelected(selected === n.n ? undefined : n.n)}><span className="qard-note-kind">{n.n} · {KIND[n.kind]}</span><Markdown text={n.note} path={path} services={services}/></button>)}</div>}
-      </div>}
-    {q.type !== 'mcq' && <div className="qard-rubric">{q.rubric.map((r, i) => <div key={i} className="qard-rubric-row"><span className={mark.awarded[i] ? 'is-full' : 'is-zero'}>{mark.awarded[i] ? '✓' : '✕'}</span><span className={mark.awarded[i] ? 'qard-muted' : ''}><InlineMarkdown text={r.point} path={path} services={services}/></span><span className="qard-muted">{mark.awarded[i] ? r.marks : 0}/{r.marks}</span></div>)}</div>}
+    {q.type === 'mcq' ? <section className="qard-answer-surface"><div className="qard-label">Your answer</div>{answer?.unknown ? <p className="qard-muted">You said you didn't know.</p> : q.options?.map((option, i) => <div key={i} className={'qard-mcq-row' + (answer?.choice === i ? ' is-chosen' : '')}><span className={i === q.answer ? 'is-full' : answer?.choice === i ? 'is-zero' : ''}>{i === q.answer ? '✓' : answer?.choice === i ? '✕' : ''}</span><Markdown text={option} path={path} services={services}/></div>)}</section>
+      : <AnswerFeedback services={services} answer={answer} mark={mark} path={path}/>}
+    {q.type !== 'mcq' && <MarkScheme services={services} question={q} mark={mark} path={path}/>}
     <button className="qard-text-button" aria-expanded={model} onClick={() => setModel(!model)}>{model ? 'Hide model answer' : 'Model answer'}</button>
     {model && <div className="qard-panel"><Markdown text={q.model} path={path} services={services}/></div>}
   </div>;

@@ -409,7 +409,7 @@ Deck and topic assignments are fixed once you attempt to add cards, so a failed 
 
 ## Exam planning
 
-Open **Exam plans** in the Qard header, then choose **New exam**. Give the exam a name and date, choose the weekdays you can study, set a daily review target, and select whole decks or individual topics. New cards in the selected decks/topics join the plan automatically. Plans can be edited or deleted without deleting cards, review history or saved sessions.
+Open the **Plans** tab in the Qard library, then choose **New exam**. Give the exam a name and date, choose the weekdays you can study, set a daily review target, and select whole decks or individual topics. New cards in the selected decks/topics join the plan automatically. Plans can be edited or deleted without deleting cards, review history or saved sessions.
 
 The planner spreads a first pass over the remaining selected study days, including exam day if it is a selected weekday. Today's session reserves space for that first pass, then fills the remaining daily target with due repeat reviews. The target counts completed reviews today, across normal sessions; repeat ratings use the target too, while cram viewing does not count. Learning cards that become due later the same day can appear again within the remaining target. Rest days do not generate a new session. A missed study day increases the remaining first-pass workload. A warning appears when the remaining days and target cannot cover all cards even before repeat reviews.
 

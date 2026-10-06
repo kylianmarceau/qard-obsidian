@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { QardServices } from '../../views/services';
-import type { AnnotationKind, Question } from '../../tests/test-types';
+import type { Question } from '../../tests/test-types';
 import { questions, sectionOf } from '../../tests/test-types';
-import { placeAnnotations } from '../../tests/annotate';
+import { AnswerFeedback, MarkScheme } from '../common/AnswerFeedback';
 import { ignoresStudyKey } from '../../review/keyboard';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { AskThread } from '../common/AskThread';
 import { Check, JobError, Waiting, cardTarget, scoreTone, useTestFolder, type TestNav } from './common';
 
-const KIND: Record<AnnotationKind, string> = { correct: 'Correct', wrong: 'Incorrect', vague: 'Too vague', missing: 'Missing', insight: 'Good insight' };
 const MISTAKE: Record<string, string> = { misconception: 'Misconception', careless: 'Careless slip', imprecise: 'Imprecise', incomplete: 'Incomplete', unknown: "Didn't know" };
 type Panel = 'retry' | 'model' | 'ask' | 'dispute' | 'card' | null;
 
@@ -52,11 +51,10 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
   const test = entry!.test!, attempt = entry!.attempt!;
   const mark = attempt.marks[q.id], answer = attempt.answers[q.id], review = attempt.review[q.id];
   const section = sectionOf(test, q.id)!, path = q.source?.path || folder;
-  const [selected, setSelected] = useState<number>(), [panel, setPanel] = useState<Panel>(null), [compare, setCompare] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null), [compare, setCompare] = useState(false);
   const [retryText, setRetryText] = useState(''), [disputeText, setDisputeText] = useState(''), [override, setOverride] = useState<boolean[]>();
   const target = cardTarget(services, q, test.title, section.title, test);
   const [front, setFront] = useState(''), [back, setBack] = useState(''), [cardError, setCardError] = useState(''), [saving, setSaving] = useState(false);
-  const placed = useMemo(() => placeAnnotations(answer?.text ?? '', mark?.annotations ?? []), [answer?.text, mark?.annotations]);
   const lost = (mark?.score ?? 0) < q.marks, sure = lost && answer?.confidence === 'sure';
   const toggle = (p: Panel) => setPanel(panel === p ? null : p);
   const openCard = () => {
@@ -76,29 +74,26 @@ function QuestionReview({ services, folder, question: q, number, prev, next }: {
       <div>
         <span className="qard-muted">Question {number} · <InlineMarkdown text={section.title} path={path} services={services}/></span>
         <div className="qard-review-prompt"><Markdown text={q.prompt} path={path} services={services}/></div>
+        {mark.feedback && <p className="qard-review-summary"><InlineMarkdown text={mark.feedback} path={path} services={services}/></p>}
         {(mark.mistake !== 'none' || sure) && <span className={'qard-review-tag' + (sure ? ' is-sure' : '')}>{[MISTAKE[mark.mistake], sure ? 'you were sure' : ''].filter(Boolean).join(' · ')}</span>}
       </div>
       <span className={'qard-review-score ' + scoreTone(mark.score, q.marks)}>{mark.score}/{q.marks}</span>
     </section>
 
     {q.type === 'mcq' ? <section><div className="qard-label">Your answer</div>{q.options?.map((o, i) => <div key={i} className={'qard-mcq-row' + (answer?.choice === i ? ' is-chosen' : '')}><span className={i === q.answer ? 'is-full' : answer?.choice === i ? 'is-zero' : ''}>{i === q.answer ? '✓' : answer?.choice === i ? '✕' : ''}</span><Markdown text={o} path={path} services={services}/></div>)}</section>
-      : <section className="qard-review-answer">
-        <div><div className="qard-label">Your answer</div>
-          {answer?.unknown ? <p className="qard-muted">You said you didn't know.</p> : answer?.text?.trim() ? <div className="qard-marked-text">{placed.segments.map((s, i) => s.kind ? <span key={i}>{s.text && <span className={`qard-seg qard-seg-${s.kind}` + (selected === s.note ? ' is-selected' : '')}>{s.text}</span>}<button className={`qard-pin qard-pin-${s.kind}`} aria-label={`Note ${s.note}: ${KIND[s.kind]}`} onClick={() => setSelected(selected === s.note ? undefined : s.note)}>{s.kind === 'missing' ? '+' : ''}{s.note}</button></span> : <span key={i}>{s.text}</span>)}</div> : <p className="qard-muted">(No answer)</p>}
-        </div>
-        <div className="qard-notes">{placed.notes.map(n => <button key={n.n} className={`qard-note qard-note-${n.kind}` + (selected === n.n ? ' is-selected' : '')} aria-pressed={selected === n.n} onClick={() => setSelected(selected === n.n ? undefined : n.n)}><span className="qard-note-kind">{n.n} · {KIND[n.kind]}</span><Markdown text={n.note} path={path} services={services}/></button>)}
-          {!placed.notes.length && mark.feedback && <div className="qard-muted"><Markdown text={mark.feedback} path={path} services={services}/></div>}</div>
-      </section>}
+      : <AnswerFeedback services={services} answer={answer} mark={mark} path={path}/>}
 
-    <section className="qard-rubric"><div className="qard-label">Mark scheme</div>{q.rubric.map((r, i) => <div key={i} className="qard-rubric-row"><span className={mark.awarded[i] ? 'is-full' : 'is-zero'} aria-label={mark.awarded[i] ? 'Awarded' : 'Not awarded'}>{mark.awarded[i] ? '✓' : '✕'}</span><span className={mark.awarded[i] ? 'qard-muted' : ''}><InlineMarkdown text={r.point} path={path} services={services}/></span><span className="qard-muted">{mark.awarded[i] ? r.marks : 0}/{r.marks}</span></div>)}</section>
+    <MarkScheme services={services} question={q} mark={mark} path={path}/>
 
-    <section className="qard-review-actions">
+    <section className="qard-review-actions" aria-label="Review actions">
+      <div className="qard-action-group">
       {lost && !review?.retry && panel !== 'retry' && panel !== 'model' && <button className="qard-primary" onClick={() => toggle('retry')}>Try again</button>}
       <button className={panel === 'model' ? 'is-on' : ''} onClick={() => toggle('model')}>Model answer</button>
-      <span className="qard-spacer"/>
+      </div><div className="qard-action-group">
       <button className={panel === 'ask' ? 'is-on' : ''} onClick={() => toggle('ask')}>Ask</button>
       {q.type !== 'mcq' && <button className={panel === 'dispute' ? 'is-on' : ''} onClick={() => toggle('dispute')}>Dispute</button>}
       {lost && <button className={review?.card ? 'is-done' : panel === 'card' ? 'is-on' : ''} disabled={!!review?.card} onClick={openCard}>{review?.card ? '✓ Card added' : 'Make card'}</button>}
+      </div>
     </section>
 
     {(panel === 'retry' || review?.retry) && <section className="qard-panel">

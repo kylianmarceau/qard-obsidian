@@ -5,7 +5,7 @@
 **Your learning, in focus.** Flashcards, practice tests and guided learning from your Obsidian notes.
 
 - **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic with FSRS spaced repetition, or use Cram mode to reveal and advance without ratings. Generated cards track their source notes; review suggested edits when the material changes.
-- **Exam plans:** choose an exam date, study days and daily review target; spread revision across selected decks/topics, track coverage, and launch practice tests.
+- **Plans:** choose an exam date, study days and daily review target; spread revision across selected decks/topics, track coverage, and launch practice tests.
 - **Saved sessions:** leave normal or cram study midway and resume the same card order and position after reopening Qard.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.

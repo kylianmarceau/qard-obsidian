@@ -1,12 +1,13 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { CalendarDays, ChevronRight } from 'lucide-react';
 import { examProgress, localDay, validDay, type ExamPlan } from '../exams/exam-plan';
+import { LibraryHeader } from './tests/TestsBrowser';
 import { topicKey } from '../decks/deck-index';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import type { Selection } from '../review/session';
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-export function ExamPlanner({ services, start, resume, test, back }: { services: QardServices; start: (cards: QardCard[], examId: string) => Promise<void>; resume: (id: string) => Promise<void>; test: (prompt: string) => void; back: () => void }) {
+export function ExamPlanner({ services, start, resume, test, back, tests, learn }: { services: QardServices; start: (cards: QardCard[], examId: string) => Promise<void>; resume: (id: string) => Promise<void>; test: (prompt: string) => void; back: () => void; tests?: () => void; learn?: () => void }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
@@ -26,7 +27,7 @@ export function ExamPlanner({ services, start, resume, test, back }: { services:
     finally { setBusy(''); }
   }
   if (editing) return <ExamEditor key={editing === 'new' ? 'new' : editing.id} services={services} plan={editing === 'new' ? undefined : editing} done={() => setEditing(undefined)}/>;
-  return <div className="qard-exam-workspace"><div className="qard-heading"><div><h1>Exam plans</h1><p>Plan your revision around the days you can study.</p></div><div className="qard-actions"><button onClick={back}>Back</button><button className="qard-primary" onClick={() => setEditing('new')}>New exam</button></div></div>
+  return <div className="qard-exam-workspace"><LibraryHeader active="plans" decks={back} tests={tests} learn={learn} plans={() => setEditing(undefined)} title="Exam plans" description="Plan your revision around an exam date and the days you can study."><button className="qard-primary" onClick={() => setEditing('new')}><CalendarDays size={16}/>New exam</button></LibraryHeader>
     {error && <p className="qard-error" role="alert">{error}</p>}
     {index.loading && <p role="status">Loading study material…</p>}
     {!saved.exams.length && <div className="qard-empty"><CalendarDays size={30}/><p>Add an exam date, choose your decks or topics, and set a daily review target.</p></div>}

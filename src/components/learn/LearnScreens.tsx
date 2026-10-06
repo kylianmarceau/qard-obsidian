@@ -10,7 +10,7 @@ import { InlineMarkdown } from '../Markdown';
 import { NEEDS_LESSON, isoDay } from '../../learn/mastery';
 import type { LessonSummary, Today, TodayItem } from '../../learn/learn-types';
 import { Check, JobError, Waiting } from '../tests/common';
-import { LibraryTabs } from '../tests/TestsBrowser';
+import { LibraryHeader } from '../tests/TestsBrowser';
 import type { TestNav } from '../tests/common';
 import { StateChip, relativeDay, useLearn, type LearnNav } from './common';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
@@ -61,7 +61,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   </div>;
 }
 
-export function LearnBrowser({ services, nav, testNav }: { services: QardServices; nav: LearnNav; testNav: TestNav }) {
+export function LearnBrowser({ services, nav, testNav, plans }: { services: QardServices; nav: LearnNav; testNav: TestNav; plans?: () => void }) {
   const { revision } = useLearn(services);
   const [courses, setCourses] = useState<Mastery[]>(), [lessons, setLessons] = useState<LessonSummary[]>([]);
   const [pending, setPending] = useState<Awaited<ReturnType<typeof services.learn.pending>>>();
@@ -69,7 +69,7 @@ export function LearnBrowser({ services, nav, testNav }: { services: QardService
   const day = isoDay(Date.now());
   const open = lessons.filter(l => !l.finished), recent = lessons.filter(l => l.finished).slice(0, 5);
   return <>
-    <div className="qard-heading"><LibraryTabs active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn}/><div className="qard-actions">{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></div></div>
+    <LibraryHeader active="learn" decks={testNav.library} tests={testNav.tests} learn={nav.learn} plans={plans} title="Your learning" description="Build understanding one topic at a time, with lessons and checks.">{nav.usage && <button className="qard-text-button" onClick={nav.usage}>Usage</button>}<button onClick={nav.today}>Today</button><button className="qard-primary" onClick={() => nav.mapCourse()}><Plus size={16}/>Map a course</button></LibraryHeader>
     {!courses && <p className="qard-muted" role="status">Loading courses…</p>}
     {pending?.mapping.map(f => <div key={f} className="qard-resume is-static"><Waiting text={`Mapping ${f.split('/').pop()}…`}><AgentLabel services={services} role="writer"/></Waiting><DeleteLearnItem services={services} kind="mapping" path={f}/></div>)}
     {pending?.failed.map(f => <div key={f.kind + f.target} className="qard-error" role="alert"><span>{f.kind === 'map' ? 'Mapping' : 'Updating'} {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}</span>
