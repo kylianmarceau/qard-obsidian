@@ -19,8 +19,8 @@ export function LibraryTabs({ active, decks, tests, learn, plans }: LibraryNavig
     window.setTimeout(() => scope?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus(), 0);
   }}>{tab.label}</button>)}</div>;
 }
-export function LibraryHeader({ title, description, children, ...navigation }: LibraryNavigation & { title: string; description: string; children: ReactNode }) {
-  return <header className="qard-library-header"><LibraryTabs {...navigation}/><div className="qard-heading qard-library-heading"><div><h1>{title}</h1><p>{description}</p></div><div className="qard-actions">{children}</div></div></header>;
+export function LibraryHeader({ title, description, children, ...navigation }: LibraryNavigation & { title: string; description?: string; children: ReactNode }) {
+  return <header className="qard-library-header"><LibraryTabs {...navigation}/><div className="qard-heading qard-library-heading"><div><h1>{title}</h1>{description && <p>{description}</p>}</div><div className="qard-actions">{children}</div></div></header>;
 }
 const STATUS: Record<TestSummary['status'], string> = { planning: 'Planning…', plan: 'Plan ready', writing: 'Writing…', ready: 'Not started', 'in-progress': 'In progress', marked: '', failed: 'Needs attention' };
 
