@@ -1,9 +1,9 @@
 import { CardSourceLinks } from './CardSourceLinks';
 import { useState } from 'react';
-import { ExternalLink, Pencil, Trash2, Play } from 'lucide-react';
+import { Pencil, Trash2, Play } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
-import { Markdown } from './Markdown';
+import { CardContent } from './CardContent';
 import { CardEditor } from './CardEditor';
 export function CardPreview({
   card,
@@ -49,15 +49,6 @@ export function CardPreview({
     <>
       <div className="qard-preview-toolbar">
         <div className="qard-actions">
-          <button
-            onClick={() => {
-              void services.openSource(card).catch((e) => setError((e as Error).message));
-            }}
-            title={card.sourceFile}
-          >
-            <ExternalLink size={15} />
-            Source
-          </button>
           <button disabled={card.duplicateId} onClick={() => setEditing(true)}>
             <Pencil size={15} />
             Edit
@@ -80,11 +71,22 @@ export function CardPreview({
       <div className="qard-card-preview">
         <div className="qard-preview-side">
           <span className="qard-eyebrow">Front</span>
-          <Markdown text={card.frontMarkdown} path={card.sourceFile} services={services} />
+          <CardContent
+            front={card.frontMarkdown}
+            path={card.sourceFile}
+            services={services}
+            revealed={false}
+          />
         </div>
         <div className="qard-preview-side qard-preview-answer">
           <span className="qard-eyebrow">Back</span>
-          <Markdown text={card.backMarkdown} path={card.sourceFile} services={services} />
+          <CardContent
+            front={card.frontMarkdown}
+            back={card.backMarkdown}
+            path={card.sourceFile}
+            services={services}
+            revealed={true}
+          />
         </div>
       </div>
       {services.sourceSync && <CardSourceLinks card={card} services={services} changed={changed} />}

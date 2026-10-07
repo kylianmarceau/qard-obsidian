@@ -5872,3 +5872,222 @@ div.qard-ask-q {
     justify-content: space-between;
   }
 }
+
+/* Optional card formats use the existing editor and study surfaces. */
+.qard-card-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 24px;
+  border: 1px solid var(--qard-border);
+  border-radius: 10px;
+  background: var(--qard-soft);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.qard-app .qard-card-type button {
+  border-color: transparent;
+  color: var(--qard-muted);
+  padding: 8px 12px;
+}
+
+.qard-app .qard-card-type button[aria-pressed='true'] {
+  background: var(--qard-bg);
+  border-color: var(--qard-border);
+  color: var(--qard-blue);
+  box-shadow: 0 1px 3px #00000008;
+}
+
+.qard-cloze-editor,
+.qard-occlusion-editor,
+.qard-format-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.qard-format-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.qard-format-tools button[aria-pressed='true'] {
+  color: var(--qard-blue);
+  background: var(--qard-tint);
+}
+
+.qard-image-picker {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.qard-image-picker > label {
+  flex: 1;
+  min-width: 180px;
+}
+
+.qard-app .qard-attachment-input {
+  display: none;
+}
+
+.qard-occlusion-workspace {
+  background: var(--qard-soft);
+  border: 1px solid var(--qard-border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  overflow: auto;
+}
+
+.qard-occlusion-image {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  margin-inline: auto;
+  line-height: 0;
+  isolation: isolate;
+}
+
+.qard-occlusion-image > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.qard-mask-canvas.is-ready {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.qard-image-mask {
+  position: absolute;
+  display: block;
+  background: #586071;
+  border: 2px solid #586071;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.qard-image-mask.is-active {
+  background: #4263dc;
+  border-color: #4263dc;
+}
+
+.qard-image-mask.is-answer {
+  background: transparent;
+  border-color: #4263dc;
+  box-shadow: 0 0 0 1px #ffffff80;
+}
+
+.qard-app button.qard-edit-mask {
+  display: flex;
+  padding: 0;
+  min-height: 0;
+  min-width: 0;
+  background: #4263dc99;
+  border: 2px solid #4263dc;
+  color: #fff;
+  pointer-events: auto;
+  border-radius: 3px;
+  cursor: move;
+  line-height: 1;
+  font-size: 11px;
+  overflow: visible;
+}
+
+.qard-app button.qard-edit-mask.is-selected {
+  background: #4263dcbf;
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+  z-index: 1;
+}
+
+.qard-mask-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #4263dc;
+  border-radius: 2px;
+  background: #fff;
+  cursor: nwse-resize;
+}
+
+.qard-occlusion-empty {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--qard-muted);
+}
+
+.qard-occlusion-empty > svg {
+  color: var(--qard-blue);
+}
+
+.qard-editor label.qard-mask-mode {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--qard-text);
+}
+
+.qard-mask-mode > span {
+  grid-column: 2;
+  color: var(--qard-muted);
+  font-size: 12px;
+}
+
+.qard-mask-size {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.qard-mask-size label {
+  width: 110px;
+}
+
+.qard-format-notes {
+  border-top: 1px solid var(--qard-border);
+  padding-top: 18px;
+  text-align: left;
+}
+
+.qard-format-cloze .qard-markdown strong {
+  color: var(--qard-blue);
+}
+
+@container (max-width: 420px) {
+  .qard-card-type {
+    width: 100%;
+  }
+
+  .qard-app .qard-card-type button {
+    flex: 1;
+    font-size: 12px;
+    padding: 7px 8px;
+  }
+
+  .qard-occlusion-workspace {
+    padding: 10px;
+  }
+
+  .qard-format-tools .qard-actions {
+    width: 100%;
+  }
+}

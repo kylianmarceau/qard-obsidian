@@ -1,14 +1,7 @@
 import type { SavedSession } from '../review/saved-session';
 import { reviewIntervals } from '../review/fsrs-scheduler';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import {
-  ArrowLeft,
-  Maximize2,
-  Minimize2,
-  RotateCcw,
-  CheckCircle2,
-  ExternalLink,
-} from 'lucide-react';
+import { ArrowLeft, Maximize2, Minimize2, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { StudyCard } from '../components/StudyCard';
 import { VoiceAnswer } from '../audio/VoiceAnswer';
 import type { QardCard } from '../cards/card-types';
@@ -411,15 +404,6 @@ export function StudyView({
         </div>
         <div className="qard-study-foot">
           <span>{busy ? 'Saving…' : ''}</span>
-          <button
-            onClick={() => {
-              setFocus(false);
-              void services.openSource(card).catch((e) => setError((e as Error).message));
-            }}
-          >
-            <ExternalLink size={14} />
-            Open source
-          </button>
         </div>
       </div>
     </div>

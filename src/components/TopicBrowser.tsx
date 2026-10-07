@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Sparkles, Plus, Play } from 'lucide-react';
 import { DeleteItem } from './DeleteItem';
 import type { Deck, QardCard } from '../cards/card-types';
+import { cardTitle } from '../cards/card-format';
 export function TopicBrowser({
   deck,
   select,
@@ -94,7 +95,7 @@ export function TopicBrowser({
                       className="qard-question-row"
                       onClick={() => select(card)}
                     >
-                      <span>{card.frontMarkdown.split('\n')[0]}</span>
+                      <span>{cardTitle(card.frontMarkdown)}</span>
                       {card.duplicateId && <span className="qard-warning-label">Duplicate ID</span>}
                       <ChevronRight size={15} />
                     </button>

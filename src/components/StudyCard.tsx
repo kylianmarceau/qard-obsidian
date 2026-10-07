@@ -1,6 +1,8 @@
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { Markdown } from './Markdown';
+import { readCardFormat } from '../cards/card-format';
+import { CardContent } from './CardContent';
 
 export function StudyCard({
   card,
@@ -11,6 +13,7 @@ export function StudyCard({
   revealed: boolean;
   services: QardServices;
 }) {
+  const special = readCardFormat(card.frontMarkdown).kind !== 'basic';
   // Keep both faces mounted so embeds are ready when the card turns. The hidden
   // face is inert and excluded from the accessibility tree, including its links.
   return (
@@ -22,7 +25,12 @@ export function StudyCard({
           inert={revealed}
         >
           <div className="qard-study-question">
-            <Markdown text={card.frontMarkdown} path={card.sourceFile} services={services} />
+            <CardContent
+              front={card.frontMarkdown}
+              path={card.sourceFile}
+              services={services}
+              revealed={false}
+            />
           </div>
         </article>
         <article
@@ -31,11 +39,19 @@ export function StudyCard({
           inert={!revealed}
         >
           <div className="qard-study-question">
-            <Markdown text={card.frontMarkdown} path={card.sourceFile} services={services} />
+            <CardContent
+              front={card.frontMarkdown}
+              back={special ? card.backMarkdown : undefined}
+              path={card.sourceFile}
+              services={services}
+              revealed={special}
+            />
           </div>
-          <div className="qard-study-answer">
-            <Markdown text={card.backMarkdown} path={card.sourceFile} services={services} />
-          </div>
+          {!special && (
+            <div className="qard-study-answer">
+              <Markdown text={card.backMarkdown} path={card.sourceFile} services={services} />
+            </div>
+          )}
         </article>
       </div>
     </div>

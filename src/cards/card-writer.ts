@@ -121,7 +121,13 @@ export class CardWriter {
   }
   /** One atomic note write per generated batch. Stable IDs make retries safe after a save or index failure. */
   async createBatch(
-    target: { deck: string; topic: string; folder: string; batchId: string },
+    target: {
+      deck: string;
+      topic: string;
+      folder: string;
+      batchId: string;
+      label?: 'cloze' | 'occlusion';
+    },
     cards: {
       id: string;
       front: string;
@@ -159,7 +165,9 @@ export class CardWriter {
         .replace(/^\.+/, '')
         .trim()
         .slice(0, 80) || 'Cards';
-    const path = [folder, `${slug} generated ${target.batchId}.md`].filter(Boolean).join('/');
+    const path = [folder, `${slug} ${target.label || 'generated'} ${target.batchId}.md`]
+      .filter(Boolean)
+      .join('/');
     for (const card of cards) {
       if (card.source) {
         await this.trackSources?.(card.id, [card.source], card.sourceSnapshots);

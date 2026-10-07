@@ -211,3 +211,43 @@ it('records sources for generated individual cards while leaving manual cards un
     [{ path: 'Notes/UDP.md', text: 'UDP has no delivery guarantee.' }],
   );
 });
+
+it('saves independent cloze and image variants in one atomic note, with separate review identities', async () => {
+  const { clozeFront, occlusionFront, FORMAT_BACK, readCardFormat } = await import(
+    '../src/cards/card-format'
+  );
+  const { writer, create, index } = setup();
+  const sentence = '{{c1::TCP}} is {{c2::reliable}}.';
+  const masks = [
+    { id: 'one', x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+    { id: 'two', x: 0.5, y: 0.1, width: 0.2, height: 0.2 },
+  ];
+  const variants = [
+    { id: 'cloze-1', front: clozeFront(sentence, 1), back: FORMAT_BACK },
+    { id: 'cloze-2', front: clozeFront(sentence, 2), back: FORMAT_BACK },
+    ...masks.map((mask) => ({
+      id: 'image-' + mask.id,
+      front: occlusionFront('Diagram', {
+        image: 'Attachments/network.svg',
+        masks,
+        target: mask.id,
+      }),
+      back: FORMAT_BACK,
+    })),
+  ];
+  const saved = await writer.createBatch({ ...target, label: 'cloze' }, variants);
+  expect(create).toHaveBeenCalledOnce();
+  expect(index.getSnapshot().issues).toEqual([]);
+  expect(new Set(saved.map((c) => c.id)).size).toBe(4);
+  expect(new Set(saved.map((c) => c.sourceFile)).size).toBe(1);
+  const edited = await writer.edit(
+    saved[0]!,
+    clozeFront(sentence.replace('TCP', 'Transmission Control Protocol'), 1),
+    'Notes',
+  );
+  expect(edited.id).toBe('cloze-1');
+  expect(readCardFormat(edited.frontMarkdown).kind).toBe('cloze');
+  expect(index.getSnapshot().cards.find((c) => c.id === 'cloze-2')?.frontMarkdown).toBe(
+    variants[1]!.front,
+  );
+});

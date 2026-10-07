@@ -153,7 +153,7 @@ export function StudySessionBuilder({
                           checked={chosen.has(card.id)}
                           onChange={() => toggle([card])}
                         />
-                        <span>{card.frontMarkdown.split('\n')[0]}</span>
+                        <span>{cardTitle(card.frontMarkdown)}</span>
                       </label>
                     ))}
                   </div>
@@ -255,3 +255,4 @@ function MixedCheckbox({
     />
   );
 }
+import { cardTitle } from '../cards/card-format';

@@ -1,4 +1,5 @@
 import { parseDocument } from 'yaml';
+import { readCardFormat } from './card-format';
 import type { ParseResult, QardCard } from './card-types';
 
 interface Line {
@@ -171,6 +172,13 @@ export function parseCards(
             ? 'Qard callout needs an answer.'
             : 'Qard callout has an unclosed code fence.',
       );
+      i = end - 1;
+      continue;
+    }
+    try {
+      readCardFormat(front);
+    } catch (error) {
+      issue(i, (error as Error).message);
       i = end - 1;
       continue;
     }

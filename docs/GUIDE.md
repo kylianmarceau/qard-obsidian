@@ -148,6 +148,28 @@ Keep the adjacent `<!-- qard-id: ... -->` comment with its callout when moving a
 
 The editor, delete action and ID assignment use `Vault.process` and replace only the affected source range. Surrounding prose and line endings are preserved. Concurrent content changes or ambiguous matches stop the edit rather than overwrite unknown text. Create-from-selection copies the selection as Markdown; it does not remove the original text. Delete removes the callout and its ID from the note after an inline confirmation. Review metadata is retained so undoing a deletion can restore its history; use Obsidian/File Recovery or your normal backups for note recovery.
 
+## Cloze cards and image occlusion
+
+Choose **New card**, then **Cloze** or **Image occlusion** in the existing editor. Basic cards remain the default. Both formats use the same normal/cram sessions, reveal controls, ratings, FSRS scheduling and saved sessions as basic cards. No AI connection is needed.
+
+For a cloze, write or paste a sentence, select a word or phrase, and choose **Hide selection**. The editor inserts a numbered blank such as `{{c1::TCP}}`. Each distinct number creates a separate card; repeat a number to hide several phrases together. Add an optional hint with `{{c1::TCP::protocol}}`. Other numbered answers remain visible as context. **Show preview** lets you inspect each numbered card before saving. Markdown and math work inside blanks; literal cloze examples in inline/fenced code are ignored. Extra notes are optional and appear after reveal.
+
+For image occlusion, choose an existing vault image, use **Add image**, or drop a local image into the editor. New images use Obsidian's configured attachment location. Drag over labels or details to draw rectangular masks; drag a mask to move it and its lower-right handle to resize it. Select a mask to remove it or adjust its width/height. Focused masks also support arrow-key movement and Delete/Backspace. **Undo last mask** removes the most recently added region. **One card per mask** is on by default: the active region reveals while other masks stay covered. Turn it off to recall all hidden regions together. PNG, JPEG, GIF, WebP, SVG and AVIF attachments are supported; added files must be smaller than 20 MB.
+
+Saving creates ordinary Qard callouts in one note with separate stable IDs for each variant. Editing a variant changes that card and keeps its review history; other variants retain their own content and history. The image remains a normal Markdown wikilink, so Obsidian's attachment link updates also work when files move. Missing images show a recovery message and can be replaced through **Edit**. Masks scale with the image at narrower widths.
+
+The editor writes a final front-line comment, `<!-- qard-cloze: 1 -->` or `<!-- qard-occlusion: {...} -->`, before the existing `<!-- qard-answer -->` separator. Keep these comments when moving or editing callouts by hand. A cloze example:
+
+```markdown
+<!-- qard-id: example-cloze -->
+> [!qard]- {{c1::TCP::protocol}} provides reliable delivery.
+> <!-- qard-cloze: 1 -->
+> <!-- qard-answer -->
+> Recall the hidden answer.
+```
+
+Plain basic cards containing literal `{{c1::...}}` text do not change type without the format comment.
+
 ## Studying at your pace
 
 Choose **Study**, select any combination of decks/topics/individual cards, choose a mode and order, and start. Expand a deck to choose topics, then expand a topic to choose individual cards.
@@ -176,7 +198,7 @@ Delete a whole deck with the trash icon on its row or beside the deck title. Del
 
 Under **Learn**, trash icons remove courses, lessons and pending course mappings. Opened courses, lessons and checks also have a trash icon in the top bar. Deleting a course moves its mastery file and associated generated lessons/checks to Obsidian's configured trash; source notes, flashcards and practice tests remain. Deleting a running mapping stops it and removes its saved proposal so it cannot restart on reload.
 
-Every preview and study card has **Open source**; previews also offer edit and delete. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
+Previews offer edit, delete and study. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
 
 ## Commands
 
