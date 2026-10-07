@@ -200,6 +200,8 @@ Order can be deck/note order or shuffle. The session shows progress and finishes
 
 **Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
 
+Completed normal sessions show a borderless **Recall difficulty** curve for the session's Again, Hard, Good and Easy ratings. Counts, percentages and a median marker summarize your actual ratings, including ratings saved before resuming. Skipped cards are excluded. Cram sessions do not record ratings, so they do not show this chart.
+
 Shortcuts are inactive in text fields, editable content, other workspace tabs, modal inputs, media controls, and while recording. Held keys and modified shortcuts do not rate cards. Focus mode fills the app window without requiring Electron’s Fullscreen API, hides Qard navigation, and restores the original workspace when exited or the view/plugin closes. Native OS window decorations may remain visible.
 
 Delete a whole deck with the trash icon on its row or beside the deck title. Delete a topic with the trash icon beside its Study button. Confirming removes all matching flashcard callouts across the vault, including cards hidden by search, while preserving headings, prose, attachments and other cards. This cannot be undone from Qard.
@@ -239,7 +241,7 @@ Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Impor
    - A nested deck tag such as `#flashcards/cs315/hmm` becomes `qard-deck: "cs315/hmm"`, unless the note already sets `qard-deck`.
    - `<!--SR:...-->` due dates, intervals and ease become Qard review states. You can turn **Keep review schedule** off to import every card as new.
 
-Cloze cards are not converted, because Qard has no cloze cards. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
+Spaced Repetition cloze cards are not converted to Qard cloze cards by this importer. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
 
 The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
 
@@ -405,7 +407,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- No cloze cards, general import/export, persistent recordings or speech recognition.
+- No general import/export, persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
