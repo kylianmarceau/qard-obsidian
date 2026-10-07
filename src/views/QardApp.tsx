@@ -49,6 +49,7 @@ const TEST_LABEL: Record<string, string> = {
   'test-cards': 'Suggested cards',
 };
 export function QardApp({ services, request }: { services: QardServices; request?: UiRequest }) {
+  const reviews = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
   const [screen, setScreen] = useState<Screen>({ kind: 'library' }),
     [search, setSearch] = useState('');
@@ -117,7 +118,7 @@ export function QardApp({ services, request }: { services: QardServices; request
     }
     const result = await services.reviews.resumeSession(id, services.index.getSnapshot().cards);
     const notice = result.skipped
-      ? `${result.skipped} unavailable or ambiguous cards were skipped. Your remaining card order is preserved.`
+      ? `${result.skipped} unavailable, paused or ambiguous cards were skipped. Your remaining card order is preserved.`
       : '';
     if (result.session.position >= result.cards.length) {
       setSessionMessage(
@@ -446,6 +447,7 @@ export function QardApp({ services, request }: { services: QardServices; request
               <>
                 <SavedSessions services={services} resume={resume} deck={deck.name} />
                 <TopicBrowser
+                  states={reviews.states}
                   key={deck.name}
                   deck={deck}
                   removeDeck={async () => {

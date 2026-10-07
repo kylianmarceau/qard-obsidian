@@ -1,3 +1,4 @@
+import type { ReviewState } from '../review/scheduler';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Sparkles, Plus, Play } from 'lucide-react';
 import { DeleteItem } from './DeleteItem';
@@ -11,8 +12,10 @@ export function TopicBrowser({
   generate,
   removeDeck,
   removeTopic,
+  states = {},
 }: {
   deck: Deck;
+  states?: Record<string, ReviewState>;
   select: (card: QardCard) => void;
   study: (topic?: string) => void;
   create: () => void;
@@ -96,6 +99,7 @@ export function TopicBrowser({
                       onClick={() => select(card)}
                     >
                       <span>{cardTitle(card.frontMarkdown)}</span>
+                      {states[card.id]?.paused && <span className="qard-paused-label">Paused</span>}
                       {card.duplicateId && <span className="qard-warning-label">Duplicate ID</span>}
                       <ChevronRight size={15} />
                     </button>

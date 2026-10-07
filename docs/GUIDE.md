@@ -183,14 +183,22 @@ Choose **Study**, select any combination of decks/topics/individual cards, choos
 
 **Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never record ratings, alter schedules or count as reviews in Statistics. Cards receive stable IDs when needed to save the session position. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
 
-Order can be deck/note order or shuffle. The session shows progress and finishes after every selected card has been reviewed once. Again does not silently add repeats; the summary offers an explicit **Review difficult cards** action. Normal and cram sessions automatically save their card order and next position. Use **Save and leave**, or close Qard, then choose **Resume** under **Continue studying** on the Decks screen (also shown inside the relevant deck). Sessions survive an Obsidian restart. Completed ratings and the next position save together; a failed save keeps you on the same card. Resuming uses the current Markdown and skips missing or ambiguous cards with a notice. Discarding a session removes only its saved queue, and completed sessions are removed automatically. Answers start hidden when you resume. Cram sessions assign stable card IDs when needed so their position can survive note edits; they still do not record ratings or change schedules.
+Order can be deck/note order or shuffle. The session shows progress and finishes after every selected card has been reviewed once. Again does not silently add repeats; the summary offers an explicit **Review difficult cards** action. Normal and cram sessions automatically save their card order and next position. Use **Save and leave**, or close Qard, then choose **Resume** under **Continue studying** on the Decks screen (also shown inside the relevant deck). Sessions survive an Obsidian restart. Completed ratings and the next position save together; a failed save keeps you on the same card. Resuming uses the current Markdown and skips missing, paused or ambiguous remaining cards with a notice. Discarding a session removes only its saved queue, and completed sessions are removed automatically. Answers start hidden when you resume. Cram sessions assign stable card IDs when needed so their position can survive note edits; they still do not record ratings or change schedules.
 
 | Key | Action |
 | --- | --- |
 | Space | Normal: reveal/hide answer. Cram: reveal/next card |
 | 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal |
+| U | Undo the last rating in this visit, including from the completion screen |
+| S | Skip the current card for this session |
 | F | Toggle focus mode |
 | Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
+
+**Undo** restores the last rating's schedule, FSRS memory, history, statistics and saved session position. The card returns with its answer hidden. It is available until you rate, skip or pause another card or leave this study view; restarting the plugin clears it. If another view changes the review, its card or its queue, undo becomes unavailable rather than overwriting that work. An undone Again rating also restores its linked course lapse when that objective has not since changed.
+
+**Skip** moves past a card for this session without recording a rating or changing its due date. Skips survive saving and resuming, and the completion screen offers **Review skipped cards** for cards that remain active.
+
+**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
 
 Shortcuts are inactive in text fields, editable content, other workspace tabs, modal inputs, media controls, and while recording. Held keys and modified shortcuts do not rate cards. Focus mode fills the app window without requiring Electron’s Fullscreen API, hides Qard navigation, and restores the original workspace when exited or the view/plugin closes. Native OS window decorations may remain visible.
 
@@ -198,7 +206,7 @@ Delete a whole deck with the trash icon on its row or beside the deck title. Del
 
 Under **Learn**, trash icons remove courses, lessons and pending course mappings. Opened courses, lessons and checks also have a trash icon in the top bar. Deleting a course moves its mastery file and associated generated lessons/checks to Obsidian's configured trash; source notes, flashcards and practice tests remain. Deleting a running mapping stops it and removes its saved proposal so it cannot restart on reload.
 
-Previews offer edit, delete and study. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
+Previews offer edit, delete, study and pause/resume. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
 
 ## Commands
 

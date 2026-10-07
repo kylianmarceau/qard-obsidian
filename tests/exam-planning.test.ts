@@ -144,3 +144,20 @@ it('includes a same-day learning review when due and leaves cards with changed a
   expect(changed.doneToday).toBe(1);
   expect(changed.queue[0]!.id).toBe('id-0');
 });
+
+it('paused cards stay in plan coverage but leave study workload; skips and pauses do not meet review targets', async () => {
+  const store = new ReviewStore(async () => {});
+  await store.review('id-0', 1, now - 500);
+  const session = await store.startSession(cards.slice(1, 4));
+  await store.skipCard({ id: session.id, position: 0 }, 'id-1', true);
+  await store.skipCard({ id: session.id, position: 1 }, 'id-2');
+  await store.setPaused('id-0', true);
+  const { states, history } = store.getSnapshot();
+  const progress = examProgress(plan, cards, states, history, now);
+  expect(progress.selected).toHaveLength(10);
+  expect(progress.covered).toBe(1);
+  expect(progress.doneToday).toBe(1);
+  expect(progress.uncovered).toBe(8);
+  expect(progress.due).toBe(0);
+  expect(progress.queue.some((c) => ['id-0', 'id-1'].includes(c.id))).toBe(false);
+});

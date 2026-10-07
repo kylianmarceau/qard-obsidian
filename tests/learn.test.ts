@@ -1455,3 +1455,38 @@ describe('deleting learning material', () => {
     expect(t.files.has(path)).toBe(false);
   });
 });
+
+it('undo restores card lapse counts and the objective changed by a second lapse', async () => {
+  const t = await mapped();
+  await t.learn.setState(t.path, 'params', 'mastered', '2026-12-01');
+  await t.learn.linkCard('undo-card', t.path, 'params');
+  const before = (await t.learn.course(t.path)).objectives.find((o) => o.id === 'params');
+  const undoFirst = await t.learn.cardLapse('undo-card');
+  expect(t.links.get('undo-card')!.lapses).toBe(1);
+  await undoFirst?.();
+  expect(t.links.get('undo-card')!.lapses).toBe(0);
+  await t.learn.cardLapse('undo-card');
+  const undoSecond = await t.learn.cardLapse('undo-card');
+  expect((await t.learn.course(t.path)).objectives.find((o) => o.id === 'params')!.state).toBe(
+    'slipping',
+  );
+  await undoSecond?.();
+  expect((await t.learn.course(t.path)).objectives.find((o) => o.id === 'params')).toEqual(before);
+  expect(t.links.get('undo-card')!.lapses).toBe(1);
+});
+
+it('undo of a lapse preserves later objective edits and relinked cards', async () => {
+  const t = await mapped();
+  await t.learn.setState(t.path, 'params', 'mastered', '2026-12-01');
+  await t.learn.linkCard('undo-card', t.path, 'params');
+  await t.learn.cardLapse('undo-card');
+  const undo = await t.learn.cardLapse('undo-card');
+  await t.learn.setState(t.path, 'params', 'right once', '2027-01-01');
+  await t.learn.linkCard('undo-card', t.path, 'lda-generative');
+  await undo?.();
+  expect((await t.learn.course(t.path)).objectives.find((o) => o.id === 'params')).toMatchObject({
+    state: 'right once',
+    due: '2027-01-01',
+  });
+  expect(t.links.get('undo-card')!.objective).toBe('lda-generative');
+});

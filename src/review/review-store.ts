@@ -13,7 +13,26 @@ import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/s
 import { scheduler, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 import { addToLog, type UsageLog } from '../agents/usage-report';
 import type { Usage } from '../agents/usage';
-import { emptyStatistics, readStatistics, recordReview, type StudyStatistics } from './statistics';
+import {
+  emptyStatistics,
+  readStatistics,
+  recordReview,
+  undoReviewStatistics,
+  type StudyStatistics,
+} from './statistics';
+export interface ReviewUndo {
+  id: string;
+  cardId: string;
+}
+interface ReviewCheckpoint extends ReviewUndo {
+  event: ReviewEvent;
+  historyLength: number;
+  before?: ReviewState;
+  after: ReviewState;
+  sessionBefore?: SavedSession;
+  sessionAfter?: SavedSession;
+  settings: QardSettings;
+}
 /** A card made for a mastery objective; lapses count Again ratings since the objective was last marked. */
 export interface CardLink {
   mastery: string;
@@ -47,8 +66,11 @@ export class ReviewStore {
   };
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
+  /** One guarded checkpoint for the current visit, never a second copy of the review log. */
+  private undo?: ReviewCheckpoint;
   constructor(private persist: (data: PluginData) => Promise<void>) {}
   load(raw: unknown) {
+    this.undo = undefined;
     if (!raw || typeof raw !== 'object') {
       return;
     }
@@ -66,7 +88,8 @@ export class ReviewStore {
         Number.isFinite(state.ease) &&
         state.ease > 0
       ) {
-        states[id] = { ...state, cardId: id };
+        const { paused, ...memory } = state;
+        states[id] = { ...memory, cardId: id, ...(paused === true ? { paused: true } : {}) };
       }
     }
     const history = Array.isArray(value.history)
@@ -133,14 +156,20 @@ export class ReviewStore {
       this.listeners.delete(listener);
     };
   };
-  private change(transform: (data: PluginData) => PluginData): Promise<void> {
+  private change<T = void>(
+    transform: (data: PluginData) => PluginData,
+    committed?: (before: PluginData, after: PluginData) => T,
+  ): Promise<T> {
     const operation = this.queue
       .catch(() => {})
       .then(async () => {
-        const next = transform(this.data);
+        const before = this.data;
+        const next = transform(before);
         await this.persist(next); // A failed write must never advance the session's state.
         this.data = next;
+        const result = committed?.(before, next);
         this.listeners.forEach((listener) => listener());
+        return result as T;
       });
     this.queue = operation;
     return operation;
@@ -173,45 +202,175 @@ export class ReviewStore {
     if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime())) {
       return Promise.reject(new Error('A valid rating and review date are required.'));
     }
-    return this.change((data) => {
-      const sessions = step
-        ? this.advanceSession(data.sessions, step, cardId, rating, now)
-        : data.sessions;
-      const previous = data.states[cardId];
-      const scheduled = data.settings.scheduling;
-      const computed =
-        data.settings.scheduler === 'fsrs'
-          ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
-          : scheduler.reviewCard(cardId, previous, rating, now);
-      const state = scheduled
-        ? computed
-        : {
-            ...computed,
-            due: previous?.due,
-            interval: previous?.interval ?? 0,
-            ease: previous?.ease ?? 2.5,
-          };
-      const event: ReviewEvent = {
-        cardId,
-        at: now,
-        rating,
-        scheduled,
-        scheduler: data.settings.scheduler,
-        ...(data.settings.scheduler === 'fsrs'
-          ? { desiredRetention: data.settings.desiredRetention }
-          : {}),
-      };
-      // Keep timestamped ratings for memory reconstruction and future personalization.
-      return {
-        ...data,
-        sessions,
-        states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
-          [cardId]: state,
-        }),
-        history: [...data.history, event],
-        statistics: recordReview(data.statistics, cardId, rating, now),
-      };
+    return this.change(
+      (data) => {
+        if (data.states[cardId]?.paused) {
+          throw new Error('This card is paused. Resume it before reviewing.');
+        }
+        const sessions = step
+          ? this.advanceSession(data.sessions, step, cardId, rating, now)
+          : data.sessions;
+        const previous = data.states[cardId];
+        const scheduled = data.settings.scheduling;
+        const computed =
+          data.settings.scheduler === 'fsrs'
+            ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
+            : scheduler.reviewCard(cardId, previous, rating, now);
+        const state = scheduled
+          ? computed
+          : {
+              ...computed,
+              due: previous?.due,
+              interval: previous?.interval ?? 0,
+              ease: previous?.ease ?? 2.5,
+            };
+        const event: ReviewEvent = {
+          cardId,
+          at: now,
+          rating,
+          scheduled,
+          scheduler: data.settings.scheduler,
+          ...(data.settings.scheduler === 'fsrs'
+            ? { desiredRetention: data.settings.desiredRetention }
+            : {}),
+        };
+        // Keep timestamped ratings for memory reconstruction and future personalization.
+        return {
+          ...data,
+          sessions,
+          states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
+            [cardId]: state,
+          }),
+          history: [...data.history, event],
+          statistics: recordReview(data.statistics, cardId, rating, now),
+        };
+      },
+      (before, after) => {
+        this.undo = {
+          id: crypto.randomUUID(),
+          cardId,
+          event: after.history[after.history.length - 1]!,
+          historyLength: after.history.length,
+          before: before.states[cardId],
+          after: after.states[cardId]!,
+          settings: before.settings,
+          ...(step
+            ? {
+                sessionBefore: before.sessions.find((s) => s.id === step.id),
+                sessionAfter: after.sessions.find((s) => s.id === step.id),
+              }
+            : {}),
+        };
+        return { id: this.undo.id, cardId };
+      },
+    );
+  }
+  canUndoReview(candidate: ReviewUndo | undefined): boolean {
+    const checkpoint = this.undo,
+      data = this.data;
+    return (
+      !!candidate &&
+      !!checkpoint &&
+      candidate.id === checkpoint.id &&
+      candidate.cardId === checkpoint.cardId &&
+      data.history.length === checkpoint.historyLength &&
+      data.history[data.history.length - 1] === checkpoint.event &&
+      data.states[checkpoint.cardId] === checkpoint.after &&
+      data.settings.scheduler === checkpoint.settings.scheduler &&
+      data.settings.scheduling === checkpoint.settings.scheduling &&
+      data.settings.desiredRetention === checkpoint.settings.desiredRetention &&
+      (!checkpoint.sessionBefore ||
+        data.sessions.find((s) => s.id === checkpoint.sessionBefore!.id) ===
+          checkpoint.sessionAfter)
+    );
+  }
+  undoReview(candidate: ReviewUndo) {
+    return this.change(
+      (data) => {
+        if (!this.canUndoReview(candidate)) {
+          throw new Error('This review changed or a later card was reviewed. It cannot be undone.');
+        }
+        const checkpoint = this.undo!;
+        const states = Object.assign(
+          Object.create(null) as Record<string, ReviewState>,
+          data.states,
+        );
+        if (checkpoint.before) {
+          states[checkpoint.cardId] = checkpoint.before;
+        } else {
+          delete states[checkpoint.cardId];
+        }
+        const sessions = checkpoint.sessionBefore
+          ? [
+              ...data.sessions.filter((s) => s.id !== checkpoint.sessionBefore!.id),
+              checkpoint.sessionBefore,
+            ]
+          : data.sessions;
+        return {
+          ...data,
+          states,
+          sessions,
+          history: data.history.slice(0, -1),
+          statistics: undoReviewStatistics(data.statistics, checkpoint.event),
+        };
+      },
+      () => {
+        this.undo = undefined;
+      },
+    );
+  }
+  setPaused(cardId: string, paused: boolean) {
+    if (!stableId(cardId)) {
+      return Promise.reject(new Error('A stable card ID is required before pausing.'));
+    }
+    return this.change((data) => ({
+      ...data,
+      states: this.pauseState(data.states, cardId, paused),
+    }));
+  }
+  private pauseState(states: Record<string, ReviewState>, cardId: string, paused: boolean) {
+    const previous = states[cardId] ?? {
+      cardId,
+      interval: 0,
+      ease: 2.5,
+      reviewCount: 0,
+      lapses: 0,
+    };
+    const { paused: _paused, ...memory } = previous;
+    return Object.assign(Object.create(null) as Record<string, ReviewState>, states, {
+      [cardId]: { ...memory, ...(paused ? { paused: true } : {}) },
     });
+  }
+  /** Skip/pause advances the saved cursor without rating or changing memory. */
+  skipCard(step: SessionStep, cardId: string, pause = false) {
+    return this.change(
+      (data) => {
+        const session = data.sessions.find((s) => s.id === step.id);
+        if (
+          !session ||
+          session.position !== step.position ||
+          session.cardIds[step.position] !== cardId
+        ) {
+          throw new Error('This session changed in another view. Return to Qard and resume it.');
+        }
+        const next = {
+          ...session,
+          position: session.position + 1,
+          updatedAt: Date.now(),
+          skippedIds: [...(session.skippedIds ?? []), cardId],
+        };
+        return {
+          ...data,
+          states: pause ? this.pauseState(data.states, cardId, true) : data.states,
+          sessions: data.sessions.flatMap((s) =>
+            s.id !== step.id ? [s] : next.position < next.cardIds.length ? [next] : [],
+          ),
+        };
+      },
+      () => {
+        this.undo = undefined;
+      },
+    );
   }
   /** Adds migrated schedules. Existing Qard states always win. */
   requireContentCheck(cardId: string, now = Date.now()) {
@@ -308,7 +467,12 @@ export class ReviewStore {
       updatedAt: now,
       ...(examId ? { examId } : {}),
     };
-    await this.change((data) => ({ ...data, sessions: [...data.sessions, session] }));
+    await this.change((data) => {
+      if (cards.some((c) => data.states[c.id]?.paused)) {
+        throw new Error('Some cards are paused. Resume them before starting a session.');
+      }
+      return { ...data, sessions: [...data.sessions, session] };
+    });
     return session;
   }
   async resumeSession(id: string, cards: QardCard[]) {
@@ -318,7 +482,7 @@ export class ReviewStore {
       if (!session) {
         throw new Error('This session has already finished or was discarded.');
       }
-      resolved = resolveSession(session, cards);
+      resolved = resolveSession(session, cards, data.states);
       const next = resolved.session;
       return {
         ...data,
@@ -358,10 +522,15 @@ export class ReviewStore {
     );
   }
   advanceCram(step: SessionStep, cardId: string) {
-    return this.change((data) => ({
-      ...data,
-      sessions: this.advanceSession(data.sessions, step, cardId, undefined, Date.now()),
-    }));
+    return this.change((data) => {
+      if (data.states[cardId]?.paused) {
+        throw new Error('This card is paused. Skip it or resume it before studying.');
+      }
+      return {
+        ...data,
+        sessions: this.advanceSession(data.sessions, step, cardId, undefined, Date.now()),
+      };
+    });
   }
   discardSession(id: string) {
     return this.change((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== id) }));

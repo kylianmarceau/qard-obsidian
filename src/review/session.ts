@@ -14,6 +14,8 @@ export interface SessionOptions {
   mode: StudyMode;
   order: CardOrder;
   now?: number;
+  /** Library/plan membership may include paused cards; study queues never do. */
+  includePaused?: boolean;
 }
 export function shuffle<T>(values: readonly T[], random = Math.random): T[] {
   const result = [...values];
@@ -34,6 +36,9 @@ export function selectCards(
   const now = options.now ?? Date.now();
   const result = cards
     .filter((card) => {
+      if (states[card.id]?.paused && !options.includePaused) {
+        return false;
+      }
       if (
         !decks.has(card.deck) &&
         !topics.has(topicKey(card.deck, card.topic)) &&
@@ -41,7 +46,7 @@ export function selectCards(
       ) {
         return false;
       }
-      // Deliberately before any scheduling lookup: All means all matching cards.
+      // All ignores scheduling fields; explicit pauses still stay out of study.
       if (options.mode === 'all') {
         return true;
       }

@@ -48,7 +48,9 @@ export function cardsFor(
   now = Date.now(),
 ): { cards: QardCard[]; warmup: boolean } {
   const { states, links } = services.reviews.getSnapshot(),
-    all = services.index.getSnapshot().cards.filter((c) => c.stable && !c.duplicateId);
+    all = services.index
+      .getSnapshot()
+      .cards.filter((c) => c.stable && !c.duplicateId && !states[c.id]?.paused);
   const avoid = new Set(context.avoid?.files ?? []);
   const due = all
     .filter(

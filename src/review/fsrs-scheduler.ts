@@ -214,7 +214,7 @@ export function memoryStatistics(
       continue;
     }
     seen.add(card.id);
-    if (states[card.id]?.needsContentCheck) {
+    if (states[card.id]?.needsContentCheck || states[card.id]?.paused) {
       continue;
     }
     const c = states[card.id]?.fsrs;

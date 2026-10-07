@@ -1,5 +1,6 @@
 import type { QardCard } from '../cards/card-types';
 import type { SessionResult, SessionStyle } from './session';
+import type { ReviewState } from './scheduler';
 
 export interface SavedSession {
   id: string;
@@ -11,6 +12,7 @@ export interface SavedSession {
   createdAt: number;
   updatedAt: number;
   examId?: string;
+  skippedIds?: string[];
 }
 export interface SessionStep {
   id: string;
@@ -58,10 +60,25 @@ export function readSessions(raw: unknown): SavedSession[] {
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
       ...(stableId(s.examId) ? { examId: s.examId } : {}),
+      ...(Array.isArray(s.skippedIds)
+        ? {
+            skippedIds: [
+              ...new Set(
+                s.skippedIds.filter(
+                  (id) => stableId(id) && s.cardIds.slice(0, s.position).includes(id),
+                ),
+              ),
+            ],
+          }
+        : {}),
     }));
 }
 /** Resolve fresh Markdown by ID, retaining saved order and the next unreviewed position. */
-export function resolveSession(session: SavedSession, cards: QardCard[]) {
+export function resolveSession(
+  session: SavedSession,
+  cards: QardCard[],
+  states: Record<string, ReviewState> = {},
+) {
   const byId = new Map<string, QardCard>();
   const ambiguous = new Set<string>();
   for (const card of cards) {
@@ -71,10 +88,17 @@ export function resolveSession(session: SavedSession, cards: QardCard[]) {
     byId.set(card.id, card);
   }
   const available = (id: string) => byId.has(id) && !ambiguous.has(id);
-  const cardIds = session.cardIds.filter(available);
+  const cardIds = session.cardIds.filter(
+    (id, index) => available(id) && (index < session.position || !states[id]?.paused),
+  );
   const position = session.cardIds.slice(0, session.position).filter(available).length;
   return {
-    session: { ...session, cardIds, position },
+    session: {
+      ...session,
+      cardIds,
+      position,
+      ...(session.skippedIds ? { skippedIds: session.skippedIds.filter(available) } : {}),
+    },
     cards: cardIds.map((id) => byId.get(id)!),
     skipped: session.cardIds.length - cardIds.length,
   };

@@ -53,7 +53,10 @@ export function StudySessionBuilder({
       }),
     [cards, saved.states, chosen, mode],
   );
+  const available = cards.filter((c) => !saved.states[c.id]?.paused);
+  const eligible = (group: QardCard[]) => group.filter((c) => !saved.states[c.id]?.paused);
   const toggle = (group: QardCard[]) => {
+    group = eligible(group);
     const next = new Set(chosen);
     const all = group.every((c) => next.has(c.id));
     group.forEach((c) => (all ? next.delete(c.id) : next.add(c.id)));
@@ -100,11 +103,13 @@ export function StudySessionBuilder({
               className="qard-text-button"
               onClick={() =>
                 setChosen(
-                  chosen.size === cards.length ? new Set() : new Set(cards.map((c) => c.id)),
+                  available.every((c) => chosen.has(c.id))
+                    ? new Set()
+                    : new Set(available.map((c) => c.id)),
                 )
               }
             >
-              {chosen.size === cards.length ? 'Clear' : 'Select all'}
+              {available.every((c) => chosen.has(c.id)) ? 'Clear' : 'Select all'}
             </button>
           </div>
           {decks.map((deck) => (
@@ -113,17 +118,22 @@ export function StudySessionBuilder({
                 <ChevronRight size={15} />
                 <label onClick={(e) => e.stopPropagation()}>
                   <MixedCheckbox
-                    checked={deck.cards.every((c) => chosen.has(c.id))}
+                    disabled={!eligible(deck.cards).length}
+                    checked={
+                      !!eligible(deck.cards).length &&
+                      eligible(deck.cards).every((c) => chosen.has(c.id))
+                    }
                     mixed={
-                      deck.cards.some((c) => chosen.has(c.id)) &&
-                      !deck.cards.every((c) => chosen.has(c.id))
+                      eligible(deck.cards).some((c) => chosen.has(c.id)) &&
+                      !eligible(deck.cards).every((c) => chosen.has(c.id))
                     }
                     onChange={() => toggle(deck.cards)}
                     label={deck.name}
                   />
                   <strong>{deck.name}</strong>
                   <span>
-                    {deck.cards.filter((c) => chosen.has(c.id)).length} / {deck.cards.length}
+                    {eligible(deck.cards).filter((c) => chosen.has(c.id)).length} /{' '}
+                    {deck.cards.length}
                   </span>
                 </label>
               </summary>
@@ -133,10 +143,14 @@ export function StudySessionBuilder({
                     <ChevronRight size={14} />
                     <label onClick={(e) => e.stopPropagation()}>
                       <MixedCheckbox
-                        checked={topic.cards.every((c) => chosen.has(c.id))}
+                        disabled={!eligible(topic.cards).length}
+                        checked={
+                          !!eligible(topic.cards).length &&
+                          eligible(topic.cards).every((c) => chosen.has(c.id))
+                        }
                         mixed={
-                          topic.cards.some((c) => chosen.has(c.id)) &&
-                          !topic.cards.every((c) => chosen.has(c.id))
+                          eligible(topic.cards).some((c) => chosen.has(c.id)) &&
+                          !eligible(topic.cards).every((c) => chosen.has(c.id))
                         }
                         onChange={() => toggle(topic.cards)}
                         label={`${deck.name}: ${topic.name}`}
@@ -150,10 +164,14 @@ export function StudySessionBuilder({
                       <label key={`${card.sourceFile}:${card.sourcePosition.start}`}>
                         <input
                           type="checkbox"
-                          checked={chosen.has(card.id)}
+                          disabled={!!saved.states[card.id]?.paused}
+                          checked={chosen.has(card.id) && !saved.states[card.id]?.paused}
                           onChange={() => toggle([card])}
                         />
                         <span>{cardTitle(card.frontMarkdown)}</span>
+                        {saved.states[card.id]?.paused && (
+                          <span className="qard-paused-label">Paused</span>
+                        )}
                       </label>
                     ))}
                   </div>
@@ -206,6 +224,11 @@ export function StudySessionBuilder({
               <option value="shuffle">Shuffle</option>
             </select>
           </label>
+          {cards.some((c) => saved.states[c.id]?.paused) && (
+            <p className="qard-muted qard-small">
+              Paused cards stay out of sessions. Open a card preview to resume it.
+            </p>
+          )}
           <div className="qard-session-start">
             <span aria-live="polite">
               {selected.length} {selected.length === 1 ? 'card' : 'cards'} selected
@@ -235,16 +258,19 @@ function MixedCheckbox({
   mixed,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean;
   mixed: boolean;
   onChange: () => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <input
       type="checkbox"
       aria-label={label}
+      disabled={disabled}
       checked={checked}
       ref={(el) => {
         if (el) {

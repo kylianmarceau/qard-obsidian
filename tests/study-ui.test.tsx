@@ -39,7 +39,7 @@ async function mount() {
 async function key(key: string, target: HTMLElement = host) {
   await act(async () => {
     target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
-    await services.reviews.flush();
+    await services.reviews.flush().catch(() => {});
   });
 }
 it('requires reveal, rates exactly once, completes every card, and escapes focus on the summary', async () => {
@@ -53,7 +53,7 @@ it('requires reveal, rates exactly once, completes every card, and escapes focus
   await act(async () => {
     for (let i = 0; i < 2; i++)
       host.dispatchEvent(new KeyboardEvent('keydown', { key: '3', bubbles: true }));
-    await services.reviews.flush();
+    await services.reviews.flush().catch(() => {});
   });
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   expect(host.textContent).toContain('1 / 1');
@@ -215,4 +215,122 @@ it('guards cram navigation against held keys, text input, confirmation dialogs a
   expect(host.textContent).toContain('2 / 2');
   expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
   expect(services.reviews.getSnapshot().history).toEqual([]);
+});
+
+it('undo works from completion and requires a fresh reveal before rating again', async () => {
+  await mount();
+  await key(' ');
+  await key('3');
+  expect(host.textContent).toContain('Session complete');
+  await key('u');
+  expect(host.textContent).not.toContain('Session complete');
+  expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  expect(services.reviews.getSnapshot().states.first).toBeUndefined();
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+  await key('4');
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+  await key(' ');
+  await key('4');
+  expect(services.reviews.getSnapshot().history).toHaveLength(1);
+  expect(services.reviews.getSnapshot().history[0]!.rating).toBe(4);
+});
+
+it('skip reports no review, leaves the schedule unchanged and offers skipped cards again', async () => {
+  const repeat = vi.fn();
+  await services.reviews.review('first', 4);
+  const before = services.reviews.getSnapshot();
+  await act(async () =>
+    root.render(<StudyView cards={cards} services={services} exit={exit} repeat={repeat} />),
+  );
+  await key('s');
+  expect(host.textContent).toContain('Session complete');
+  expect(host.textContent).toContain('0 / 1');
+  expect(host.textContent).toContain('1 card skipped');
+  expect(services.reviews.getSnapshot()).toBe(before);
+  await act(async () =>
+    [...host.querySelectorAll('button')]
+      .find((b) => b.textContent === 'Review skipped cards')!
+      .click(),
+  );
+  expect(repeat).toHaveBeenCalledWith(cards);
+});
+
+it('pause advances a saved session without rating, and does not offer paused cards for repetition', async () => {
+  const session = await services.reviews.startSession(cards);
+  await act(async () =>
+    root.render(
+      <StudyView
+        cards={cards}
+        session={session}
+        services={services}
+        exit={exit}
+        repeat={vi.fn()}
+      />,
+    ),
+  );
+  await act(async () => {
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Pause card')!.click();
+    await services.reviews.flush().catch(() => {});
+  });
+  expect(host.textContent).toContain('Session complete');
+  expect(host.textContent).not.toContain('Review skipped cards');
+  expect(services.reviews.getSnapshot().states.first).toMatchObject({
+    paused: true,
+    reviewCount: 0,
+  });
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+  expect(services.reviews.getSnapshot().sessions).toEqual([]);
+});
+
+it('failed undo keeps the completion screen and failed skip keeps the front card', async () => {
+  const write = vi.fn(async () => {});
+  services.reviews = new ReviewStore(write);
+  const session = await services.reviews.startSession(cards);
+  await act(async () =>
+    root.render(
+      <StudyView
+        cards={cards}
+        session={session}
+        services={services}
+        exit={exit}
+        repeat={vi.fn()}
+      />,
+    ),
+  );
+  write.mockRejectedValueOnce(new Error('disk full'));
+  await key('s');
+  expect(host.textContent).toContain('disk full');
+  expect(host.textContent).not.toContain('Session complete');
+  await key(' ');
+  await key('3');
+  write.mockRejectedValueOnce(new Error('disk full'));
+  await key('u');
+  expect(host.textContent).toContain('Session complete');
+  expect(host.textContent).toContain('disk full');
+  expect(services.reviews.getSnapshot().history).toHaveLength(1);
+  await key('u');
+  expect(host.textContent).not.toContain('Session complete');
+  expect(services.reviews.getSnapshot().sessions[0]!.position).toBe(0);
+});
+
+it('undo reverses linked-course lapses and offers a separate retry when that course write fails', async () => {
+  const restore = vi.fn(async () => {});
+  restore.mockRejectedValueOnce(new Error('course disk full'));
+  services.learn = { cardLapse: vi.fn(async () => restore) } as unknown as QardServices['learn'];
+  await mount();
+  await key(' ');
+  await key('1');
+  await key('u');
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+  expect(host.textContent).toContain('Rating undone. The linked course could not be restored');
+  const retry = [...host.querySelectorAll('button')].find(
+    (b) => b.textContent === 'Retry course restoration',
+  )!;
+  expect(retry.disabled).toBe(false);
+  await act(async () => retry.click());
+  expect(restore).toHaveBeenCalledTimes(2);
+  expect(host.textContent).not.toContain('could not be restored');
+  await key(' ');
+  await key('3');
+  expect(services.reviews.getSnapshot().history).toHaveLength(1);
 });

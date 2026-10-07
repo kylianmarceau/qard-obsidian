@@ -767,6 +767,7 @@ export class LearnService {
     mastery: string,
     objective: string,
     evidence: Evidence,
+    capture?: (before: Objective, after: Objective) => void,
   ): Promise<Objective | undefined> {
     if (this.isRemoved(mastery) || !this.storage.exists(mastery)) {
       return undefined;
@@ -779,10 +780,15 @@ export class LearnService {
         return text;
       }
       updated = applyEvidence(o, evidence);
-      return writeObjectives(
+      const written = writeObjectives(
         text,
         m.objectives.map((x) => (x.id === objective ? updated! : x)),
       );
+      capture?.(
+        o,
+        parseMastery(mastery, written).objectives.find((x) => x.id === objective) ?? updated,
+      );
+      return written;
     });
     this.publish();
     if (
@@ -838,16 +844,44 @@ export class LearnService {
       return;
     }
     const lapses = link.lapses + 1;
+    const nextLink = { ...link, lapses: lapses >= 2 ? 0 : lapses };
+    let before: Objective | undefined, after: Objective | undefined;
     if (lapses >= 2) {
-      await this.links.set(cardId, { ...link, lapses: 0 });
-      await this.record(link.mastery, link.objective, {
-        kind: 'card',
-        day: this.today(),
-        label: 'lapsed twice',
-      });
+      await this.links.set(cardId, nextLink);
+      await this.record(
+        link.mastery,
+        link.objective,
+        {
+          kind: 'card',
+          day: this.today(),
+          label: 'lapsed twice',
+        },
+        (previous, updated) => {
+          before = previous;
+          after = updated;
+        },
+      );
     } else {
-      await this.links.set(cardId, { ...link, lapses });
+      await this.links.set(cardId, nextLink);
     }
+    // Undo only this lapse. Never overwrite a later lesson, check or hand-edited objective.
+    return async () => {
+      if (before && after && !this.isRemoved(link.mastery) && this.storage.exists(link.mastery)) {
+        await this.storage.process(link.mastery, (text) => {
+          const m = parseMastery(link.mastery, text);
+          return writeObjectives(
+            text,
+            m.objectives.map((o) =>
+              o.id === link.objective && JSON.stringify(o) === JSON.stringify(after) ? before! : o,
+            ),
+          );
+        });
+        this.publish();
+      }
+      if (JSON.stringify(this.links.get(cardId)) === JSON.stringify(nextLink)) {
+        await this.links.set(cardId, link);
+      }
+    };
   }
   linkCard(cardId: string, mastery: string, objective: string) {
     return this.links.set(cardId, { mastery, objective, lapses: 0 });

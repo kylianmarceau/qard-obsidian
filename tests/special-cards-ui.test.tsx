@@ -332,3 +332,36 @@ it('creates one card per mask or a combined card without changing the rating mod
     })),
   );
 });
+
+it('pauses and resumes a card from its preview without losing history or enabling study while paused', async () => {
+  const card = makeCard(clozeFront('{{c1::TCP}} is reliable.', 1));
+  await services.reviews.review(card.id, 4, 1000);
+  const before = services.reviews.getSnapshot().states[card.id],
+    changed = vi.fn();
+  await act(async () =>
+    root.render(
+      <CardPreview
+        card={card}
+        services={services}
+        back={vi.fn()}
+        study={vi.fn()}
+        changed={changed}
+      />,
+    ),
+  );
+  await act(async () => {
+    button('Pause card').click();
+    await services.reviews.flush();
+  });
+  expect(services.reviews.getSnapshot().states[card.id]).toEqual({ ...before, paused: true });
+  expect(button('Study')?.disabled).toBe(true);
+  expect(host.textContent).toContain('history and schedule are preserved');
+  await act(async () => {
+    button('Resume card').click();
+    await services.reviews.flush();
+  });
+  expect(services.reviews.getSnapshot().states[card.id]).toEqual(before);
+  expect(button('Study')?.disabled).toBe(false);
+  expect(services.reviews.getSnapshot().history).toHaveLength(1);
+  expect(changed).toHaveBeenCalledWith(card);
+});

@@ -11,6 +11,8 @@ export interface ReviewState {
   lastRating?: Rating;
   fsrs?: FsrsCard;
   needsContentCheck?: boolean;
+  /** Excluded from study queues without changing memory or due dates. */
+  paused?: boolean;
 }
 export interface ReviewEvent {
   cardId: string;
@@ -35,10 +37,11 @@ export const DAY = 86_400_000;
 export const scheduler: Scheduler = {
   getCardState: (id, states) => states[id],
   isDue: (state, now) =>
-    !!state?.needsContentCheck ||
-    !state?.reviewCount ||
-    state.due === undefined ||
-    state.due <= now,
+    !state?.paused &&
+    (!!state?.needsContentCheck ||
+      !state?.reviewCount ||
+      state.due === undefined ||
+      state.due <= now),
   reviewCard(cardId, state, rating, now) {
     const ease = Math.max(
       1.3,

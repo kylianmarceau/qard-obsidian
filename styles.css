@@ -1558,6 +1558,8 @@
 }
 
 .qard-study-foot {
+  gap: 8px;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6090,4 +6092,22 @@ div.qard-ask-q {
   .qard-format-tools .qard-actions {
     width: 100%;
   }
+}
+
+.qard-study-secondary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.qard-paused-label {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 5px;
+  color: var(--qard-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
 }

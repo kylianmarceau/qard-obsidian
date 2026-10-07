@@ -42,6 +42,31 @@ export function recordReview(
   };
 }
 
+/** Remove exactly one rating, preserving aggregates from older, incomplete histories. */
+export function undoReviewStatistics(stats: StudyStatistics, event: ReviewEvent): StudyStatistics {
+  const decrement = (entries: Record<string, RatingCounts>, key: string) => {
+    const counts = entries[key];
+    if (!counts || counts[event.rating - 1]! < 1) {
+      throw new Error('Review statistics changed. This rating cannot be undone.');
+    }
+    const next: RatingCounts = [...counts];
+    next[event.rating - 1] = next[event.rating - 1]! - 1;
+    const result = { ...entries, [key]: next };
+    if (!countRatings(next)) {
+      delete result[key];
+    }
+    return result;
+  };
+  return {
+    ...stats,
+    daily: decrement(stats.daily, isoDay(event.at)),
+    cards: Object.assign(
+      Object.create(null) as Record<string, RatingCounts>,
+      decrement(stats.cards, event.cardId),
+    ),
+  };
+}
+
 /** Migrate the retained review log exactly once; saved aggregates survive log rotation. */
 export function readStatistics(raw: unknown, history: ReviewEvent[]): StudyStatistics {
   if (
@@ -191,7 +216,7 @@ export function cardStatistics(
     if (isDue) {
       due++;
     }
-    if (scheduled && seen) {
+    if (scheduled && seen && !state?.paused) {
       const dueDay = isDue ? today : state?.due !== undefined ? isoDay(state.due) : today;
       const i = forecast.findIndex((_, index) => addDays(today, index) === dueDay);
       if (i >= 0) {

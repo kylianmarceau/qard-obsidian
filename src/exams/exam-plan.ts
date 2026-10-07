@@ -84,6 +84,7 @@ export function examProgress(
     selection: plan.selection,
     mode: 'all',
     order: 'note',
+    includePaused: true,
   });
   const ids = new Set(selected.map((c) => c.id)),
     covered = new Set<string>();
@@ -120,7 +121,7 @@ export function examProgress(
     }
   }
   const isStudyDay = !expired && weekdays.has(first.getDay());
-  const uncovered = selected.filter((c) => !covered.has(c.id));
+  const uncovered = selected.filter((c) => !covered.has(c.id) && !states[c.id]?.paused);
   const coveredToday = [...firstReviews.values()].filter((at) => localDay(at) === today).length;
   const coverageToday = studyDays
     ? Math.max(0, Math.ceil((uncovered.length + coveredToday) / studyDays) - coveredToday)

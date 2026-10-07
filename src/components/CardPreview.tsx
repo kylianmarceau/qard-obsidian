@@ -1,6 +1,6 @@
 import { CardSourceLinks } from './CardSourceLinks';
-import { useState } from 'react';
-import { Pencil, Trash2, Play } from 'lucide-react';
+import { useState, useSyncExternalStore } from 'react';
+import { Pencil, Trash2, Play, Pause } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { CardContent } from './CardContent';
@@ -18,6 +18,8 @@ export function CardPreview({
   study: () => void;
   changed: (card: QardCard) => void;
 }) {
+  const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const paused = !!saved.states[card.id]?.paused;
   const [editing, setEditing] = useState(false),
     [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
@@ -34,6 +36,22 @@ export function CardPreview({
         }}
       />
     );
+  }
+  async function togglePaused() {
+    setBusy(true);
+    setError('');
+    try {
+      const [stable] = card.stable ? [card] : await services.writer.ensureStable([card]);
+      if (!stable) {
+        throw new Error('This card is no longer available.');
+      }
+      await services.reviews.setPaused(stable.id, !paused);
+      changed(stable);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
   async function remove() {
     setBusy(true);
@@ -54,6 +72,18 @@ export function CardPreview({
             Edit
           </button>
           <button
+            disabled={busy || card.duplicateId}
+            onClick={() => void togglePaused()}
+            title={
+              paused
+                ? 'Return this card to study sessions'
+                : 'Keep this card out of study sessions until you resume it'
+            }
+          >
+            {paused ? <Play size={15} /> : <Pause size={15} />}
+            {paused ? 'Resume card' : 'Pause card'}
+          </button>
+          <button
             className="qard-icon-button"
             aria-label="Delete card"
             title="Delete card"
@@ -63,11 +93,20 @@ export function CardPreview({
             <Trash2 size={16} />
           </button>
         </div>
-        <button className="qard-primary" disabled={card.duplicateId} onClick={study}>
+        <button
+          className="qard-primary"
+          disabled={busy || paused || card.duplicateId}
+          onClick={study}
+        >
           <Play size={15} />
           Study
         </button>
       </div>
+      {paused && (
+        <p className="qard-muted" role="status">
+          Paused · excluded from study sessions. Your review history and schedule are preserved.
+        </p>
+      )}
       <div className="qard-card-preview">
         <div className="qard-preview-side">
           <span className="qard-eyebrow">Front</span>

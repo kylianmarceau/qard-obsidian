@@ -1,7 +1,17 @@
+import type { ReviewUndo } from '../review/review-store';
 import type { SavedSession } from '../review/saved-session';
 import { reviewIntervals } from '../review/fsrs-scheduler';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowLeft, Maximize2, Minimize2, RotateCcw, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  CheckCircle2,
+  Undo2,
+  SkipForward,
+  Pause,
+} from 'lucide-react';
 import { StudyCard } from '../components/StudyCard';
 import { VoiceAnswer } from '../audio/VoiceAnswer';
 import type { QardCard } from '../cards/card-types';
@@ -41,6 +51,15 @@ export function StudyView({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [recording, setRecording] = useState(false);
+  const [undo, setUndo] = useState<{
+    review: ReviewUndo;
+    position: number;
+    undoLapse?: () => Promise<void>;
+  }>();
+  const [skipped, setSkipped] = useState<string[]>(session?.skippedIds ?? []);
+  const [courseUndo, setCourseUndo] = useState<{ run: () => Promise<void> }>();
+  const canUndo = services.reviews.canUndoReview(undo?.review);
+  const activeCards = cards.filter((c) => !saved.states[c.id]?.paused);
   const [confirmExit, setConfirmExit] = useState(false);
   const lock = useRef(false),
     surface = useRef<HTMLDivElement>(null),
@@ -48,6 +67,7 @@ export function StudyView({
     start = useRef(Date.now());
   const navigationLock = useRef(false);
   const card = cards[position];
+  const paused = !!card && !!saved.states[card.id]?.paused;
   const intervals = useMemo(
     () =>
       !cram && card && revealed && saved.settings.scheduling && saved.settings.scheduler === 'fsrs'
@@ -84,24 +104,35 @@ export function StudyView({
     return () => services.app.workspace.offref(off);
   }, [services]);
   async function rate(rating: Rating) {
-    if (cram || !card || !revealed || lock.current || recording) {
+    if (
+      cram ||
+      !card ||
+      paused ||
+      !revealed ||
+      lock.current ||
+      recording ||
+      confirmExit ||
+      courseUndo
+    ) {
       return;
     }
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      await services.reviews.review(
+      const review = await services.reviews.review(
         card.id,
         rating,
         Date.now(),
         session ? { id: session.id, position } : undefined,
       );
       // Two lapses on a card made for a mastered objective mark it as slipping.
-      if (rating === 1) {
-        void services.learn?.cardLapse(card.id).catch(() => {});
-      }
+      const undoLapse =
+        rating === 1
+          ? await services.learn?.cardLapse?.(card.id).catch(() => undefined)
+          : undefined;
       if (mounted.current) {
+        setUndo({ review, position, undoLapse });
         setResults((old) => [...old, { cardId: card.id, rating }]);
         setPosition((i) => i + 1);
         setRevealed(false);
@@ -120,6 +151,7 @@ export function StudyView({
   const advance = async () => {
     if (
       !card ||
+      paused ||
       !actions.current.revealed ||
       recording ||
       confirmExit ||
@@ -153,6 +185,97 @@ export function StudyView({
       }
     }
   };
+  async function undoLast() {
+    if (!undo || !canUndo || lock.current || recording || confirmExit) {
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await services.reviews.undoReview(undo.review);
+      if (mounted.current) {
+        setPosition(undo.position);
+        setResults((old) => old.slice(0, -1));
+        setRevealed(false);
+        setUndo(undefined);
+      }
+      try {
+        await undo.undoLapse?.();
+      } catch (e) {
+        if (mounted.current && undo.undoLapse) {
+          setCourseUndo({ run: undo.undoLapse });
+          setError(
+            `Rating undone. The linked course could not be restored: ${(e as Error).message}`,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError((e as Error).message || 'Could not undo your review. Try again.');
+      }
+    } finally {
+      lock.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
+    }
+  }
+  async function retryCourseUndo() {
+    if (!courseUndo || lock.current || recording || confirmExit) {
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    try {
+      await courseUndo.run();
+      if (mounted.current) {
+        setCourseUndo(undefined);
+        setError('');
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError(`Rating undone. The linked course could not be restored: ${(e as Error).message}`);
+      }
+    } finally {
+      lock.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
+    }
+  }
+  async function skip(pause = false) {
+    if (!card || lock.current || navigationLock.current || recording || confirmExit || courseUndo) {
+      return;
+    }
+    navigationLock.current = true;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      if (session) {
+        await services.reviews.skipCard({ id: session.id, position }, card.id, pause);
+      } else if (pause) {
+        await services.reviews.setPaused(card.id, true);
+      }
+      if (mounted.current) {
+        setSkipped((old) => [...old, card.id]);
+        setUndo(undefined);
+        setRevealed(false);
+        setPosition((i) => i + 1);
+      }
+    } catch (e) {
+      navigationLock.current = false;
+      if (mounted.current) {
+        setError((e as Error).message || 'Could not save your position. Try again.');
+      }
+    } finally {
+      lock.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
+    }
+  }
   async function repeatSaved(next: QardCard[]) {
     setBusy(true);
     setError('');
@@ -164,8 +287,17 @@ export function StudyView({
       setBusy(false);
     }
   }
-  const actions = useRef({ rate, advance, focus, revealed, recording, confirmExit });
-  actions.current = { rate, advance, focus, revealed, recording, confirmExit };
+  const actions = useRef({
+    rate,
+    advance,
+    undoLast,
+    skip,
+    focus,
+    revealed,
+    recording,
+    confirmExit,
+  });
+  actions.current = { rate, advance, undoLast, skip, focus, revealed, recording, confirmExit };
   useEffect(() => {
     const doc = services.host.ownerDocument;
     const handler = (event: KeyboardEvent) => {
@@ -192,6 +324,17 @@ export function StudyView({
         return;
       }
       if (
+        event.key.toLowerCase() === 'u' &&
+        !current.recording &&
+        !current.confirmExit &&
+        !lock.current
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        void current.undoLast();
+        return;
+      }
+      if (
         !card ||
         current.recording ||
         current.confirmExit ||
@@ -201,6 +344,12 @@ export function StudyView({
         return;
       }
       const key = event.key.toLowerCase();
+      if (key === 's') {
+        event.preventDefault();
+        event.stopPropagation();
+        void current.skip();
+        return;
+      }
       if (key === ' ' || (!cram && ['1', '2', '3', '4'].includes(key))) {
         event.preventDefault();
         event.stopPropagation();
@@ -230,7 +379,7 @@ export function StudyView({
         <div className="qard-summary-stats">
           <div>
             <strong>
-              {cram ? position : results.length} / {cards.length}
+              {cram ? position - skipped.length : results.length} / {cards.length}
             </strong>
             <span>{cram ? 'cards viewed' : 'cards reviewed'}</span>
           </div>
@@ -249,19 +398,43 @@ export function StudyView({
             ))}
           </div>
         )}
+        {!!skipped.length && (
+          <p className="qard-muted">
+            {skipped.length} {skipped.length === 1 ? 'card skipped' : 'cards skipped'} · not counted
+            as reviews
+          </p>
+        )}
         <div className="qard-actions">
+          {canUndo && (
+            <button disabled={busy} onClick={() => void undoLast()}>
+              <Undo2 size={16} />
+              Undo last rating{saved.settings.keyboardHints && <kbd>U</kbd>}
+            </button>
+          )}
+          {activeCards.some((c) => skipped.includes(c.id)) && (
+            <button
+              disabled={busy}
+              onClick={() => void repeatSaved(activeCards.filter((c) => skipped.includes(c.id)))}
+            >
+              <RotateCcw size={16} />
+              Review skipped cards
+            </button>
+          )}
           {cram && (
-            <button disabled={busy} onClick={() => void repeatSaved(cards)}>
+            <button
+              disabled={busy || !activeCards.length}
+              onClick={() => void repeatSaved(activeCards)}
+            >
               <RotateCcw size={16} />
               Cram again
             </button>
           )}
-          {results.some((r) => r.rating < 3) && (
+          {activeCards.some((c) => results.some((r) => r.cardId === c.id && r.rating < 3)) && (
             <button
               disabled={busy}
               onClick={() =>
                 void repeatSaved(
-                  cards.filter((c) => results.some((r) => r.cardId === c.id && r.rating < 3)),
+                  activeCards.filter((c) => results.some((r) => r.cardId === c.id && r.rating < 3)),
                 )
               }
             >
@@ -276,6 +449,14 @@ export function StudyView({
         {error && (
           <p className="qard-error" role="alert">
             {error}
+            {courseUndo && (
+              <button
+                disabled={busy || recording || confirmExit}
+                onClick={() => void retryCourseUndo()}
+              >
+                Retry course restoration
+              </button>
+            )}
           </p>
         )}
         <button onClick={() => setFocus(false)} hidden={!focus}>
@@ -342,18 +523,31 @@ export function StudyView({
             This answer changed. Check what you remember before rating it.
           </p>
         )}
+        {paused && (
+          <p className="qard-muted" role="status">
+            This card is paused. Skip it here, or resume it from its card preview.
+          </p>
+        )}
         <StudyCard key={card.id} card={card} revealed={revealed} services={services} />
         {saved.settings.audioEnabled && <VoiceAnswer key={card.id} onBusy={onRecording} />}
         {error && (
           <p className="qard-error" role="alert">
             {error}
+            {courseUndo && (
+              <button
+                disabled={busy || recording || confirmExit}
+                onClick={() => void retryCourseUndo()}
+              >
+                Retry course restoration
+              </button>
+            )}
           </p>
         )}
         <div className="qard-study-controls">
           {revealed && cram ? (
             <button
               className="qard-primary qard-reveal"
-              disabled={busy || recording || confirmExit}
+              disabled={busy || recording || confirmExit || paused || !!courseUndo}
               onClick={() => void advance()}
             >
               Next card {saved.settings.keyboardHints && <kbd>Space</kbd>}
@@ -368,7 +562,7 @@ export function StudyView({
                       'qard-rating qard-rating-' + r.rating + (intervals ? ' with-interval' : '')
                     }
                     title={r.hint}
-                    disabled={busy || recording || confirmExit}
+                    disabled={busy || recording || confirmExit || paused || !!courseUndo}
                     onClick={() => void rate(r.rating)}
                   >
                     <strong>{r.name}</strong>
@@ -395,7 +589,7 @@ export function StudyView({
           ) : (
             <button
               className="qard-primary qard-reveal"
-              disabled={recording || confirmExit}
+              disabled={busy || recording || confirmExit || !!courseUndo}
               onClick={() => setRevealed(true)}
             >
               Reveal answer {saved.settings.keyboardHints && <kbd>Space</kbd>}
@@ -403,7 +597,35 @@ export function StudyView({
           )}
         </div>
         <div className="qard-study-foot">
-          <span>{busy ? 'Saving…' : ''}</span>
+          <div className="qard-study-secondary">
+            {!cram && (
+              <button
+                disabled={busy || recording || confirmExit || !canUndo}
+                title="Restore the last rating and its schedule"
+                onClick={() => void undoLast()}
+              >
+                <Undo2 size={14} />
+                Undo{saved.settings.keyboardHints && <kbd>U</kbd>}
+              </button>
+            )}
+            <button
+              disabled={busy || recording || confirmExit || !!courseUndo}
+              title="Skip for this session without changing the schedule"
+              onClick={() => void skip()}
+            >
+              <SkipForward size={14} />
+              Skip{saved.settings.keyboardHints && <kbd>S</kbd>}
+            </button>
+            <button
+              disabled={busy || recording || confirmExit || paused || !!courseUndo}
+              title="Keep this card out of study sessions until you resume it in its preview"
+              onClick={() => void skip(true)}
+            >
+              <Pause size={14} />
+              Pause card
+            </button>
+          </div>
+          <span role="status">{busy ? 'Saving…' : ''}</span>
         </div>
       </div>
     </div>
