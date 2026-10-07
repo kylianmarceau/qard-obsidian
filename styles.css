@@ -1627,8 +1627,6 @@
   width: 100%;
   margin: 0;
   padding: 20px 16px 16px;
-  border: 1px solid var(--qard-border);
-  border-radius: 12px;
   text-align: left;
 }
 
