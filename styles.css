@@ -1623,6 +1623,137 @@
   justify-content: center;
 }
 
+.qard-difficulty {
+  width: 100%;
+  margin: 0;
+  padding: 20px 16px 16px;
+  border: 1px solid var(--qard-border);
+  border-radius: 12px;
+  text-align: left;
+}
+
+.qard-difficulty-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 0 8px;
+}
+
+.qard-difficulty-heading p {
+  margin-top: 4px;
+  color: var(--qard-muted);
+  font-size: 12px;
+}
+
+.qard-difficulty-median {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--qard-soft);
+  color: var(--qard-muted);
+  font-size: 11px;
+}
+
+.qard-difficulty-median strong {
+  color: var(--qard-text);
+  font-weight: 500;
+}
+
+.qard-difficulty-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 18px;
+  overflow: visible;
+  color: var(--qard-blue);
+}
+
+.qard-difficulty-grid,
+.qard-difficulty-axis {
+  fill: none;
+  stroke: var(--qard-border);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.qard-difficulty-grid {
+  stroke-dasharray: 3 5;
+}
+
+.qard-difficulty-scale {
+  fill: var(--qard-muted);
+  font-size: 10px;
+}
+
+.qard-difficulty-marker {
+  fill: none;
+  stroke: var(--qard-muted);
+  stroke-width: 1px;
+  stroke-dasharray: 3 5;
+  opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.qard-difficulty-line {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.qard-difficulty-point {
+  fill: var(--qard-bg);
+  stroke: currentcolor;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.qard-difficulty-median-point {
+  fill: var(--qard-muted);
+}
+
+.qard-difficulty .qard-difficulty-ratings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  text-align: center;
+}
+
+.qard-difficulty-ratings > div {
+  min-width: 0;
+}
+
+.qard-difficulty-ratings strong {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.qard-difficulty-ratings small {
+  color: var(--qard-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.qard-difficulty-direction {
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 8px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--qard-border);
+  color: var(--qard-muted);
+  font-size: 10px;
+}
+
 .qard-confirm {
   display: flex;
   align-items: center;

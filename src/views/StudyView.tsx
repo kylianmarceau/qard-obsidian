@@ -13,6 +13,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { StudyCard } from '../components/StudyCard';
+import { SessionDifficultyChart } from '../components/SessionDifficultyChart';
 import { VoiceAnswer } from '../audio/VoiceAnswer';
 import type { QardCard } from '../cards/card-types';
 import type { Rating } from '../review/scheduler';
@@ -388,16 +389,7 @@ export function StudyView({
             <span>this visit</span>
           </div>
         </div>
-        {!cram && (
-          <div className="qard-summary-ratings">
-            {ratings.map((r) => (
-              <div key={r.rating}>
-                <strong>{results.filter((x) => x.rating === r.rating).length}</strong>
-                <span>{r.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        {!cram && <SessionDifficultyChart results={results} />}
         {!!skipped.length && (
           <p className="qard-muted">
             {skipped.length} {skipped.length === 1 ? 'card skipped' : 'cards skipped'} · not counted

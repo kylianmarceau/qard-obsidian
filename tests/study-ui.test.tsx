@@ -222,8 +222,12 @@ it('undo works from completion and requires a fresh reveal before rating again',
   await key(' ');
   await key('3');
   expect(host.textContent).toContain('Session complete');
+  expect(host.querySelector('.qard-difficulty-plot')?.getAttribute('aria-label')).toContain(
+    'Good: 1',
+  );
   await key('u');
   expect(host.textContent).not.toContain('Session complete');
+  expect(host.querySelector('.qard-difficulty')).toBeNull();
   expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
   expect(services.reviews.getSnapshot().states.first).toBeUndefined();
   expect(services.reviews.getSnapshot().history).toEqual([]);
@@ -233,6 +237,9 @@ it('undo works from completion and requires a fresh reveal before rating again',
   await key('4');
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   expect(services.reviews.getSnapshot().history[0]!.rating).toBe(4);
+  expect(host.querySelector('.qard-difficulty-plot')?.getAttribute('aria-label')).toContain(
+    'Good: 0, Easy: 1. Median: Easy.',
+  );
 });
 
 it('skip reports no review, leaves the schedule unchanged and offers skipped cards again', async () => {
@@ -246,6 +253,7 @@ it('skip reports no review, leaves the schedule unchanged and offers skipped car
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('0 / 1');
   expect(host.textContent).toContain('1 card skipped');
+  expect(host.querySelector('.qard-difficulty')).toBeNull();
   expect(services.reviews.getSnapshot()).toBe(before);
   await act(async () =>
     [...host.querySelectorAll('button')]
