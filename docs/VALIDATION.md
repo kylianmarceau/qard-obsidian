@@ -105,3 +105,11 @@ The three plugin assets were backed up and installed in the registered `/Users/k
 `npm run check` passes formatting, strict TypeScript, source and stylesheet lint with zero warnings, **404 tests across 54 files**, the production build and release-content verification. Version metadata matches in the package, lock file, manifest and compatibility table. The release includes cloze/image occlusion, review undo/skip/pause, and the borderless session recall-difficulty curve.
 
 Chart regression checks cover rating frequencies and percentages, odd/even medians, split distributions, a single card, empty ratings, undo/rerating and skipped reviews. A local browser preview verified desktop light and narrow dark layouts. The border removal was also verified on an existing completion screen in Obsidian 1.14.4, retaining its session results. The production stylesheet contains no outer chart border. Mobile hardware was not exercised.
+
+## Release 0.5.4 — 9 October 2026
+
+On `main`, `npm run check` passes formatting, strict TypeScript, source and stylesheet lint with zero warnings, **425 tests across 56 files**, the production build and release-content verification. Version metadata matches in the package, lock file, manifest and compatibility table.
+
+The release adds persistent FSRS learning queues for normal Due cards sessions. Regression coverage includes timed learning/relearning returns, interleaving without interrupting the current question, waiting and restart/resume after the initial pass, undo, skip/pause, finishing early, failed saves, stale or premature ratings, malformed saved queues and settings changes. Other study modes and older saved sessions retain single-pass behavior.
+
+Before the version bump, the feature build was installed in the registered `/Users/kyliandabancourt/Documents/Qard/qard/obsidian-plugin/.test-vault`. The three installed assets matched the build, and all 19 other vault files retained their hashes, including notes, settings and review data. Native Obsidian interaction and mobile hardware were not exercised for this change; the study-flow checks use the production UI with mocked Obsidian services.
