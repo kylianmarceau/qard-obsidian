@@ -54,7 +54,8 @@ export function SavedSessions({
               </strong>
               <span className="qard-saved-session-progress">
                 {s.style === 'cram' ? 'Cram · ' : ''}
-                {s.position} of {s.cardIds.length} completed
+                {s.position} of {s.cardIds.length} {s.repeatLearning ? 'reviewed' : 'completed'}
+                {!!s.learning?.length && ` · ${s.learning.length} learning`}
               </span>
             </div>
             <div className="qard-saved-session-actions">

@@ -6,7 +6,8 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { Layers, ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { CardDraft } from '../cards/card-writer';
-import type { Selection, SessionStyle } from '../review/session';
+import type { Selection, SessionStyle, StudyMode } from '../review/session';
+import { hasRemainingSession } from '../review/saved-session';
 import { buildDecks, matchesSearch, topicKey } from '../decks/deck-index';
 import { DeckBrowser } from '../components/DeckBrowser';
 import { TopicBrowser } from '../components/TopicBrowser';
@@ -101,12 +102,17 @@ export function QardApp({ services, request }: { services: QardServices; request
   const builder = (selection: Selection = { decks: [], topics: [], cards: [] }) =>
     setScreen({ kind: 'builder', selection });
   const start = useCallback(
-    async (cards: QardCard[], style: SessionStyle = 'normal', examId?: string) => {
+    async (
+      cards: QardCard[],
+      style: SessionStyle = 'normal',
+      examId?: string,
+      mode?: StudyMode,
+    ) => {
       if (!cards.length) {
         throw new Error('No cards are available for this session.');
       }
       const ready = await services.writer.ensureStable(cards);
-      const session = await services.reviews.startSession(ready, style, examId);
+      const session = await services.reviews.startSession(ready, style, examId, mode);
       setSessionMessage('');
       setScreen({ kind: 'study', cards: ready, serial: Date.now(), style, session });
     },
@@ -120,7 +126,7 @@ export function QardApp({ services, request }: { services: QardServices; request
     const notice = result.skipped
       ? `${result.skipped} unavailable, paused or ambiguous cards were skipped. Your remaining card order is preserved.`
       : '';
-    if (result.session.position >= result.cards.length) {
+    if (!hasRemainingSession(result.session)) {
       setSessionMessage(
         'This session has no remaining available cards. Completed reviews are saved.',
       );
@@ -210,6 +216,9 @@ export function QardApp({ services, request }: { services: QardServices; request
               (c) => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now),
             )
             .sort((a, b) => (states[a.id]?.due ?? 0) - (states[b.id]?.due ?? 0)),
+          'normal',
+          undefined,
+          'due',
         ).catch((e) => setSessionMessage((e as Error).message));
       },
     }),
@@ -528,7 +537,7 @@ export function QardApp({ services, request }: { services: QardServices; request
               cards={index.cards}
               decks={index.decks}
               initial={screen.selection}
-              start={start}
+              start={(cards, style, mode) => start(cards, style, undefined, mode)}
               back={library}
             />
           )}
