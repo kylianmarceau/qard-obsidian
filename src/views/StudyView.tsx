@@ -1,5 +1,6 @@
 import type { ReviewUndo } from '../review/review-store';
-import type { SavedSession } from '../review/saved-session';
+import type { SavedSession, SessionStep } from '../review/saved-session';
+import { pendingLearning, type LearningReview } from '../review/learning-queue';
 import { reviewIntervals } from '../review/fsrs-scheduler';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
@@ -45,6 +46,12 @@ export function StudyView({
 }) {
   const cram = style === 'cram';
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const [learning, setLearning] = useState<LearningReview | undefined>(() =>
+    session?.repeatLearning
+      ? pendingLearning(session, saved.states).find((entry) => entry.due <= Date.now())
+      : undefined,
+  );
+  const [clock, setClock] = useState(Date.now());
   const [position, setPosition] = useState(session?.position ?? 0),
     [revealed, setRevealed] = useState(false),
     [focus, setFocus] = useState(saved.settings.autoFocus);
@@ -55,6 +62,7 @@ export function StudyView({
   const [undo, setUndo] = useState<{
     review: ReviewUndo;
     position: number;
+    learning?: LearningReview;
     undoLapse?: () => Promise<void>;
   }>();
   const [skipped, setSkipped] = useState<string[]>(session?.skippedIds ?? []);
@@ -67,7 +75,28 @@ export function StudyView({
     mounted = useRef(true),
     start = useRef(Date.now());
   const navigationLock = useRef(false);
-  const card = cards[position];
+  const currentSession = session ? saved.sessions.find((s) => s.id === session.id) : undefined;
+  const learningEnabled = !cram && saved.settings.scheduling && saved.settings.scheduler === 'fsrs';
+  const pending = learningEnabled ? pendingLearning(currentSession, saved.states) : [];
+  const currentLearning = learningEnabled && currentSession?.repeatLearning ? learning : undefined;
+  const card = currentLearning
+    ? cards.find((c) => c.id === currentLearning.cardId)
+    : cards[position];
+  const waiting = !card && pending.length > 0;
+  const step: SessionStep | undefined = session
+    ? { id: session.id, position, ...(currentLearning ? { learningDue: currentLearning.due } : {}) }
+    : undefined;
+  function nextCard() {
+    setClock(Date.now());
+    const data = services.reviews.getSnapshot();
+    const next = session ? data.sessions.find((s) => s.id === session.id) : undefined;
+    setPosition(next?.position ?? (currentLearning ? position : position + 1));
+    setLearning(
+      learningEnabled
+        ? pendingLearning(next, data.states).find((entry) => entry.due <= Date.now())
+        : undefined,
+    );
+  }
   const paused = !!card && !!saved.states[card.id]?.paused;
   const intervals = useMemo(
     () =>
@@ -94,8 +123,27 @@ export function StudyView({
   }, [focus, services]);
   useEffect(() => {
     navigationLock.current = false;
-    surface.current?.focus();
-  }, [position]);
+    if (services.isActive()) {
+      surface.current?.focus();
+    }
+  }, [position, currentLearning]);
+  useEffect(() => {
+    if (!waiting) {
+      return;
+    }
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [waiting]);
+  useEffect(() => {
+    if (!waiting || busy || confirmExit || courseUndo) {
+      return;
+    }
+    const ready = pending.find((entry) => entry.due <= Date.now());
+    if (ready) {
+      setLearning(ready);
+      setRevealed(false);
+    }
+  }, [waiting, clock, saved, busy, confirmExit, courseUndo]);
   useEffect(() => {
     const off = services.app.workspace.on('active-leaf-change', () => {
       if (!services.isActive()) {
@@ -121,21 +169,16 @@ export function StudyView({
     setBusy(true);
     setError('');
     try {
-      const review = await services.reviews.review(
-        card.id,
-        rating,
-        Date.now(),
-        session ? { id: session.id, position } : undefined,
-      );
+      const review = await services.reviews.review(card.id, rating, Date.now(), step);
       // Two lapses on a card made for a mastered objective mark it as slipping.
       const undoLapse =
         rating === 1
           ? await services.learn?.cardLapse?.(card.id).catch(() => undefined)
           : undefined;
       if (mounted.current) {
-        setUndo({ review, position, undoLapse });
+        setUndo({ review, position, learning: currentLearning, undoLapse });
         setResults((old) => [...old, { cardId: card.id, rating }]);
-        setPosition((i) => i + 1);
+        nextCard();
         setRevealed(false);
       }
     } catch (e) {
@@ -197,6 +240,7 @@ export function StudyView({
       await services.reviews.undoReview(undo.review);
       if (mounted.current) {
         setPosition(undo.position);
+        setLearning(undo.learning);
         setResults((old) => old.slice(0, -1));
         setRevealed(false);
         setUndo(undefined);
@@ -255,15 +299,15 @@ export function StudyView({
     setError('');
     try {
       if (session) {
-        await services.reviews.skipCard({ id: session.id, position }, card.id, pause);
+        await services.reviews.skipCard(step!, card.id, pause);
       } else if (pause) {
         await services.reviews.setPaused(card.id, true);
       }
       if (mounted.current) {
-        setSkipped((old) => [...old, card.id]);
+        setSkipped((old) => [...new Set([...old, card.id])]);
         setUndo(undefined);
         setRevealed(false);
-        setPosition((i) => i + 1);
+        nextCard();
       }
     } catch (e) {
       navigationLock.current = false;
@@ -286,6 +330,29 @@ export function StudyView({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function finishLearning() {
+    if (!session || lock.current) {
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      await services.reviews.discardSession(session.id);
+      if (mounted.current) {
+        setLearning(undefined);
+      }
+    } catch (e) {
+      if (mounted.current) {
+        setError((e as Error).message || 'Could not finish this session. Try again.');
+      }
+    } finally {
+      lock.current = false;
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   }
   const actions = useRef({
@@ -311,7 +378,7 @@ export function StudyView({
         event.stopPropagation();
         if (current.focus) {
           setFocus(false);
-        } else if (card) {
+        } else if (card || waiting) {
           setConfirmExit((v) => !v);
         } else {
           exit();
@@ -370,8 +437,57 @@ export function StudyView({
     };
     doc.addEventListener('keydown', handler, true);
     return () => doc.removeEventListener('keydown', handler, true);
-  }, [services, card, exit, cram]);
+  }, [services, card, exit, cram, waiting]);
   const onRecording = useCallback((value: boolean) => setRecording(value), []);
+  if (waiting) {
+    const minutes = Math.max(1, Math.ceil((pending[0]!.due - clock) / 60000));
+    return (
+      <div className="qard-summary">
+        <h1>Learning cards return soon</h1>
+        <p role="status">
+          {pending.length} learning {pending.length === 1 ? 'card remains' : 'cards remain'}. The
+          next card returns in {minutes} {minutes === 1 ? 'minute' : 'minutes'}. Keep this session
+          open to continue when ready.
+        </p>
+        <div className="qard-actions">
+          {canUndo && (
+            <button disabled={busy || !!courseUndo} onClick={() => void undoLast()}>
+              Undo last rating{saved.settings.keyboardHints && <kbd>U</kbd>}
+            </button>
+          )}
+          <button className="qard-primary" disabled={busy} onClick={exit}>
+            Save and leave
+          </button>
+          <button disabled={busy || !!courseUndo} onClick={() => void finishLearning()}>
+            Finish session
+          </button>
+        </div>
+        <p className="qard-muted">Finishing keeps your reviews and scheduled due dates.</p>
+        {confirmExit && (
+          <div className="qard-confirm" role="alert">
+            <p>Your learning cards are saved. Resume this session whenever you are ready.</p>
+            <button onClick={() => setConfirmExit(false)}>Keep studying</button>
+            <button disabled={busy} onClick={exit}>
+              Leave session
+            </button>
+          </div>
+        )}
+        {error && (
+          <p className="qard-error" role="alert">
+            {error}
+          </p>
+        )}
+        {courseUndo && (
+          <button disabled={busy} onClick={() => void retryCourseUndo()}>
+            Retry course restoration
+          </button>
+        )}
+        <button onClick={() => setFocus(false)} hidden={!focus}>
+          Exit focus mode
+        </button>
+      </div>
+    );
+  }
   if (!card) {
     return (
       <div className="qard-summary">
@@ -380,7 +496,8 @@ export function StudyView({
         <div className="qard-summary-stats">
           <div>
             <strong>
-              {cram ? position - skipped.length : results.length} / {cards.length}
+              {cram ? position - skipped.length : new Set(results.map((r) => r.cardId)).size} /{' '}
+              {cards.length}
             </strong>
             <span>{cram ? 'cards viewed' : 'cards reviewed'}</span>
           </div>
@@ -390,6 +507,9 @@ export function StudyView({
           </div>
         </div>
         {!cram && <SessionDifficultyChart results={results} />}
+        {!cram && results.length > new Set(results.map((r) => r.cardId)).size && (
+          <p className="qard-muted">{results.length} reviews, including learning repeats</p>
+        )}
         {!!skipped.length && (
           <p className="qard-muted">
             {skipped.length} {skipped.length === 1 ? 'card skipped' : 'cards skipped'} · not counted
@@ -502,7 +622,14 @@ export function StudyView({
       <div className="qard-study-area">
         <div className="qard-study-progress">
           <span>
-            {position + 1} <span>/ {cards.length}</span>
+            {currentLearning ? (
+              'Learning review'
+            ) : (
+              <>
+                {position + 1} <span>/ {cards.length}</span>
+              </>
+            )}
+            {!!pending.length && ` · ${pending.length} learning`}
           </span>
         </div>
         <progress

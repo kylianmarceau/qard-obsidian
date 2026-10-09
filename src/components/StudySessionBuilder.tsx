@@ -28,7 +28,7 @@ export function StudySessionBuilder({
   decks: Deck[];
   initial: Selection;
   services: QardServices;
-  start: (cards: QardCard[], style?: SessionStyle) => void | Promise<void>;
+  start: (cards: QardCard[], style?: SessionStyle, mode?: StudyMode) => void | Promise<void>;
   back: () => void;
 }) {
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
@@ -81,6 +81,8 @@ export function StudySessionBuilder({
           : ready;
       if (style === 'cram') {
         await start(ordered, style);
+      } else if (mode === 'due') {
+        await start(ordered, style, mode);
       } else {
         await start(ordered);
       }

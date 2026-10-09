@@ -3,11 +3,14 @@ import {
   readSessions,
   resolveSession,
   stableId,
+  hasRemainingSession,
+  matchesSessionStep,
   type SavedSession,
   type SessionStep,
 } from './saved-session';
 import type { QardCard } from '../cards/card-types';
-import type { SessionStyle } from './session';
+import type { SessionStyle, StudyMode } from './session';
+import { learningReview } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
 import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/settings';
 import { scheduler, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
@@ -192,7 +195,17 @@ export class ReviewStore {
                 ),
               );
       }
-      return { ...data, settings: next, states };
+      const sessions =
+        !next.scheduling || next.scheduler !== 'fsrs'
+          ? data.sessions.flatMap((session) => {
+              if (!session.repeatLearning) {
+                return [session];
+              }
+              const { repeatLearning: _repeat, learning: _learning, ...singlePass } = session;
+              return hasRemainingSession(singlePass) ? [singlePass] : [];
+            })
+          : data.sessions;
+      return { ...data, settings: next, states, sessions };
     });
   }
   review(cardId: string, rating: Rating, now = Date.now(), step?: SessionStep) {
@@ -207,10 +220,12 @@ export class ReviewStore {
         if (data.states[cardId]?.paused) {
           throw new Error('This card is paused. Resume it before reviewing.');
         }
-        const sessions = step
-          ? this.advanceSession(data.sessions, step, cardId, rating, now)
-          : data.sessions;
         const previous = data.states[cardId];
+        if (step?.learningDue !== undefined && previous?.due !== step.learningDue) {
+          throw new Error(
+            'This learning card changed in another view. Return to Qard and resume it.',
+          );
+        }
         const scheduled = data.settings.scheduling;
         const computed =
           data.settings.scheduler === 'fsrs'
@@ -224,6 +239,16 @@ export class ReviewStore {
               interval: previous?.interval ?? 0,
               ease: previous?.ease ?? 2.5,
             };
+        const sessions = step
+          ? this.advanceSession(
+              data.sessions,
+              step,
+              cardId,
+              rating,
+              now,
+              scheduled ? state : undefined,
+            )
+          : data.sessions;
         const event: ReviewEvent = {
           cardId,
           at: now,
@@ -326,6 +351,18 @@ export class ReviewStore {
     return this.change((data) => ({
       ...data,
       states: this.pauseState(data.states, cardId, paused),
+      sessions: paused
+        ? data.sessions.flatMap((session) => {
+            if (!session.learning?.some((entry) => entry.cardId === cardId)) {
+              return [session];
+            }
+            const next = {
+              ...session,
+              learning: session.learning.filter((entry) => entry.cardId !== cardId),
+            };
+            return hasRemainingSession(next) ? [next] : [];
+          })
+        : data.sessions,
     }));
   }
   private pauseState(states: Record<string, ReviewState>, cardId: string, paused: boolean) {
@@ -346,24 +383,23 @@ export class ReviewStore {
     return this.change(
       (data) => {
         const session = data.sessions.find((s) => s.id === step.id);
-        if (
-          !session ||
-          session.position !== step.position ||
-          session.cardIds[step.position] !== cardId
-        ) {
+        if (!session || !matchesSessionStep(session, step, cardId)) {
           throw new Error('This session changed in another view. Return to Qard and resume it.');
         }
         const next = {
           ...session,
-          position: session.position + 1,
+          position: session.position + (step.learningDue === undefined ? 1 : 0),
           updatedAt: Date.now(),
-          skippedIds: [...(session.skippedIds ?? []), cardId],
+          skippedIds: [...new Set([...(session.skippedIds ?? []), cardId])],
+          ...(session.repeatLearning
+            ? { learning: session.learning?.filter((entry) => entry.cardId !== cardId) ?? [] }
+            : {}),
         };
         return {
           ...data,
           states: pause ? this.pauseState(data.states, cardId, true) : data.states,
           sessions: data.sessions.flatMap((s) =>
-            s.id !== step.id ? [s] : next.position < next.cardIds.length ? [next] : [],
+            s.id !== step.id ? [s] : hasRemainingSession(next) ? [next] : [],
           ),
         };
       },
@@ -446,6 +482,7 @@ export class ReviewStore {
     cards: QardCard[],
     style: SessionStyle = 'normal',
     examId?: string,
+    mode: StudyMode = 'all',
   ): Promise<SavedSession> {
     if (
       !cards.length ||
@@ -471,6 +508,16 @@ export class ReviewStore {
       if (cards.some((c) => data.states[c.id]?.paused)) {
         throw new Error('Some cards are paused. Resume them before starting a session.');
       }
+      if (
+        style === 'normal' &&
+        mode === 'due' &&
+        !examId &&
+        data.settings.scheduling &&
+        data.settings.scheduler === 'fsrs'
+      ) {
+        session.repeatLearning = true;
+        session.learning = [];
+      }
       return { ...data, sessions: [...data.sessions, session] };
     });
     return session;
@@ -487,7 +534,7 @@ export class ReviewStore {
       return {
         ...data,
         sessions: data.sessions.flatMap((s) =>
-          s.id !== id ? [s] : next.position < next.cardIds.length ? [next] : [],
+          s.id !== id ? [s] : hasRemainingSession(next) ? [next] : [],
         ),
       };
     });
@@ -499,26 +546,35 @@ export class ReviewStore {
     cardId: string,
     rating: Rating | undefined,
     now: number,
+    state?: ReviewState,
   ) {
     const session = sessions.find((s) => s.id === step.id);
-    if (
-      !session ||
-      session.position !== step.position ||
-      session.cardIds[step.position] !== cardId
-    ) {
+    if (!session || !matchesSessionStep(session, step, cardId)) {
       throw new Error('This session changed in another view. Return to Qard and resume it.');
     }
     if ((session.style === 'normal') !== (rating !== undefined)) {
       throw new Error('The session mode changed. Resume it from Qard.');
     }
+    if (step.learningDue !== undefined && step.learningDue > now) {
+      throw new Error('This learning card is not due yet.');
+    }
+    const repeat = session.repeatLearning ? learningReview(state) : undefined;
     const next = {
       ...session,
-      position: session.position + 1,
+      position: session.position + (step.learningDue === undefined ? 1 : 0),
       updatedAt: now,
       results: rating ? [...session.results, { cardId, rating }] : session.results,
+      ...(session.repeatLearning
+        ? {
+            learning: [
+              ...(session.learning ?? []).filter((entry) => entry.cardId !== cardId),
+              ...(repeat ? [repeat] : []),
+            ],
+          }
+        : {}),
     };
     return sessions.flatMap((s) =>
-      s.id !== step.id ? [s] : next.position < next.cardIds.length ? [next] : [],
+      s.id !== step.id ? [s] : hasRemainingSession(next) ? [next] : [],
     );
   }
   advanceCram(step: SessionStep, cardId: string) {

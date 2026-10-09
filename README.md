@@ -9,6 +9,7 @@
 - **Card formats:** select text to create numbered cloze blanks, or draw image masks to recall diagram labels. Each variant has its own review history and works with normal or cram study.
 - **Review controls:** undo the last rating, skip a card for this session, or pause it until you resume it. Schedules and history are preserved when skipping or pausing.
 - **Saved sessions:** leave normal or cram study midway and resume the same card order and position after reopening Qard.
+- **Learning reviews:** in normal Due sessions with FSRS, learning and forgotten cards return when their scheduled interval arrives. Wait for the next card, save and leave, or finish the session with your reviews preserved.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
 - **Learn:** map a course into connected topics, follow guided lessons and check what you remember. Track your progress and what to study next.

@@ -46,6 +46,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 async function tick() {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -147,4 +148,44 @@ it('shows save failure without moving the card and retries without duplicating t
   await key('3');
   expect(host.textContent).toContain('Question b');
   expect(store.getSnapshot().history).toHaveLength(1);
+});
+
+it('starts Due study with learning repeats and resumes a queue after every original card was visited', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  const now = new Date('2026-10-09T12:00:00Z').getTime();
+  vi.setSystemTime(now);
+  await mount();
+  await click('Study');
+  await click('Select all');
+  const mode = host.querySelector('[aria-label="Study mode"]') as HTMLSelectElement;
+  await act(async () => {
+    mode.value = 'due';
+    mode.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await click('Start');
+  expect(services.reviews.getSnapshot().sessions[0]!.repeatLearning).toBe(true);
+  await key(' ');
+  await key('1');
+  await key(' ');
+  await key('4');
+  await key(' ');
+  await key('4');
+  expect(host.textContent).toContain('Learning cards return soon');
+  await click('Save and leave');
+  expect(host.textContent).toContain('3 of 3 reviewed · 1 learning');
+  await reload();
+  await click('Resume', true);
+  expect(host.textContent).toContain('Learning cards return soon');
+  await click('Save and leave');
+  vi.setSystemTime(now + 60_000);
+  await reload();
+  await click('Resume', true);
+  expect(host.textContent).toContain('Question a');
+  expect(host.textContent).toContain('Learning review');
+  await key(' ');
+  await key('4');
+  expect(host.textContent).toContain('Session complete');
+  expect(host.textContent).toContain('3 / 3');
+  expect(host.textContent).toContain('4 reviews, including learning repeats');
+  expect(services.reviews.getSnapshot().sessions).toEqual([]);
 });
