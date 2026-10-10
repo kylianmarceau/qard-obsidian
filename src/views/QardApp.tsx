@@ -356,15 +356,6 @@ export function QardApp({ services, request }: { services: QardServices; request
                   </>
                 ))}
             </nav>
-            {deskShell && (
-              <LibraryTabs
-                active="decks"
-                decks={library}
-                tests={nav.tests}
-                learn={learnNav.learn}
-                plans={plans}
-              />
-            )}
             <div className="qard-topbar-actions">
               <button
                 className="qard-statistics-link"
@@ -416,6 +407,15 @@ export function QardApp({ services, request }: { services: QardServices; request
                       : 'qard-page'
           }
         >
+          {deskShell && (
+            <LibraryTabs
+              active="decks"
+              decks={library}
+              tests={nav.tests}
+              learn={learnNav.learn}
+              plans={plans}
+            />
+          )}
           {!study && sessionMessage && <p role="status">{sessionMessage}</p>}
           {!study &&
             !onTests &&
