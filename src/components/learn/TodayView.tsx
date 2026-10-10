@@ -9,6 +9,7 @@ import { JobError, Waiting } from '../common/FeedbackStatus';
 import { StateChip } from './learning-status';
 import { useLearn } from './useLearn';
 import { todayDueCards } from '../../review/today-cards';
+import { buildDecks } from '../../decks/deck-index';
 import { type LearnNav } from '../../views/navigation';
 
 /** Loads Today and reloads it whenever the learn service changes. */
@@ -59,13 +60,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
   const reviews = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const due = useMemo(() => todayDueCards(index.cards, reviews.states), [index, reviews.states]);
-  const decks = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const card of due) {
-      counts.set(card.deck, (counts.get(card.deck) ?? 0) + 1);
-    }
-    return [...counts].sort(([a], [b]) => a.localeCompare(b));
-  }, [due]);
+  const decks = useMemo(() => buildDecks(due), [due]);
   useEffect(() => {
     if (today) {
       services.learn.prepare(today);
@@ -79,7 +74,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const start = () => first && nav.check(first.check!);
   const nothing = !today.checks.length && !due.length && !today.lessons.length;
   const suggestion = due.length
-    ? `Choose a deck to review${today.checks.length ? ' or start with your checks' : ''}.`
+    ? `Choose a deck or topic to review${today.checks.length ? ' or start with your checks' : ''}.`
     : today.checks.length
       ? 'Start with your checks.'
       : 'Choose a lesson to keep learning.';
@@ -132,21 +127,41 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
           <p className="qard-muted qard-small">
             {plural(due.length, 'due card')} · {plural(decks.length, 'deck')}
           </p>
-          {decks.map(([deck, count]) => (
-            <button
-              key={deck}
-              className="qard-doc-row qard-row-button qard-today-deck"
-              aria-label={`Study ${deck}: ${plural(count, 'due card')}`}
-              onClick={() => nav.studyDue(deck)}
-            >
-              <span className="qard-today-deck-copy">
-                <strong>{deck}</strong>
-                <small>{plural(count, 'card')} due for review</small>
-              </span>
-              <span className="qard-today-deck-action">
-                <Play size={14} /> Study
-              </span>
-            </button>
+          {decks.map((deck) => (
+            <div key={deck.name} className="qard-today-deck-group">
+              <button
+                className="qard-doc-row qard-row-button qard-today-deck"
+                aria-label={`Study ${deck.name}: ${plural(deck.cards.length, 'due card')}`}
+                onClick={() => nav.studyDue(deck.name)}
+              >
+                <span className="qard-today-deck-copy">
+                  <strong>{deck.name}</strong>
+                  <small>{plural(deck.cards.length, 'card')} due for review</small>
+                </span>
+                <span className="qard-today-deck-action">
+                  <Play size={14} /> Study all
+                </span>
+              </button>
+              <ul className="qard-today-topics" aria-label={`Due topics in ${deck.name}`}>
+                {deck.topics.map((topic) => (
+                  <li key={topic.name}>
+                    <button
+                      className="qard-row-button qard-today-topic"
+                      aria-label={`Study ${topic.name} in ${deck.name}: ${plural(topic.cards.length, 'due card')}`}
+                      onClick={() => nav.studyDue(deck.name, topic.name)}
+                    >
+                      <span className="qard-today-topic-copy">
+                        <span>{topic.name}</span>
+                        <small>{plural(topic.cards.length, 'due card')}</small>
+                      </span>
+                      <span className="qard-today-deck-action">
+                        <Play size={14} /> Study
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </section>
       )}

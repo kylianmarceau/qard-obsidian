@@ -6471,7 +6471,7 @@ div.qard-ask-q {
   gap: 16px;
 }
 
-.qard-row-button > span.qard-today-deck-copy {
+.qard-app .qard-row-button > span.qard-today-deck-copy {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -6496,4 +6496,57 @@ div.qard-ask-q {
   flex-shrink: 0;
   color: var(--qard-blue);
   font-size: 12px;
+}
+
+/* Topics stay visible beneath their deck, with a separate review action. */
+.qard-today-deck-group + .qard-today-deck-group {
+  margin-top: 20px;
+}
+
+.qard-today-topics {
+  margin: 0 0 0 12px;
+  padding: 0 0 0 16px;
+  list-style: none;
+  border-left: 1px solid var(--qard-border);
+}
+
+.qard-today-topics > li {
+  margin: 0;
+  padding: 0;
+}
+
+.qard-app button.qard-today-topic {
+  padding: 12px 4px;
+  gap: 16px;
+}
+
+.qard-app .qard-today-topics > li:first-child > button {
+  border-top: 0;
+}
+
+.qard-app .qard-row-button > span.qard-today-topic-copy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.qard-today-topic-copy small {
+  color: var(--qard-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+@container (max-width: 420px) {
+  .qard-today-topics {
+    margin-left: 6px;
+    padding-left: 12px;
+  }
+
+  .qard-today-topic-copy > span {
+    flex-basis: 100%;
+  }
 }
