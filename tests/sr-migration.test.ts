@@ -97,12 +97,16 @@ describe('Spaced Repetition migration', () => {
     ]);
   });
 
-  it('leaves cloze paragraphs, code and existing Qard cards untouched and reports clozes', () => {
+  it('converts cloze paragraphs while leaving code and existing Qard cards untouched', () => {
     const qard = '<!-- qard-id: keep -->\n> [!qard]- Existing::card?\n> Yes.\n';
     const source = note('The capital is ==Paris==.\n\n```cpp\nstd::vector<int> v;\n```\n\n' + qard);
     const scanned = scanSrNote(source, 'a.md')!;
-    expect(scanned.cards).toHaveLength(0);
-    expect(scanned.skipped[0]?.reason).toMatch(/cloze/i);
+    expect(scanned.cards).toHaveLength(1);
+    const result = convert(source);
+    expect(result.converted).toBe(1);
+    expect(result.source).toContain('{{c1::Paris}}');
+    expect(result.source).toContain('```cpp\nstd::vector<int> v;\n```');
+    expect(result.source).toContain(qard);
     expect(scanSrNote(convert(note('Q::A\n')).source, 'a.md')?.cards).toHaveLength(0);
   });
 

@@ -21,11 +21,15 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
+    "fflate": "^0.8.3",
+    "fzstd": "^0.1.1",
     "lucide-react": "^1.31.0",
     "preact": "10.29.8",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "sql.js": "^1.14.2",
     "ts-fsrs": "5.4.2",
+    "turndown": "^7.2.4",
     "yaml": "^2.8.1"
   },
   "devDependencies": {
@@ -33,6 +37,8 @@
     "@types/node": "^22.19.19",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.11",
+    "@types/turndown": "^5.0.6",
     "esbuild": "^0.25.12",
     "eslint": "10.11.0",
     "eslint-plugin-obsidianmd": "0.4.2",

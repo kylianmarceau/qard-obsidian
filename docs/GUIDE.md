@@ -247,20 +247,37 @@ Read the explanation, expand **Original card** to compare, and edit the proposed
 
 The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
 
+## Importing and exporting files
+
+Open **Settings → Qard → Import and export**. These tools stay in settings; the study workspace has no extra controls.
+
+**Import flashcards from a file** accepts UTF-8 CSV/TSV (up to 20 MB) and Anki `.apkg` packages (up to 100 MB), with a maximum of 10,000 cards per import. Nothing is saved until you choose **Import cards** after reviewing the preview.
+
+For CSV/TSV, choose the separator, whether the first row contains headings, and the question/answer columns. Deck, topic, tags and sibling group columns are optional; missing decks and topics use your chosen defaults. The headings `Question`/`Front`, `Answer`/`Back`, `Deck`, `Topic`, `Tags` and `Sibling group` are recognized automatically. Separate tags with spaces. Quoted fields support commas, tabs, quotes and real line breaks. Questions and answers are Markdown; exported Qard cloze/image format comments survive a round trip. Each imported card gets a fresh ID and starts as new. Matching question, answer, deck and topic are skipped by default, both within the file and against current vault cards. Invalid rows are listed separately.
+
+Anki import supports older compatibility packages and the current compressed package format. Basic, reversed and standard cloze templates become ordinary Qard cards. Nested deck names and tags are retained; each cloze target keeps its own schedule and shared sibling group. Supported local images, audio, video and PDFs are copied into **Imported media** and linked from the cards. Remote media becomes a link. Rich text, lists, ordinary tables and Anki MathJax delimiters are converted to Markdown. Image-occlusion masks, JavaScript-dependent templates, unsupported filters, merged tables and missing media are reported in the preview and skipped for manual conversion.
+
+**Keep Anki review data** preserves supported due dates, intervals, review counts, actual timestamped ratings and suspended cards. Qard handles subsequent reviews. Anki learning steps, custom scheduling and exact FSRS parameters are not transferred. Qard reconstructs FSRS memory from complete rating histories; incomplete histories use labelled estimates. Turn the option off to start every imported card as new. Anki cards receive the topic **General**.
+
+Choose an import folder. New notes are grouped by deck, topic and tags inside its **Imports** folder. Source notes and existing Qard schedules are preserved. Approved import records remain in the vault; imports with media also keep a copy of the original package for recovery. If saving is interrupted, use **Resume an unfinished import** in settings. Retries reuse the same IDs and do not duplicate notes, attachments or review history. Keep the import record and package until the import is complete; edited import files are reported instead of overwritten.
+
+**Export flashcards** saves all cards or one deck to a new CSV/TSV file in your chosen vault folder. It includes questions, answers, decks, topics, tags and sibling groups. It excludes IDs, review history and attachment files. Local links use vault paths when they can be resolved; copy those attachments separately when moving the export to another vault.
+
 ## Importing from Spaced Repetition
 
-Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Import**. Qard reads the Spaced Repetition plugin's settings (deck tags, ignored tags, separators, end marker, folder decks and cloze options) when they are installed. Otherwise it uses that plugin's defaults.
+Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Import and export**. Qard reads the Spaced Repetition plugin's settings (deck tags, ignored tags, separators, end marker, folder decks and cloze options) when they are installed. Otherwise it uses that plugin's defaults.
 
 1. Qard scans the notes that Spaced Repetition treats as flashcard notes and lists them with card, schedule and skipped counts. Nothing is written yet.
 2. Choose which notes to convert. A note with exactly the same cards as an earlier note (for example an archived copy) is marked and starts unselected.
 3. **Convert notes** rewrites each selected note in place. Cards are converted as follows:
    - `Question::Answer` and multiline `?` cards become `[!qard]` callouts with IDs.
    - Reversed `:::` and `??` cards become two cards, one for each direction.
+   - Standard highlight, configured bold/curly and sequential clozes become numbered Qard clozes. Repeated group numbers hide their blanks together; hints are retained. Each target gets its own schedule, and related cards share a sibling group.
    - Headings, prose and any other text in the note stay as they are, and headings become Qard topics.
    - A nested deck tag such as `#flashcards/cs315/hmm` becomes `qard-deck: "cs315/hmm"`, unless the note already sets `qard-deck`.
    - `<!--SR:...-->` due dates, intervals and ease become Qard review states. You can turn **Keep review schedule** off to import every card as new.
 
-Spaced Repetition cloze cards are not converted to Qard cloze cards by this importer. Cards with an empty side or an unclosed code fence are not converted either. All of these are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
+Custom cloze patterns, overlapping `a`/`h`/`s` groups, mixed numbered and unnumbered blanks, empty sides and unclosed code fences are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
 
 The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
 
@@ -372,7 +389,7 @@ Choose **Statistics** in the workspace header or run **Qard: Show study statisti
 - **Your decks:** cards studied, recall across saved ratings for current cards, and cards due now, with a Study action for each deck. This section always describes your current collection; the review-period filter does not change it.
 - **Memory estimates:** expand this section when using FSRS to see predicted recall, median stability and cards below the retention target. Stability is the number of days until predicted recall falls to 90%, independently of the selected target. These are model estimates, separate from rating-based recall. Paused cards and cards awaiting a content check are excluded; approximate estimates from imported schedules or incomplete histories are labelled.
 
-Daily and per-card rating totals are saved locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. Older reviews removed by the previous limit cannot be recovered; the page identifies incomplete history. Imported schedules affect collection counts but do not create historical reviews. Deleted cards remain in activity totals; duplicate card IDs are excluded from deck counts until fixed. Expand **About this data** for these details on the page.
+Daily and per-card rating totals are saved locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. Older reviews removed by the previous limit cannot be recovered; the page identifies incomplete history. Imported schedules affect collection counts without inventing reviews. Actual Anki rating events are included when review data is kept. Deleted cards remain in activity totals; duplicate card IDs are excluded from deck counts until fixed. Expand **About this data** for these details on the page.
 
 ## Token usage
 
@@ -426,7 +443,8 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- No general import/export, persistent recordings or speech recognition.
+- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export is not supported.
+- No persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.

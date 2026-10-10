@@ -7,6 +7,7 @@ import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
 import { QardSettingsTab } from './settings/SettingsTab';
+import { TransferModal, type TransferMode } from './settings/TransferModal';
 import { SelectionModal } from './views/SelectionModal';
 import { ImportModal } from './views/ImportModal';
 import type { QardCard } from './cards/card-types';
@@ -333,6 +334,9 @@ export default class QardPlugin extends Plugin {
   }
   openImport() {
     new ImportModal(this).open();
+  }
+  openTransfer(mode: TransferMode) {
+    new TransferModal(this, mode).open();
   }
   async show(
     kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates',

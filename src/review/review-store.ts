@@ -23,6 +23,7 @@ import {
   recordReview,
   undoReviewStatistics,
   type StudyStatistics,
+  type RatingCounts,
 } from './statistics';
 export interface ReviewUndo {
   id: string;
@@ -559,7 +560,7 @@ export class ReviewStore {
       };
     });
   }
-  importStates(states: ReviewState[]) {
+  importStates(states: ReviewState[], importedHistory: ReviewEvent[] = []) {
     const valid = states.filter(
       (s) =>
         /^[A-Za-z0-9_-]+$/.test(s.cardId) &&
@@ -575,15 +576,51 @@ export class ReviewStore {
     }
     return this.change((data) => {
       const next = Object.assign(Object.create(null) as Record<string, ReviewState>, data.states);
+      const added = new Set(valid.filter((s) => !next[s.cardId]).map((s) => s.cardId));
+      const events = importedHistory.filter(
+        (e) =>
+          added.has(e.cardId) &&
+          [1, 2, 3, 4].includes(e.rating) &&
+          Number.isFinite(new Date(e.at).getTime()),
+      );
+      const byCard = new Map<string, ReviewEvent[]>();
+      for (const event of events) {
+        const list = byCard.get(event.cardId) ?? [];
+        list.push(event);
+        byCard.set(event.cardId, list);
+      }
       for (const state of valid) {
         if (!next[state.cardId]) {
           next[state.cardId] =
             data.settings.scheduler === 'fsrs'
-              ? initializeFsrs(state, [], data.settings.desiredRetention)
+              ? initializeFsrs(
+                  state,
+                  byCard.get(state.cardId) ?? [],
+                  data.settings.desiredRetention,
+                )
               : state;
         }
       }
-      return { ...data, states: next };
+      const importedStats = readStatistics(undefined, events);
+      const daily = { ...data.statistics.daily };
+      for (const [day, counts] of Object.entries(importedStats.daily)) {
+        daily[day] = counts.map((n, i) => n + (daily[day]?.[i] ?? 0)) as RatingCounts;
+      }
+      const statistics = {
+        ...data.statistics,
+        daily,
+        cards: Object.assign(
+          Object.create(null) as Record<string, RatingCounts>,
+          data.statistics.cards,
+          importedStats.cards,
+        ),
+      };
+      return {
+        ...data,
+        states: next,
+        history: [...data.history, ...events].sort((a, b) => a.at - b.at),
+        statistics,
+      };
     });
   }
   link(cardId: string, link: CardLink) {

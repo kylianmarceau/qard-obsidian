@@ -26,7 +26,15 @@ export default defineConfig([
           disallowTypeAnnotations: false,
         },
       ],
-      'obsidianmd/ui/sentence-case': ['warn', { brands: ['Qard', 'Spaced Repetition', 'FSRS'] }],
+      'obsidianmd/ui/sentence-case': [
+        'warn',
+        { brands: ['Qard', 'Spaced Repetition', 'FSRS', 'Anki', 'Markdown', 'CSV', 'TSV'] },
+      ],
     },
+  },
+  {
+    files: ['src/migration/anki-content.ts'],
+    // These nodes belong to an inert DOMParser document; Obsidian's window helpers are unavailable.
+    rules: { 'obsidianmd/prefer-create-el': 'off' },
   },
 ]);

@@ -4,7 +4,8 @@ import { importNotes, loadSrSettings, scanVault, type ScannedNote } from '../mig
 import type { SrSettings } from '../migration/sr-parser';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const cardCount = (note: ScannedNote) => note.cards.reduce((n, c) => n + (c.reversed ? 2 : 1), 0);
+const cardCount = (note: ScannedNote) =>
+  note.cards.reduce((n, c) => n + (c.clozeTargets?.length ?? (c.reversed ? 2 : 1)), 0);
 
 /** Preview, choose notes, then convert Spaced Repetition cards to Qard callouts in place. */
 export class ImportModal extends Modal {

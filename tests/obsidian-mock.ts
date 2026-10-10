@@ -71,6 +71,24 @@ export class PluginSettingTab {
     public plugin: unknown,
   ) {}
 }
+export class Modal {
+  modalEl = typeof document === 'undefined' ? ({} as HTMLElement) : document.createElement('div');
+  contentEl = typeof document === 'undefined' ? ({} as HTMLElement) : document.createElement('div');
+  constructor(public app: unknown) {
+    if (typeof document !== 'undefined') this.modalEl.append(this.contentEl);
+  }
+  setTitle(_title: string) {}
+  onOpen() {}
+  onClose() {}
+  open() {
+    if (typeof document !== 'undefined') document.body.append(this.modalEl);
+    this.onOpen();
+  }
+  close() {
+    this.onClose();
+    if (typeof document !== 'undefined') this.modalEl.remove();
+  }
+}
 export class Notice {
   constructor(public message: string) {}
 }

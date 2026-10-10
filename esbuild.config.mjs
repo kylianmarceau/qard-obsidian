@@ -2,7 +2,14 @@ import { build, context } from 'esbuild';
 import { mkdir, copyFile, stat, writeFile, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-const fsrsLicense = await readFile('node_modules/ts-fsrs/LICENSE', 'utf8');
+const licenses = (
+  await Promise.all(
+    ['ts-fsrs', 'fflate', 'fzstd', 'sql.js', 'turndown'].map(
+      async (name) =>
+        `Includes ${name}:\n${await readFile(`node_modules/${name}/LICENSE`, 'utf8')}`,
+    ),
+  )
+).join('\n\n');
 const watch = process.argv.includes('--watch');
 const options = {
   entryPoints: ['src/main.ts'],
@@ -16,6 +23,7 @@ const options = {
   external: ['obsidian'],
   format: 'cjs',
   platform: 'browser',
+  loader: { '.wasm': 'binary' },
   target: 'es2020',
   outfile: 'main.js',
   jsx: 'automatic',
@@ -25,8 +33,7 @@ const options = {
   define: { 'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production') },
   banner: {
     js: `/* Qard — local-first Obsidian study workspace. MIT license.
-Includes ts-fsrs:
-${fsrsLicense}
+${licenses}
 */`,
   },
 };

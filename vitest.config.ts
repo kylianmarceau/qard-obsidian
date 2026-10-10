@@ -12,6 +12,9 @@ export default defineConfig({
       'react/jsx-runtime': 'preact/jsx-runtime',
       react: 'preact/compat',
       obsidian: fileURLToPath(new URL('./tests/obsidian-mock.ts', import.meta.url)),
+      'sql.js/dist/sql-wasm-browser.wasm': fileURLToPath(
+        new URL('./tests/sqlite-wasm.ts', import.meta.url),
+      ),
     },
   },
   test: {

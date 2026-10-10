@@ -24,3 +24,35 @@ it('settings rows never return an Obsidian Setting from a promise callback (it i
   await new Promise((r) => setTimeout(r, 10));
   expect(adopted).toBe(0);
 });
+
+it('opens transfer tools exclusively from Qard settings', async () => {
+  const { vi } = await import('vitest');
+  const openTransfer = vi.fn(),
+    openImport = vi.fn();
+  const plugin = {
+    app: {},
+    reviews: { getSnapshot: () => ({ settings: readSettings({}) }) },
+    openTransfer,
+    openImport,
+  };
+  const tab = new QardSettingsTab(plugin as never);
+  const group = tab.getSettingDefinitions().find((g) => g.heading === 'Import and export')!;
+  expect(group.items.map((row) => row.name)).toEqual([
+    'Import flashcards from a file',
+    'Export flashcards',
+    'Resume an unfinished import',
+    'Import from Spaced Repetition',
+  ]);
+  for (const row of group.items) {
+    const button = {
+      setButtonText: () => button,
+      onClick: (callback: () => void) => {
+        callback();
+        return button;
+      },
+    };
+    row.render({ addButton: (callback: (b: typeof button) => void) => callback(button) } as never);
+  }
+  expect(openTransfer.mock.calls).toEqual([['import'], ['export'], ['resume']]);
+  expect(openImport).toHaveBeenCalledOnce();
+});

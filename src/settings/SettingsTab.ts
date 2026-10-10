@@ -62,7 +62,7 @@ export class QardSettingsTab extends PluginSettingTab {
       group('AI roles', this.roleDefinitions()),
       group('Practice tests', this.testDefinitions()),
       group('Lessons and checks', this.learnDefinitions()),
-      group('Import', this.importDefinitions()),
+      group('Import and export', this.importDefinitions()),
     ];
   }
   private studyDefinitions(): SettingRow[] {
@@ -503,6 +503,33 @@ export class QardSettingsTab extends PluginSettingTab {
   // Conditional rows depend on the provider, so the whole tab is redrawn when it changes.
   private importDefinitions(): SettingRow[] {
     return [
+      {
+        name: 'Import flashcards from a file',
+        desc: 'Preview and import CSV, TSV or Anki .apkg cards, including supported media and review data.',
+        render: (row) => {
+          row.addButton((b) =>
+            b.setButtonText('Import…').onClick(() => this.qard.openTransfer('import')),
+          );
+        },
+      },
+      {
+        name: 'Export flashcards',
+        desc: 'Save all cards or a selected deck as CSV or TSV in your vault.',
+        render: (row) => {
+          row.addButton((b) =>
+            b.setButtonText('Export…').onClick(() => this.qard.openTransfer('export')),
+          );
+        },
+      },
+      {
+        name: 'Resume an unfinished import',
+        desc: 'Finish an approved file import interrupted by a save error or restart.',
+        render: (row) => {
+          row.addButton((b) =>
+            b.setButtonText('Resume…').onClick(() => this.qard.openTransfer('resume')),
+          );
+        },
+      },
       {
         name: 'Import from Spaced Repetition',
         desc: 'Convert flashcards made for the Spaced Repetition plugin into Qard cards, keeping their review schedule.',

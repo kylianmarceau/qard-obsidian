@@ -5,6 +5,7 @@
 **Your learning, in focus.** Flashcards, practice tests and guided learning from your Obsidian notes.
 
 - **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic with FSRS spaced repetition, or use Cram mode to reveal and advance without ratings. Generated cards track their source notes; review suggested edits when the material changes.
+- **Import and export:** from Qard settings, preview CSV/TSV and Anki `.apkg` imports, keep supported Anki media and review data, or export a deck to CSV/TSV. Migrate Spaced Repetition cards, including standard clozes.
 - **Plans:** set up an exam in three steps, track coverage across selected decks/topics, launch practice tests, and see exams and revision in a monthly calendar.
 - **Card formats:** select text to create numbered cloze blanks, or draw image masks to recall diagram labels. Each variant has its own review history and works with normal or cram study.
 - **Review controls:** edit without leaving your session, flag cards that need fixing, undo the last rating, skip, or pause. Related cloze and image variants are separated until tomorrow; cram includes every variant.

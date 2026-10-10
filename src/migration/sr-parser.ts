@@ -2,6 +2,8 @@ import { parseDocument } from 'yaml';
 import { parseCards, sourceLines } from '../cards/parser';
 import { serializeCard } from '../cards/source-patch';
 import { DAY, type ReviewState } from '../review/scheduler';
+import { srCloze } from './sr-cloze';
+import { clozeFront, FORMAT_BACK } from '../cards/card-format';
 
 /** The subset of Spaced Repetition plugin settings that decides what counts as a card. */
 export interface SrSettings {
@@ -16,6 +18,7 @@ export interface SrSettings {
   clozeHighlight: boolean;
   clozeBold: boolean;
   clozeCurly: boolean;
+  clozePatterns?: string[];
 }
 export const DEFAULT_SR_SETTINGS: SrSettings = {
   tags: ['flashcards'],
@@ -59,6 +62,9 @@ export function readSrSettings(raw: unknown): SrSettings {
     clozeHighlight: flag('convertHighlightsToClozes', d.clozeHighlight),
     clozeBold: flag('convertBoldTextToClozes', d.clozeBold),
     clozeCurly: flag('convertCurlyBracketsToClozes', d.clozeCurly),
+    ...(Array.isArray(s.clozePatterns)
+      ? { clozePatterns: s.clozePatterns.filter((p): p is string => typeof p === 'string') }
+      : {}),
   };
 }
 
@@ -75,6 +81,7 @@ export interface SrCard {
   start: number;
   end: number;
   schedules: (SrSchedule | undefined)[];
+  clozeTargets?: number[];
 }
 export interface SrSkip {
   line: number;
@@ -248,16 +255,31 @@ export function scanSrNote(
         });
       }
     } else if (block.length) {
-      const body = text(0, block.length);
-      if (
-        (settings.clozeHighlight && /==[^=\n]+==/.test(body)) ||
-        (settings.clozeBold && /\*\*[^*\n]+\*\*/.test(body)) ||
-        (settings.clozeCurly && /\{\{[^}\n]+\}\}/.test(body))
-      ) {
-        note.skipped.push({
-          line: block[0]!,
-          reason: 'Cloze card. Qard has no cloze cards, so this text is left as it is.',
-        });
+      const end =
+        block.length -
+        (settings.endMarker && lines[block[block.length - 1]!]!.text.trim() === settings.endMarker
+          ? 1
+          : 0);
+      const body = text(0, end),
+        inline = body.match(trailingSchedule);
+      try {
+        const converted = srCloze(inline ? body.slice(0, inline.index).trim() : body, settings);
+        if (converted) {
+          card = {
+            reversed: false,
+            front: converted.text,
+            back: FORMAT_BACK,
+            clozeTargets: converted.targets,
+            line: block[0]!,
+            start: lines[block[0]!]!.start,
+            end:
+              lines[block[block.length - 1]!]!.start + lines[block[block.length - 1]!]!.text.length,
+            schedules: inline ? parseSchedules(inline[1]!) : [],
+          };
+          note.cards.push(card);
+        }
+      } catch (e) {
+        note.skipped.push({ line: block[0]!, reason: (e as Error).message });
       }
     }
     block = [];
@@ -300,6 +322,12 @@ export function scanSrNote(
       } else if (lastCard?.line === i - 1) {
         lastCard.card.schedules = parseSchedules(schedule[1]!);
         lastCard.card.end = lines[i]!.start + line.length;
+      } else if (block.length) {
+        const card = flush();
+        if (card) {
+          card.schedules = parseSchedules(schedule[1]!);
+          card.end = lines[i]!.start + line.length;
+        }
       }
       lastCard = undefined;
       continue;
@@ -312,14 +340,14 @@ export function scanSrNote(
       continue;
     }
     if (!trimmed) {
-      if (!(settings.endMarker && separator >= 0)) {
+      if (!(settings.endMarker && block.length)) {
         flush();
       } else {
         block.push(i);
       }
       continue;
     }
-    if (settings.endMarker && separator >= 0 && trimmed === settings.endMarker) {
+    if (settings.endMarker && block.length && trimmed === settings.endMarker) {
       block.push(i);
       const card = flush();
       lastCard = card && { card, line: i };
@@ -353,12 +381,16 @@ export function scanSrNote(
         block.push(i);
         continue;
       }
-      const single = singles.find(([sep]) => line.includes(sep));
+      // Do not mistake a custom curly cloze's :: for a question/answer separator.
+      const separatorLine = line.replace(/\{\{.*?\}\}|==.*?==|\*\*.*?\*\*/g, (match) =>
+        ' '.repeat(match.length),
+      );
+      const single = singles.find(([sep]) => separatorLine.includes(sep));
       if (single) {
         // SR treats the separator line alone as the card; preceding lines are context.
         block = [];
         const [sep, rev] = single,
-          at = line.indexOf(sep),
+          at = separatorLine.indexOf(sep),
           inline = line.match(trailingSchedule);
         const front = line.slice(0, at).trim(),
           back = (inline ? line.slice(0, inline.index) : line).slice(at + sep.length).trim();
@@ -416,16 +448,24 @@ export function convertSrNote(
     ids: string[] = [];
   const edits: { start: number; end: number; text: string }[] = [];
   for (const card of note.cards) {
-    const sides = card.reversed
-      ? [
-          [card.front, card.back],
-          [card.back, card.front],
-        ]
-      : [[card.front, card.back]];
+    const sides = card.clozeTargets
+      ? card.clozeTargets.map((target) => [clozeFront(card.front, target), card.back])
+      : card.reversed
+        ? [
+            [card.front, card.back],
+            [card.back, card.front],
+          ]
+        : [[card.front, card.back]];
     try {
+      const newIds = sides.map(() => newId());
+      const group = card.clozeTargets || card.reversed ? `sr-${newIds[0]}` : undefined;
       const pending = sides.map(([front, back], n) => {
-        const id = newId();
-        return { id, text: serializeCard(id, front!, back!, eol), schedule: card.schedules[n] };
+        const id = newIds[n]!;
+        return {
+          id,
+          text: serializeCard(id, front!, back!, eol, group),
+          schedule: card.schedules[n],
+        };
       });
       let text = pending
         .map((p) => p.text)
