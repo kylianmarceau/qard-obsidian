@@ -1,7 +1,11 @@
 import { failureDays, needsRepair } from '../review/card-repair';
 import type { ReviewUndo } from '../review/review-store';
 import type { SavedSession, SessionStep } from '../review/saved-session';
-import { pendingLearning, type LearningReview } from '../review/learning-queue';
+import {
+  completedReviewCount,
+  pendingLearning,
+  type LearningReview,
+} from '../review/learning-queue';
 import { reviewIntervals } from '../review/fsrs-scheduler';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
@@ -97,6 +101,16 @@ export function StudyView({
   const currentSession = session ? saved.sessions.find((s) => s.id === session.id) : undefined;
   const learningEnabled = !cram && saved.settings.scheduling && saved.settings.scheduler === 'fsrs';
   const pending = learningEnabled ? pendingLearning(currentSession, saved.states) : [];
+  const completed = completedReviewCount(
+    {
+      results,
+      cardIds: cards.map((c) => c.id),
+      repeatLearning: learningEnabled && session?.repeatLearning ? true : undefined,
+      skippedIds: skipped,
+      deferredIds: deferred,
+    },
+    saved.states,
+  );
   const currentLearning = learningEnabled && currentSession?.repeatLearning ? learning : undefined;
   const card = currentLearning
     ? cards.find((c) => c.id === currentLearning.cardId)
@@ -553,6 +567,9 @@ export function StudyView({
     return (
       <div className="qard-summary">
         <h1>Learning cards return soon</h1>
+        <p>
+          {completed} / {cards.length} completed
+        </p>
         <p role="status">
           {pending.length} learning {pending.length === 1 ? 'card remains' : 'cards remain'}. The
           next card returns in {minutes} {minutes === 1 ? 'minute' : 'minutes'}. Keep this session
@@ -743,11 +760,14 @@ export function StudyView({
       <div className="qard-study-area">
         <div className="qard-study-progress">
           <span>
-            {currentLearning ? (
-              'Learning review'
-            ) : (
+            {cram ? (
               <>
                 {position + 1} <span>/ {cards.length}</span>
+              </>
+            ) : (
+              <>
+                {currentLearning && 'Learning review · '}
+                {completed} <span>/ {cards.length} completed</span>
               </>
             )}
             {!!pending.length && ` · ${pending.length} learning`}
@@ -755,8 +775,8 @@ export function StudyView({
         </div>
         <progress
           max={cards.length}
-          value={position}
-          aria-label={cram ? 'Cards viewed' : 'Cards reviewed'}
+          value={cram ? position : completed}
+          aria-label={cram ? 'Cards viewed' : 'Cards completed'}
         />
         {!cram && saved.states[card.id]?.needsContentCheck && (
           <p className="qard-muted qard-small">

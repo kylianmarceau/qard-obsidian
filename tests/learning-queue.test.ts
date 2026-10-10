@@ -195,13 +195,21 @@ it('orders waiting repeats by their real due times and finishing preserves the s
   expect(store.getSnapshot().sessions).toEqual([]);
 });
 
-it('keeps manual, cram, exam, simple-scheduler, scheduling-off and legacy sessions single-pass', async () => {
-  for (const mode of ['all', 'new', 'difficult'] as const) {
+it.each(['all', 'due', 'new', 'difficult'] as const)(
+  'keeps missed cards in normal %s sessions until learning is finished',
+  async (mode) => {
     const store = new ReviewStore(async () => {});
     const session = await store.startSession([cards[0]!], 'normal', undefined, mode);
     await store.review('a', 1, now, { id: session.id, position: 0 });
-    expect(store.getSnapshot().sessions).toEqual([]);
-  }
+    expect(store.getSnapshot().sessions[0]).toMatchObject({
+      repeatLearning: true,
+      position: 1,
+      learning: [{ cardId: 'a', due: now + 60_000 }],
+    });
+  },
+);
+
+it('keeps cram, exam, simple-scheduler and scheduling-off sessions single-pass', async () => {
   for (const options of [
     { style: 'cram' as const },
     { examId: 'exam' },
@@ -213,11 +221,27 @@ it('keeps manual, cram, exam, simple-scheduler, scheduling-off and legacy sessio
     const session = await store.startSession([cards[0]!], options.style, options.examId, 'due');
     expect(session.repeatLearning).toBeUndefined();
   }
+});
+
+it('upgrades a saved single-pass deck session on resume without losing its order or reviews', async () => {
   const store = new ReviewStore(async () => {});
-  const session = await store.startSession([cards[0]!]);
-  store.load(JSON.parse(JSON.stringify(store.getSnapshot())));
+  const session = await store.startSession(cards);
+  const data = JSON.parse(JSON.stringify(store.getSnapshot()));
+  delete data.sessions[0].repeatLearning;
+  delete data.sessions[0].learning;
+  store.load(data);
   await store.review('a', 1, now, { id: session.id, position: 0 });
-  expect(store.getSnapshot().sessions).toEqual([]);
+  const before = store.getSnapshot();
+  const resumed = await store.resumeSession(session.id, cards);
+  expect(resumed.session).toMatchObject({
+    cardIds: ['a', 'b', 'c'],
+    position: 1,
+    results: [{ cardId: 'a', rating: 1 }],
+    repeatLearning: true,
+    learning: [{ cardId: 'a', due: now + 60_000 }],
+  });
+  expect(store.getSnapshot().history).toBe(before.history);
+  expect(store.getSnapshot().states).toBe(before.states);
 });
 
 it.each([{ scheduling: false }, { scheduler: 'simple' as const }])(

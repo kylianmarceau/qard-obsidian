@@ -15,7 +15,7 @@ export interface SavedSession {
   examId?: string;
   skippedIds?: string[];
   deferredIds?: string[];
-  /** Opt-in for new normal Due sessions; older/manual/cram sessions stay single-pass. */
+  /** Enabled for normal FSRS study; older sessions gain repeats when resumed. */
   repeatLearning?: true;
   learning?: LearningReview[];
 }

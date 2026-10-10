@@ -310,7 +310,7 @@ it('failed undo keeps the completion screen and failed skip keeps the front card
   expect(host.textContent).toContain('disk full');
   expect(host.textContent).not.toContain('Session complete');
   await key(' ');
-  await key('3');
+  await key('4');
   write.mockRejectedValueOnce(new Error('disk full'));
   await key('u');
   expect(host.textContent).toContain('Session complete');

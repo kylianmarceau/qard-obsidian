@@ -88,7 +88,7 @@ it('leaves midway, survives a full store/UI restart, resumes the next card, and 
   await click('Start');
   expect(host.textContent).toContain('Question a');
   await key(' ');
-  await key('3');
+  await key('4');
   expect(host.textContent).toContain('Question b');
   await click('Save and leave');
   await click('Leave session');
@@ -96,11 +96,11 @@ it('leaves midway, survives a full store/UI restart, resumes the next card, and 
   await reload();
   await click('Resume', true);
   expect(host.textContent).toContain('Question b');
-  expect(host.textContent).toContain('2 / 3');
+  expect(host.textContent).toContain('1 / 3 completed');
   await key(' ');
   await key('4');
   await key(' ');
-  await key('3');
+  await key('4');
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('3 / 3');
   expect(services.reviews.getSnapshot().history.map((e) => e.cardId)).toEqual(['a', 'b', 'c']);
@@ -172,7 +172,7 @@ it('starts Due study with learning repeats and resumes a queue after every origi
   await key('4');
   expect(host.textContent).toContain('Learning cards return soon');
   await click('Save and leave');
-  expect(host.textContent).toContain('3 of 3 reviewed · 1 learning');
+  expect(host.textContent).toContain('2 of 3 completed · 1 learning');
   await reload();
   await click('Resume', true);
   expect(host.textContent).toContain('Learning cards return soon');

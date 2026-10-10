@@ -132,3 +132,9 @@ An isolated browser preview using production components and sample in-memory sto
 ## Release 0.5.5 — 10 October 2026
 
 On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **450 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match. The release includes review editing and repair flags, advisory Often forgotten prompts, related-card separation, the bottom review toolbar and deck-specific Today queues described above. No dependencies or minimum Obsidian version changed.
+
+## Release 0.5.8 — 10 October 2026
+
+On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **460 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match. No dependencies or minimum Obsidian version changed.
+
+Normal FSRS All, New and Difficult deck sessions now use the learning/relearning queue already used by Due sessions. Regression coverage verifies a 52-card deck stays at zero completed after Again, moves to the next card, returns the missed card at the scheduled boundary, counts its completion once, and restores the pending count on undo. Coverage also checks saved completion counts, graduation after Good learning steps, and upgrading older single-pass sessions on resume without losing order, review history or memory. Existing timing, restart, skip/pause, stale review, failed-save, cram, simple scheduling and exam tests pass. Native Obsidian and mobile hardware were not exercised for this change.

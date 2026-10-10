@@ -48,7 +48,7 @@ it('resolves edits and skips deleted or ambiguous cards while keeping the next a
   expect(result.skipped).toBe(2);
   expect(result.session.position).toBe(0);
   expect(result.cards[0]!.frontMarkdown).toBe('Edited');
-  await store.review('c', 3, 2000, { id: session.id, position: 0 });
+  await store.review('c', 4, 2000, { id: session.id, position: 0 });
   expect(store.getSnapshot().sessions).toEqual([]);
   expect(store.getSnapshot().history).toHaveLength(2);
 });

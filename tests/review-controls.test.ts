@@ -46,7 +46,7 @@ it('undo on completion recreates the saved queue and removes a first rating with
   const session = await store.startSession([cards[0]!]);
   const other = await store.startSession(cards, 'cram');
   const before = store.getSnapshot();
-  const token = await store.review('a', 3, now, { id: session.id, position: 0 });
+  const token = await store.review('a', 4, now, { id: session.id, position: 0 });
   expect(store.getSnapshot().sessions).toEqual([other]);
   await store.undoReview(token);
   expect(store.getSnapshot().states.a).toBeUndefined();
@@ -108,7 +108,7 @@ it('skip persists across restart, changes no memory or review totals, and reject
   restarted.load(JSON.parse(JSON.stringify(store.getSnapshot())));
   const resumed = await restarted.resumeSession(session.id, cards);
   expect(resumed.session).toMatchObject({ position: 1, skippedIds: ['a'], results: [] });
-  await restarted.review('b', 3, now, { id: session.id, position: 1 });
+  await restarted.review('b', 4, now, { id: session.id, position: 1 });
   await restarted.skipCard({ id: session.id, position: 2 }, 'c');
   expect(restarted.getSnapshot().sessions).toEqual([]);
   expect(restarted.getSnapshot().history).toHaveLength(2);

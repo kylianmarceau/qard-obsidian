@@ -8,7 +8,7 @@ export interface LearningReview {
   due: number;
 }
 
-/** Only FSRS learning/relearning steps return within a due-review session. */
+/** FSRS learning/relearning steps return within a normal study session. */
 export function learningReview(state: ReviewState | undefined): LearningReview | undefined {
   if (
     !state ||
@@ -33,4 +33,26 @@ export function pendingLearning(
       return current ? [current] : [];
     })
     .sort((a, b) => a.due - b.due || a.cardId.localeCompare(b.cardId));
+}
+
+/** Count finished cards separately from attempts and the first-pass queue position. */
+export function completedReviewCount(
+  session: Pick<
+    SavedSession,
+    'results' | 'cardIds' | 'repeatLearning' | 'skippedIds' | 'deferredIds'
+  >,
+  states: Record<string, ReviewState>,
+): number {
+  const available = new Set(session.cardIds);
+  const excluded = new Set([...(session.skippedIds ?? []), ...(session.deferredIds ?? [])]);
+  return new Set(
+    session.results
+      .filter(
+        ({ cardId }) =>
+          available.has(cardId) &&
+          !excluded.has(cardId) &&
+          (!session.repeatLearning || !learningReview(states[cardId])),
+      )
+      .map(({ cardId }) => cardId),
+  ).size;
 }

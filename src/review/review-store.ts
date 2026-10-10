@@ -604,7 +604,7 @@ export class ReviewStore {
     cards: QardCard[],
     style: SessionStyle = 'normal',
     examId?: string,
-    mode: StudyMode = 'all',
+    _mode: StudyMode = 'all',
   ): Promise<SavedSession> {
     if (
       !cards.length ||
@@ -642,7 +642,6 @@ export class ReviewStore {
       }
       if (
         style === 'normal' &&
-        mode === 'due' &&
         !examId &&
         data.settings.scheduling &&
         data.settings.scheduler === 'fsrs'
@@ -661,7 +660,23 @@ export class ReviewStore {
       if (!session) {
         throw new Error('This session has already finished or was discarded.');
       }
-      resolved = resolveSession(session, cards, data.states);
+      // Older single-pass deck sessions gain learning repeats when resumed under FSRS.
+      const repeatLearning =
+        session.style === 'normal' &&
+        !session.examId &&
+        data.settings.scheduling &&
+        data.settings.scheduler === 'fsrs';
+      const prepared: SavedSession = repeatLearning
+        ? {
+            ...session,
+            repeatLearning: true,
+            learning: session.cardIds.slice(0, session.position).flatMap((cardId) => {
+              const entry = learningReview(data.states[cardId]);
+              return entry && !session.skippedIds?.includes(cardId) ? [entry] : [];
+            }),
+          }
+        : session;
+      resolved = resolveSession(prepared, cards, data.states);
       const next = resolved.session;
       return {
         ...data,

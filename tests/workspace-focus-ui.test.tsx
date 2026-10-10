@@ -122,7 +122,7 @@ it('hands the shortcut to study once and restores it after finishing a session',
   await key('f');
   expect(services.setFocus).toHaveBeenLastCalledWith(true);
   await key(' ');
-  await key('3');
+  await key('4');
   expect(host.textContent).toContain('Session complete');
   await key('f');
   expect(services.setFocus).toHaveBeenLastCalledWith(false);

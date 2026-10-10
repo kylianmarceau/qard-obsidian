@@ -77,12 +77,53 @@ async function elapsed(ms: number) {
   });
 }
 
+it('keeps a missed card unfinished in a 52-card deck and completes it only after its returning review', async () => {
+  const deck = Array.from(
+    { length: 52 },
+    (_, i) =>
+      parseCards(
+        `<!-- qard-id: card${i} -->\n> [!qard]- Deck question ${i}\n> Answer ${i}`,
+        'deck.md',
+      ).cards[0]!,
+  );
+  const session = await services.reviews.startSession(deck);
+  await mount(session, deck);
+  const progress = () => host.querySelector('progress')!.value;
+  expect(host.textContent).toContain('0 / 52 completed');
+  await key(' ');
+  await key('1');
+  expect(host.textContent).toContain('Deck question 1');
+  expect(host.textContent).toContain('0 / 52 completed · 1 learning');
+  expect(progress()).toBe(0);
+  await key(' ');
+  await key('4');
+  expect(progress()).toBe(1);
+  await elapsed(60_000);
+  expect(host.textContent).toContain('Deck question 2');
+  await key(' ');
+  await key('4');
+  expect(host.textContent).toContain('Deck question 0');
+  expect(host.textContent).toContain('Learning review · 2 / 52 completed');
+  expect(progress()).toBe(2);
+  await key(' ');
+  await key('4');
+  expect(host.textContent).toContain('Deck question 3');
+  expect(host.textContent).toContain('3 / 52 completed');
+  expect(progress()).toBe(3);
+  expect(services.reviews.getSnapshot().history).toHaveLength(4);
+  await key('u');
+  expect(host.textContent).toContain('Learning review · 2 / 52 completed');
+  expect(progress()).toBe(2);
+  expect(services.reviews.getSnapshot().history).toHaveLength(3);
+});
+
 it('waits for real FSRS intervals, returns hidden questions automatically, and counts unique cards separately from repeats', async () => {
   const session = await services.reviews.startSession([cards[0]!], 'normal', undefined, 'due');
   await mount(session, [cards[0]!]);
   await key(' ');
   await key('1');
   expect(host.textContent).toContain('Learning cards return soon');
+  expect(host.textContent).toContain('0 / 1 completed');
   expect(host.textContent).toContain('next card returns in 1 minute');
   await elapsed(59_999);
   expect(host.querySelector('.qard-study-card')).toBeNull();
@@ -93,6 +134,7 @@ it('waits for real FSRS intervals, returns hidden questions automatically, and c
   await key(' ');
   await key('3');
   expect(host.textContent).toContain('next card returns in 10 minutes');
+  expect(host.textContent).toContain('0 / 1 completed');
   await elapsed(600_000);
   await key(' ');
   await key('3');
@@ -117,7 +159,7 @@ it('does not interrupt the current question when another card becomes due; inter
   expect(host.textContent).toContain('Learning review');
   await key('s');
   expect(host.textContent).toContain('Question c');
-  expect(host.textContent).toContain('3 / 3');
+  expect(host.textContent).toContain('1 / 3 completed');
   expect(services.reviews.getSnapshot().sessions[0]!.position).toBe(2);
   expect(services.reviews.getSnapshot().sessions[0]!.learning).toEqual([]);
 });
@@ -151,7 +193,7 @@ it('undo restores the first-pass card from waiting and the repeated card after g
   await key(' ');
   await key('1');
   await key('u');
-  expect(host.textContent).toContain('1 / 1');
+  expect(host.textContent).toContain('0 / 1 completed');
   expect(host.textContent).toContain('Question a');
   expect(services.reviews.getSnapshot().history).toEqual([]);
   await key(' ');
