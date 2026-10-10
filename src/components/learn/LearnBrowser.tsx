@@ -72,6 +72,11 @@ export function LearnBrowser({
             Usage
           </button>
         )}
+        {nav.time && (
+          <button className="qard-text-button" onClick={nav.time}>
+            Study time
+          </button>
+        )}
         <button onClick={nav.today}>Today</button>
         <button className="qard-primary" onClick={() => nav.mapCourse()}>
           <Plus size={16} />

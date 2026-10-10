@@ -13,6 +13,7 @@ import {
   answerSchema,
   closeSchema,
   courseUpdateSchema,
+  figureSchema,
   mapSchema,
   objectivesSchema,
   probeMapSchema,
@@ -60,6 +61,7 @@ const PURPOSES = new Map<Schema, string>([
   [tutorMarkSchema, 'Tutoring'],
   [answerSchema, 'Tutoring'],
   [closeSchema, 'Lesson wrap-ups'],
+  [figureSchema, 'Figures'],
 ]);
 export const purposeOf = (schema: Schema) => PURPOSES.get(schema) ?? 'Other';
 export const usageKey = (purpose: string, role: string, provider: string, model: string) =>

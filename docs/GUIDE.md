@@ -278,7 +278,7 @@ The “this…” commands work in a Markdown note containing indexed cards. Top
 
 ## Study-progress backups
 
-**Settings → Qard → Study-progress backups → Manage backups** lists automatic dated copies, with **Back up now** for a manual copy. Qard saves one on startup and at most one every 30 minutes while plugin data is saved, retaining the newest 30. Copies live in the vault configuration folder under `plugins/qard/study-backups` (normally `.obsidian/plugins/qard/study-backups`). They contain review history, schedules, statistics, saved sessions, exam plans and card/mastery links. They exclude preferences, AI connections, usage and card text.
+**Settings → Qard → Study-progress backups → Manage backups** lists automatic dated copies, with **Back up now** for a manual copy. Qard saves one on startup and at most one every 30 minutes while plugin data is saved, retaining the newest 30. Copies live in the vault configuration folder under `plugins/qard/study-backups` (normally `.obsidian/plugins/qard/study-backups`). They contain review history, schedules, statistics, study time, saved sessions, exam plans and card/mastery links. They exclude preferences, AI connections, usage and card text.
 
 **Preview restore** shows the current and saved review/session/exam counts before confirmation. Restoration replaces later study progress, keeps current preferences and connections, and saves a fresh copy first. Changed progress during preparation, damaged files and failed saves stop the restore. Notes, attachments, source-tracking files, AI drafts, lessons and tests are separate vault files; back up the whole vault to protect those. These local copies do not protect against losing the vault or device.
 
@@ -400,6 +400,18 @@ Choose **Teach** on an objective, or run **Qard: Teach me this note**.
 3. **Teach.** The writer prepares each step, starting with the first, while you work. Each step says why it is needed, explains the idea from what you already accept, and ends with a check. When you can work it out yourself, the check comes before the explanation. The tutor marks your answer live and, if you made a mistake the writer expected, shows an explanation aimed at it. You can try again once, and ask questions at any point.
 4. **Close.** The lesson is recorded in the mastery file and saved as a note in `Qard/Lessons/`. The writer suggests cards (linked to the objective) and, when a note was missing something the lesson had to explain, a paragraph to add to it. Nothing is added to your notes unless you accept it. The first check is written for three days later.
 
+### Figures
+
+Lessons follow the vault's rule for visuals: use one only when you would understand significantly faster or more accurately with it. Most steps need none.
+
+- **Flows, processes and small graphs** are written inline as Mermaid. Labels Mermaid can't parse are quoted automatically.
+- **Figures already in your notes** are reused: the writer copies the note's embed and caption.
+- **Anything else** (a distribution with specific parameters, a curve, a geometric picture, a data structure with real values) goes to the **Illustrator** as a brief. It is drawn in the background while you work through earlier steps.
+
+The illustrator replies with either a matplotlib script or an SVG. Qard runs scripts itself with Python 3 on this computer. On macOS, the script runs under `sandbox-exec`, with no network access and writes allowed only to Qard's temporary folder. Qard sets the style and saves the figure, removes anything from the SVG that isn't drawing (scripts, event handlers, links to other files), and saves it to `assets/<subject>/descriptive-name.svg`. That folder can be changed in **Settings → Qard → Lessons and checks**. The lesson and its note show the figure with an italic *Figure:* caption. If a figure fails, the error goes back to the illustrator once.
+
+**Draw this** asks for a figure on any step or answer; **Redraw…** takes a note on what to change. Without Python (or on mobile), the illustrator writes the SVG by hand.
+
 ## Background work and while you wait
 
 Writing tests, marking, mapping courses and preparing lessons run in the background. Leaving the screen, closing the Qard tab or moving around Obsidian doesn't stop them. When one finishes, Obsidian shows a notice. Course mappings and updates are saved under `Qard/Proposals/` until you review them, and a lesson reopened after a reload picks up where it stopped. The header shows **● N running** while jobs are in progress; it lists each one with its elapsed time and an estimate, and opens it when clicked. Estimates come from how long that kind of job recently took with your chosen connection and model.
@@ -425,6 +437,11 @@ Choose **Statistics** in the workspace header or run **Qard: Show study statisti
 - **Memory estimates:** expand this section when using FSRS to see predicted recall, median stability and cards below the retention target. Stability is the number of days until predicted recall falls to 90%, independently of the selected target. These are model estimates, separate from rating-based recall. Paused cards and cards awaiting a content check are excluded; approximate estimates from imported schedules or incomplete histories are labelled.
 
 Daily and per-card rating totals are saved locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. Older reviews removed by the previous limit cannot be recovered; the page identifies incomplete history. Imported schedules affect collection counts without inventing reviews. Actual Anki rating events are included when review data is kept. Deleted cards remain in activity totals; duplicate card IDs are excluded from deck counts until fixed. Expand **About this data** for these details on the page.
+## Study time
+
+Qard records how long you actively study, by course and activity: cards, lessons, checks, practice tests, course maps and the library. Time counts only while a Qard tab is in front, Obsidian has focus, and you've typed, clicked or scrolled in the last two minutes. Card reviews count towards the card's deck, or towards the course a deck is named after (a `DS346 A1` deck counts towards DS346).
+
+Open **Study time** from Learn, or run **Qard: Show study time**. It shows a daily chart by activity and a table by course. Today shows how long you've studied today, and each course page shows its time over the last 30 days. Times are kept for a year in Qard's plugin data on this device. Nothing is sent anywhere.
 
 ## Token usage
 
@@ -452,6 +469,7 @@ Then, under **AI roles**, choose a connection and model for each job:
 | **Tutor** | Replies live in lessons, marks checks, answers questions. Should be fast. | Claude Code with Haiku |
 | **Writer** | Maps courses, and writes tests, checks and lesson steps. Should be your best model. | Claude Code's default model |
 | **Marker** | Marks practice tests in the background. | Claude Code's default model |
+| **Illustrator** | Draws figures for lessons. Should be a strong model. | The writer's connection and model |
 
 Each Claude Code or Codex call starts a new process, which adds a few seconds. For the most responsive tutor, use an API key or OpenRouter with a fast model.
 

@@ -1,5 +1,5 @@
 import type { SourceSnapshot } from '../../cards/source-sync-types';
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentRole } from '../../agents/runner';
@@ -44,6 +44,7 @@ export function AskThread({
   cancel,
   card,
   onCard,
+  figure,
   title = 'Questions',
 }: {
   services: QardServices;
@@ -60,6 +61,8 @@ export function AskThread({
   card?: CardTarget;
   onCard?: (cardId: string) => void;
   title?: string;
+  /** A figure under an answer (body) and its "Draw this" button (action), where answers can be illustrated. */
+  figure?: (index: number) => { body: ReactNode; action: ReactNode };
 }) {
   const [text, setText] = useState(''),
     [pending, setPending] = useState<string>(),
@@ -123,9 +126,11 @@ export function AskThread({
               </button>
               <div className="qard-ask-a">
                 <Markdown text={item.a} path={path} services={services} />
+                {figure?.(i).body}
                 <div className="qard-ask-tools">
                   <AgentLabel services={services} role={role} />
                   <span className="qard-spacer" />
+                  {figure?.(i).action}
                   {card &&
                     (added.has(i) ? (
                       <span className="is-full qard-small">

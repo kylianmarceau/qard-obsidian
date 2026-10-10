@@ -424,6 +424,11 @@ export class QardSettingsTab extends PluginSettingTab {
         'Maps courses and writes lessons, checks and tests. Choose your best model.',
       ),
       role('marker', 'Marker', 'Marks practice tests in the background.'),
+      role(
+        'illustrator',
+        'Illustrator',
+        'Draws figures for lessons: plots computed with Python on this computer, or diagrams. Choose a strong model.',
+      ),
     ];
   }
   private testDefinitions(): SettingRow[] {
@@ -515,13 +520,35 @@ export class QardSettingsTab extends PluginSettingTab {
               try {
                 const folder = safeFolder(x.getValue());
                 if (folder) {
-                  void this.patch((s) => ({ ...s, learn: { folder } }));
+                  void this.patch((s) => ({ ...s, learn: { ...s.learn, folder } }));
                 } else {
                   throw new Error('Choose a folder.');
                 }
               } catch (e) {
                 new Notice((e as Error).message);
                 x.setValue(this.qard.reviews.getSnapshot().settings.learn.folder);
+              }
+            });
+          });
+        },
+      },
+      {
+        name: 'Figures folder',
+        desc: 'Figures the illustrator draws are saved here, in a subfolder per subject (e.g. assets/statistics), so you can reuse them in notes.',
+        render: (row) => {
+          row.addText((x) => {
+            x.setValue(l.figures).setPlaceholder('Figures folder');
+            x.inputEl.addEventListener('change', () => {
+              try {
+                const figures = safeFolder(x.getValue());
+                if (figures) {
+                  void this.patch((s) => ({ ...s, learn: { ...s.learn, figures } }));
+                } else {
+                  throw new Error('Choose a folder.');
+                }
+              } catch (e) {
+                new Notice((e as Error).message);
+                x.setValue(this.qard.reviews.getSnapshot().settings.learn.figures);
               }
             });
           });

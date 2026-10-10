@@ -32,7 +32,7 @@ export class BackupModal extends Modal {
       }
       this.contentEl.empty();
       this.contentEl.createEl('p', {
-        text: 'Automatic local copies are kept on startup and every 30 minutes while progress changes, up to 30 copies. They include reviews, schedules, saved sessions, exam plans and card/mastery links. Notes, attachments, source-tracking files and AI drafts are separate vault files and are not included.',
+        text: 'Automatic local copies are kept on startup and every 30 minutes while progress changes, up to 30 copies. They include reviews, schedules, study time, saved sessions, exam plans and card/mastery links. Notes, attachments, source-tracking files and AI drafts are separate vault files and are not included.',
       });
       new Setting(this.contentEl).addButton((button) =>
         button

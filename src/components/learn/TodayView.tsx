@@ -11,6 +11,7 @@ import { useLearn } from './useLearn';
 import { todayDueCards } from '../../review/today-cards';
 import { buildDecks } from '../../decks/deck-index';
 import { type LearnNav } from '../../views/navigation';
+import { StudyTimeLine } from '../usage/StudyTimeView';
 import { newAllowance, introductionsToday } from '../../review/pacing';
 import { scheduler } from '../../review/scheduler';
 
@@ -115,6 +116,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
             ? 'Nothing is due. Map a course or make a test to keep going.'
             : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. ${suggestion}`}
         </p>
+        <StudyTimeLine services={services} days={1} open={nav.time} />
       </header>
       {today.checks.length > 0 && (
         <section>

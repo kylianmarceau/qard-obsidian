@@ -45,6 +45,7 @@ export class QardView extends ItemView {
       flashcards: this.plugin.flashcards,
       sourceSync: this.plugin.sourceSync,
       improvements: this.plugin.improvements,
+      time: this.plugin.time,
       setFocus: (enabled) => this.setFocus(enabled),
       isActive: () => this.app.workspace.getActiveViewOfType(QardView) === this,
       openSource: (card) => this.plugin.openSource(card),
@@ -81,6 +82,7 @@ export class QardView extends ItemView {
     }
   }
   release() {
+    this.plugin.time?.set(this, undefined);
     this.setFocus(false);
     this.root?.unmount();
     this.root = undefined;

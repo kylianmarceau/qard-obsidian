@@ -34,7 +34,8 @@ export type LearnJobKind =
   | 'steps'
   | 'tutor'
   | 'ask'
-  | 'close';
+  | 'close'
+  | 'figure';
 
 export interface LearnJob {
   kind: LearnJobKind;

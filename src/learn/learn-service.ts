@@ -19,6 +19,9 @@ import {
   type AgentRole,
   type AgentRunner,
 } from '../agents/runner';
+import { cleanSvg, figureDomain, figureName, type Figure } from './figures';
+import type { PythonRunner } from '../agents/python';
+import { debug } from '../debug/debug-log';
 import { marksSchema, readMarks } from '../tests/test-schema';
 import {
   markChoice,
@@ -73,6 +76,9 @@ import {
   readTutorMark,
   stepSchema,
   tutorMarkSchema,
+  figureSchema,
+  readFigure,
+  firstSentences,
 } from './learn-schema';
 import {
   askPrompt,
@@ -86,10 +92,12 @@ import {
   reviseMapPrompt,
   stepPrompt,
   tutorMarkPrompt,
+  illustratePrompt,
 } from './learn-prompts';
 import type {
   CheckRecord,
   Lesson,
+  LessonStep,
   LessonSummary,
   StepState,
   Today,
@@ -139,6 +147,7 @@ export class LearnService {
       paths: string[],
       unchangedSince?: number,
     ) => Promise<SourceSnapshot[]>,
+    private python?: PythonRunner,
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -171,14 +180,18 @@ export class LearnService {
     work: (signal: AbortSignal) => Promise<T>,
   ): Promise<T | undefined> {
     if (this.isRemoved(target)) {
+      debug.log('job', 'skipped: target was deleted', { target, kind });
       return undefined;
     }
     const k = key(target, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) {
+      debug.log('job', 'already running, not started again', { key: k });
       return undefined;
     }
     const startedAt = this.now(),
-      controller = new AbortController();
+      controller = new AbortController(),
+      span = debug.span('job', kind, { key: k });
+    controller.signal.addEventListener('abort', () => span.fail('cancelled'));
     this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
@@ -196,8 +209,10 @@ export class LearnService {
         this.publish(jobs);
       }
       this.timing(kind, this.now() - startedAt);
+      span.end();
       return result;
     } catch (error) {
+      span.fail(error);
       if (!this.disposed && this.controllers.get(k) === controller) {
         this.publish({
           ...this.snapshot.jobs,
@@ -1159,6 +1174,25 @@ export class LearnService {
   /** Opens a lesson and picks up any work a reload interrupted: the probe, the plan, unwritten steps or the wrap-up. */
   async openLesson(path: string) {
     const l = await this.loadLesson(path);
+    debug.log('lesson', 'open', {
+      path,
+      stage: l.finishedAt
+        ? l.close
+          ? 'closed'
+          : 'closing'
+        : !l.probe
+          ? 'probe'
+          : l.probe.submitted && !l.map
+            ? 'planning'
+            : !l.map
+              ? 'answering probe'
+              : !l.accepted
+                ? 'reviewing plan'
+                : 'teaching',
+      steps: l.steps.map((s) => !!s),
+      current: l.current,
+      jobs: Object.keys(this.snapshot.jobs).filter((k) => k.startsWith(`${path}|`)),
+    });
     if (l.finishedAt) {
       if (!l.close) {
         void this.close(path);
@@ -1169,6 +1203,17 @@ export class LearnService {
       void this.submitProbe(path);
     } else if (l.map && (l.steps.length !== l.map.steps.length || l.steps.some((s) => !s))) {
       await this.prepareSteps(path);
+    }
+    if (!l.finishedAt) {
+      l.steps.forEach((s, i) => {
+        if (
+          s?.figure?.trim() &&
+          !l.state[i]?.figure &&
+          !this.job(path, 'figure', String(i))?.error
+        ) {
+          void this.illustrate(path, i);
+        }
+      });
     }
     return l;
   }
@@ -1340,6 +1385,12 @@ export class LearnService {
       lesson = { ...lesson, probe: { ...probe, submitted: true, marks } };
       await this.setLesson(path, lesson);
       const { m, o, sources } = await this.context(lesson);
+      debug.log('lesson', 'context ready', {
+        path,
+        course: m?.course,
+        objective: o?.id,
+        sourceChars: sources?.length ?? 0,
+      });
       const typed = probe.questions.filter((q) => !marks[q.id]);
       const result = await runValidated(
         this.activeRunner('tutor', signal),
@@ -1368,7 +1419,7 @@ export class LearnService {
       await this.setLesson(path, {
         ...this.lesson(path),
         objective,
-        probe: { ...probe, submitted: true, marks, findings: result.findings },
+        probe: { ...probe, submitted: true, marks, findings: firstSentences(result.findings) },
         map: result.map,
       });
       // Steps start being written while the student reads the plan.
@@ -1475,6 +1526,10 @@ export class LearnService {
                 : s,
             ),
           });
+          // The illustrator starts on a figure the writer asked for while the remaining steps are written.
+          if (step.figure?.trim()) {
+            void this.illustrate(path, index);
+          }
         }
       };
       await Promise.all(Array.from({ length: STEP_WRITERS }, worker));
@@ -1588,6 +1643,100 @@ export class LearnService {
         await this.patchStep(path, index, { asks: [...latest.asks, { q: question, a: answer }] });
       }
     });
+  }
+  /**
+   * Draws a figure for a step (from the writer's brief, or the student's "Draw this", with an optional request)
+   * or for the answer to a question asked in it.
+   */
+  illustrate(path: string, index: number, ask?: number, request?: string) {
+    return this.track(
+      path,
+      'figure',
+      ask === undefined ? String(index) : `${index}-ask-${ask}`,
+      async (signal) => {
+        const lesson = this.lesson(path),
+          step = lesson.steps[index],
+          asked = ask === undefined ? undefined : lesson.state[index]?.asks[ask];
+        if (!step || (ask !== undefined && !asked)) {
+          return;
+        }
+        const previous = asked ? asked.figure : lesson.state[index]?.figure;
+        const base = asked
+          ? `A figure that makes this answer clear.\nQuestion: ${asked.q}\nAnswer: ${asked.a}`
+          : step.figure?.trim() || `The one figure that would make "${step.title}" clearest.`;
+        const brief = request?.trim()
+          ? previous
+            ? `${previous.brief}\n\nThe student saw the figure (${previous.caption}) and asks: ${request.trim()}`
+            : `${base}\n\nThe student asks: ${request.trim()}`
+          : (previous?.brief ?? base);
+        const figure = await this.draw(lesson.map?.title ?? lesson.topic, step, brief, signal);
+        const latest = this.lesson(path),
+          st = latest.state[index];
+        if (!st) {
+          return;
+        }
+        const next: StepState = asked
+          ? { ...st, asks: st.asks.map((a, i) => (i === ask ? { ...a, figure } : a)) }
+          : { ...st, figure };
+        await this.setLesson(path, {
+          ...latest,
+          state: latest.state.map((x, i) => (i === index ? next : x)),
+        });
+      },
+    );
+  }
+  /**
+   * The illustrator replies with a matplotlib script or an SVG. Qard runs the script on this computer, cleans the
+   * SVG and saves it under the figures folder. A failure goes back to the illustrator once, with the error.
+   */
+  private async draw(
+    topic: string,
+    step: LessonStep,
+    brief: string,
+    signal: AbortSignal,
+  ): Promise<Figure> {
+    const python = !!this.python,
+      root = this.settings().learn.figures.replace(/\/+$/, '');
+    const domains = [
+      ...new Set(
+        ['svg', 'png']
+          .flatMap((ext) => this.storage.files(root, ext))
+          .map((p) => p.slice(root.length + 1).split('/'))
+          .filter((parts) => parts.length > 1)
+          .map((parts) => parts[0]!),
+      ),
+    ].sort();
+    let prompt = illustratePrompt({ topic, step, brief, python, domains });
+    for (let attempt = 0; ; attempt++) {
+      const reply = await runValidated(
+        this.runner('illustrator'),
+        { signal, prompt, schema: figureSchema, effort: 'medium', vault: false },
+        (v) => readFigure(v, python),
+      );
+      try {
+        const svg = cleanSvg(
+          reply.kind === 'python' ? await this.python!(reply.code, signal) : reply.code,
+        );
+        const folder = `${root}/${figureDomain(reply.domain)}`,
+          name = figureName(reply.name);
+        let path = `${folder}/${name}.svg`;
+        for (let n = 2; this.storage.exists(path); n++) {
+          path = `${folder}/${name}-${n}.svg`;
+        }
+        await this.storage.write(path, svg);
+        return { path, caption: reply.caption.trim(), brief };
+      } catch (error) {
+        debug.log('figure', 'attempt failed', {
+          attempt,
+          kind: reply.kind,
+          error: (error as Error).message,
+        });
+        if (signal.aborted || attempt >= 1) {
+          throw error;
+        }
+        prompt = `${prompt}\n\nYour previous figure failed: ${(error as Error).message}\n<previous kind="${reply.kind}">\n${reply.code.slice(0, 20000)}\n</previous>\nFix it.`;
+      }
+    }
   }
   async go(path: string, index: number) {
     const lesson = this.lesson(path);

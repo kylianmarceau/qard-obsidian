@@ -171,6 +171,10 @@ export function StudyView({
         : undefined,
     [card, revealed, saved, cram],
   );
+  // Study time is split by deck, card by card.
+  useEffect(() => {
+    services.time?.set(services.owner, { activity: 'cards', course: card?.deck });
+  }, [services, card?.deck]);
   useEffect(() => {
     mounted.current = true;
     return () => {

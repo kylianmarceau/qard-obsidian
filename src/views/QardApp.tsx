@@ -46,6 +46,15 @@ import { StatisticsView } from '../components/statistics/StatisticsView';
 import { UsageView } from '../components/usage/UsageView';
 import type { QardServices } from './services';
 import type { UiRequest } from './navigation';
+import { StudyTimeView } from '../components/usage/StudyTimeView';
+import type { StudyContext } from '../time/study-time';
+/** "Notes/Courses/DS346/DS346 Mastery.md" → "DS346". */
+const courseName = (path: string) =>
+  path
+    .split('/')
+    .pop()!
+    .replace(/\.md$/, '')
+    .replace(/ mastery$/i, '');
 const LEARN_SCREENS = ['today', 'learn', 'map-course', 'course', 'check', 'lesson'];
 const TEST_LABEL: Record<string, string> = {
   plan: 'Plan',
@@ -80,6 +89,7 @@ export function QardApp({ services, request }: { services: QardServices; request
       request.kind === 'today' ||
       request.kind === 'learn' ||
       request.kind === 'usage' ||
+      request.kind === 'time' ||
       request.kind === 'statistics' ||
       request.kind === 'source-updates'
     ) {
@@ -234,6 +244,7 @@ export function QardApp({ services, request }: { services: QardServices; request
       learn: () => setScreen({ kind: 'learn' }),
       mapCourse: (folder) => setScreen({ kind: 'map-course', folder }),
       usage: () => setScreen({ kind: 'usage' }),
+      time: () => setScreen({ kind: 'time' }),
       course: (path, objective) =>
         setScreen({ kind: 'course', path, objective, serial: Date.now() }),
       check: (path) => setScreen({ kind: 'check', path }),
@@ -292,6 +303,44 @@ export function QardApp({ services, request }: { services: QardServices; request
   const onTests = ['tests', 'new-test', 'plan', 'take', 'results', 'review', 'test-cards'].includes(
     screen.kind,
   );
+  // Study time: what this screen is, and for which course. Card study reports each card's deck itself.
+  useSyncExternalStore(services.learn.subscribe, services.learn.getSnapshot);
+  useSyncExternalStore(services.tests.subscribe, services.tests.getSnapshot);
+  const context = ((): StudyContext | undefined => {
+    if (screen.kind === 'study') {
+      return undefined;
+    }
+    if (screen.kind === 'lesson') {
+      return { activity: 'lessons', course: services.learn.lessonAt(screen.path)?.course };
+    }
+    if (screen.kind === 'check') {
+      return { activity: 'checks', course: services.learn.checkAt(screen.path)?.course };
+    }
+    if (screen.kind === 'course') {
+      return { activity: 'planning', course: courseName(screen.path) };
+    }
+    if (onLearn) {
+      return {
+        activity: 'planning',
+        course:
+          screen.kind === 'map-course' && screen.folder
+            ? screen.folder.split('/').pop()
+            : undefined,
+      };
+    }
+    if (onTests) {
+      const mastery = testFolder ? services.tests.get(testFolder)?.test?.mastery : undefined;
+      return { activity: 'tests', course: mastery ? courseName(mastery) : undefined };
+    }
+    return { activity: 'browsing', course: activeDeck || undefined };
+  })();
+  const activity = context?.activity,
+    course = context?.course;
+  useEffect(() => {
+    if (activity) {
+      services.time?.set(services.owner, { activity, course });
+    }
+  }, [services, activity, course]);
   return (
     <div
       className={[
@@ -385,7 +434,9 @@ export function QardApp({ services, request }: { services: QardServices; request
                                 ? 'Token usage'
                                 : screen.kind === 'generate-cards'
                                   ? 'Generate flashcards'
-                                  : 'New card'}
+                                  : screen.kind === 'time'
+                                    ? 'Study time'
+                                    : 'New card'}
                     </span>
                   </>
                 ))}
@@ -653,6 +704,7 @@ export function QardApp({ services, request }: { services: QardServices; request
             />
           )}
           {screen.kind === 'usage' && <UsageView services={services} />}
+          {screen.kind === 'time' && <StudyTimeView services={services} />}
           {screen.kind === 'learn' && (
             <LearnBrowser services={services} nav={learnNav} testNav={nav} plans={plans} />
           )}

@@ -7,6 +7,7 @@ import type {
 } from './test-contracts';
 import type { SourceSnapshot } from '../cards/source-sync-types';
 import type { TestSettings } from '../settings/settings';
+import { debug } from '../debug/debug-log';
 import {
   CANCELLED,
   guardRunner,
@@ -219,10 +220,13 @@ export class TestService {
     }
     const k = key(folder, kind, id);
     if (this.snapshot.jobs[k] && !this.snapshot.jobs[k].error) {
+      debug.log('job', 'already running, not started again', { key: k });
       return undefined;
     }
     const startedAt = this.now(),
-      controller = new AbortController();
+      controller = new AbortController(),
+      span = debug.span('job', kind, { key: k });
+    controller.signal.addEventListener('abort', () => span.fail('cancelled'));
     this.controllers.set(k, controller);
     this.publish({ ...this.snapshot.jobs, [k]: { kind, id, startedAt } });
     // Cancelling settles the job straight away, even if the request underneath can't be interrupted.
@@ -242,8 +246,10 @@ export class TestService {
       if (!this.removed.has(folder)) {
         this.timing(kind, this.now() - startedAt);
       }
+      span.end();
       return result;
     } catch (error) {
+      span.fail(error);
       if (!this.disposed && !this.removed.has(folder)) {
         this.publish({
           ...this.snapshot.jobs,

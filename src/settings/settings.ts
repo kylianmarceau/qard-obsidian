@@ -18,8 +18,10 @@ export interface AgentSettings {
   codexPath: string;
   roles: Record<AgentRole, RoleSetting>;
 }
+/** figures: where drawn figures are saved, one subfolder per subject (the vault's assets/<domain>/ convention). */
 export interface LearnSettings {
   folder: string;
+  figures: string;
 }
 export interface QardSettings {
   defaultMode: StudyMode;
@@ -55,9 +57,10 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
     tutor: { provider: 'claude-code', model: 'haiku' },
     writer: { provider: 'claude-code', model: '' },
     marker: { provider: 'claude-code', model: '' },
+    illustrator: { provider: 'claude-code', model: '' },
   },
 };
-export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard' };
+export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard', figures: 'assets' };
 export const DEFAULT_SETTINGS: QardSettings = {
   defaultMode: 'all',
   defaultOrder: 'note',
@@ -112,6 +115,7 @@ function readAgentSettings(raw: unknown, legacy: unknown): AgentSettings {
         tutor: readRole(roles.tutor, d.tutor),
         writer: readRole(roles.writer, d.writer),
         marker: readRole(roles.marker, d.marker),
+        illustrator: readRole(roles.illustrator, readRole(roles.writer, d.writer)),
       },
     };
   }
@@ -133,14 +137,20 @@ function readAgentSettings(raw: unknown, legacy: unknown): AgentSettings {
   return {
     claudePath: provider === 'claude-code' ? path : '',
     codexPath: provider === 'codex' ? path : '',
-    roles: { tutor, writer: { provider, model }, marker: { provider, model } },
+    roles: {
+      tutor,
+      writer: { provider, model },
+      marker: { provider, model },
+      illustrator: { provider, model },
+    },
   };
 }
 function readLearnSettings(raw: unknown): LearnSettings {
   const l = raw && typeof raw === 'object' ? (raw as Partial<LearnSettings>) : {};
+  const d = DEFAULT_LEARN_SETTINGS;
   return {
-    folder:
-      typeof l.folder === 'string' && l.folder.trim() ? l.folder : DEFAULT_LEARN_SETTINGS.folder,
+    folder: typeof l.folder === 'string' && l.folder.trim() ? l.folder : d.folder,
+    figures: typeof l.figures === 'string' && l.figures.trim() ? l.figures : d.figures,
   };
 }
 export function readSettings(raw: unknown): QardSettings {

@@ -33,6 +33,7 @@ const LEARN_LABELS: Record<string, string> = {
   close: 'Wrapping up lesson',
   'map-course': 'Mapping course',
   'check-write': 'Writing check',
+  figure: 'Drawing a figure',
 };
 const name = (path: string) =>
   path

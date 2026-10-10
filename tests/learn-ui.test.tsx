@@ -18,6 +18,8 @@ import { DeleteLearnItem } from '../src/components/learn/DeleteLearnItem';
 import { RunningJobs } from '../src/components/jobs/RunningJobs';
 import type { QardServices } from '../src/views/services';
 import type { AgentTask } from '../src/agents/runner';
+// A constant snapshot: useSyncExternalStore re-renders forever if each call returns a new object.
+const reviewSnapshot = { settings: readSettings({}), study: {} };
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MASTERY = 'Notes/DS346/DS346 Mastery.md';
@@ -141,7 +143,7 @@ beforeEach(() => {
     owner: new Component(),
     learn,
     index: { getSnapshot: () => ({ cards: [] }) },
-    reviews: { getSnapshot: () => ({ settings: readSettings({}) }) },
+    reviews: { subscribe: () => () => {}, getSnapshot: () => reviewSnapshot },
     isActive: () => true,
     app: {
       workspace: { on: vi.fn(), offref: vi.fn(), openLinkText: vi.fn() },
@@ -225,7 +227,8 @@ it('a lesson plan is shown for approval before teaching starts', async () => {
         answers: {},
         submitted: true,
         marks: {},
-        findings: 'Start from pLSA.',
+        findings:
+          'Start from pLSA. You know the $\\theta_i \\sim \\mathrm{Dir}(\\alpha)$ step. Start from pLSA again. And again.',
       },
       map: {
         title: 'The LDA story',
@@ -241,7 +244,11 @@ it('a lesson plan is shown for approval before teaching starts', async () => {
   await tick();
   await tick();
   expect(host.querySelector('h1')?.textContent).toBe('The LDA story');
-  expect(host.textContent).toContain('Start from pLSA.');
+  // The findings sit in the body, cut to two sentences, not under the title.
+  expect(host.querySelector('header')!.textContent).not.toContain('pLSA');
+  expect(host.querySelector('.qard-probe-results')!.textContent).toBe(
+    'What your answers showStart from pLSA. You know the $\\theta_i \\sim \\mathrm{Dir}(\\alpha)$ step.',
+  );
   expect(host.textContent).toContain('Dirichlet draws');
   await click(buttons('Start lesson')[0]);
   await tick();

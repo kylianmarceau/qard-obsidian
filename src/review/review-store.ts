@@ -12,6 +12,7 @@ import {
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle, StudyMode } from './session';
 import { newAllowance, paceCards, type PacingOptions } from './pacing';
+import { addStudy, type StudyLog } from '../time/study-time';
 import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
@@ -55,6 +56,7 @@ export interface PluginData {
   links: Record<string, CardLink>;
   timings: Record<string, number[]>;
   usage: UsageLog;
+  study: StudyLog;
   statistics: StudyStatistics;
   sessions: SavedSession[];
   exams: ExamPlan[];
@@ -68,6 +70,7 @@ export class ReviewStore {
     links: Object.create(null) as Record<string, CardLink>,
     timings: {},
     usage: {},
+    study: {},
     statistics: emptyStatistics(),
     sessions: [],
     exams: [],
@@ -162,6 +165,18 @@ export class ReviewStore {
       settings.scheduler === 'fsrs'
         ? migrateFsrs(states, history, settings.desiredRetention)
         : states;
+    const study: StudyLog = {};
+    for (const [day, entries] of Object.entries(value.study || {})) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !entries || typeof entries !== 'object') {
+        continue;
+      }
+      const valid = Object.entries(entries).filter(
+        ([k, s]) => typeof k === 'string' && Number.isFinite(s) && s > 0,
+      );
+      if (valid.length) {
+        study[day] = Object.fromEntries(valid);
+      }
+    }
     this.data = {
       version: 1,
       settings,
@@ -170,6 +185,7 @@ export class ReviewStore {
       links,
       timings,
       usage,
+      study,
       statistics: readStatistics(value.statistics, history),
       sessions: readSessions(value.sessions).flatMap((session) => {
         if (!session.repeatLearning) {
@@ -260,13 +276,18 @@ export class ReviewStore {
         }
         const progress = validateProgress(raw);
         const restored = new ReviewStore(async () => {});
-        restored.load({ ...progress, settings: data.settings });
+        restored.load({
+          ...progress,
+          study: progress.study ?? data.study,
+          settings: data.settings,
+        });
         const parsed = restored.getSnapshot();
         return {
           ...data,
           states: parsed.states,
           history: parsed.history,
           statistics: parsed.statistics,
+          study: parsed.study,
           links: parsed.links,
           sessions: parsed.sessions,
           exams: parsed.exams,
@@ -904,6 +925,12 @@ export class ReviewStore {
   }
   deleteExam(id: string) {
     return this.change((data) => ({ ...data, exams: data.exams.filter((p) => p.id !== id) }));
+  }
+  recordStudy(add: StudyLog, today: string) {
+    return this.change((data) => ({ ...data, study: addStudy(data.study, add, today) }));
+  }
+  resetStudy() {
+    return this.change((data) => ({ ...data, study: {} }));
   }
   flush() {
     return this.queue;

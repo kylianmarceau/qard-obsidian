@@ -1,9 +1,10 @@
 import type { Schema } from '../tests/test-schema';
 import type { Usage } from './usage';
+import { clip, debug, errorText } from '../debug/debug-log';
 
 export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter';
-/** Tutor replies live and should be fast; the writer and marker favour quality. */
-export type AgentRole = 'tutor' | 'writer' | 'marker';
+/** Tutor replies live and should be fast; the writer and marker favour quality; the illustrator draws figures. */
+export type AgentRole = 'tutor' | 'writer' | 'marker' | 'illustrator';
 /**
  * vault: false when the prompt already holds everything needed, so API runners skip the note tools.
  * effort: how hard to think, where the provider supports it.
@@ -66,6 +67,10 @@ export async function runValidated<T>(
   try {
     return read(first);
   } catch (error) {
+    debug.log('agent', 'reply rejected, retrying once', {
+      error: errorText(error),
+      reply: clip(JSON.stringify(first) ?? ''),
+    });
     if (task.signal?.aborted) {
       throw new Error(CANCELLED);
     }
@@ -118,6 +123,7 @@ export function deadline<T>(
     };
     const timer = window.setTimeout(() => {
       done();
+      debug.log('agent', 'request timed out', { what, ms });
       reject(
         new Error(
           `${what} didn't reply within ${Math.round(ms / 60_000)} minutes, so Qard stopped waiting.`,

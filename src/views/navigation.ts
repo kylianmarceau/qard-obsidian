@@ -21,7 +21,7 @@ export type Screen =
   | { kind: 'new-test'; prompt?: string; serial: number }
   | { kind: 'plan' | 'take' | 'results' | 'test-cards'; folder: string }
   | { kind: 'review'; folder: string; question?: string }
-  | { kind: 'exams' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates' }
+  | { kind: 'exams' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates' | 'time' }
   | { kind: 'map-course'; folder?: string }
   | { kind: 'check' | 'lesson'; path: string }
   | { kind: 'course'; path: string; objective?: string; serial: number };
@@ -48,6 +48,7 @@ export type LearnNav = {
   studyDue: (deck: string, topic?: string) => void;
   studyNew?: (deck: string) => void;
   usage?: () => void;
+  time?: () => void;
 };
 
 export interface UiRequest {
@@ -63,7 +64,8 @@ export interface UiRequest {
     | 'lesson'
     | 'usage'
     | 'statistics'
-    | 'source-updates';
+    | 'source-updates'
+    | 'time';
   selection?: Selection;
   draft?: Partial<CardDraft>;
   path?: string;

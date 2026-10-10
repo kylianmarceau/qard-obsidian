@@ -15,6 +15,8 @@ import { type LearnNav } from '../../views/navigation';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 import { JobControls } from '../jobs/JobControls';
 import { tidyMermaid } from '../../learn/mermaid';
+import { DrawButton, FigureView } from './FigureView';
+import { firstSentences } from '../../learn/learn-schema';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({
@@ -298,14 +300,15 @@ function LessonMapView({
         <h1>
           <InlineMarkdown text={map.title} path={where} services={services} />
         </h1>
-        {probe?.findings && (
-          <div className="qard-lesson-findings">
-            <Markdown text={probe.findings} path={where} services={services} />
-          </div>
-        )}
       </header>
-      {probe && probe.questions.length > 0 && (
+      {probe && (probe.findings || probe.questions.length > 0) && (
         <section className="qard-probe-results">
+          <h2>What your answers show</h2>
+          {probe.findings && (
+            <div className="qard-doc-body">
+              <Markdown text={firstSentences(probe.findings)} path={where} services={services} />
+            </div>
+          )}
           {probe.questions.map((q) => {
             const m = probe.marks?.[q.id];
             const ok = !!m && m.score >= q.marks;
@@ -408,7 +411,8 @@ function LessonSteps({
   const writing = job(path, 'steps'),
     tutor = job(path, 'tutor', String(index)),
     retrying = job(path, 'tutor', `${index}-retry`),
-    asking = job(path, 'ask', String(index));
+    asking = job(path, 'ask', String(index)),
+    drawing = job(path, 'figure', String(index));
   const running = (j?: { error?: string }) => !!j && !j.error;
   const where = lesson.notes[0] ?? path,
     last = index === lesson.steps.length - 1;
@@ -471,8 +475,24 @@ function LessonSteps({
           {explain && (
             <section className="qard-lesson-explain">
               <Markdown text={step.explain} path={where} services={services} />
+              <FigureView
+                services={services}
+                path={where}
+                figure={st?.figure}
+                job={drawing}
+                draw={(r) => void services.learn.illustrate(path, index, undefined, r)}
+                cancel={() => services.learn.cancel(path, 'figure', String(index))}
+                dismiss={() => services.learn.dismiss(path, 'figure', String(index))}
+              />
               <div className="qard-lesson-connect">
                 <Markdown text={step.connect} path={where} services={services} />
+              </div>
+              <div className="qard-lesson-draw">
+                <DrawButton
+                  figure={st?.figure}
+                  job={drawing}
+                  draw={() => void services.learn.illustrate(path, index)}
+                />
               </div>
             </section>
           )}
@@ -601,6 +621,31 @@ function LessonSteps({
             ask={(q) => void services.learn.ask(path, q)}
             dismiss={() => services.learn.dismiss(path, 'ask', String(index))}
             cancel={() => services.learn.cancel(path, 'ask', String(index))}
+            figure={(i) => {
+              const id = `${index}-ask-${i}`,
+                j = job(path, 'figure', id),
+                f = st?.asks[i]?.figure;
+              return {
+                body: (
+                  <FigureView
+                    services={services}
+                    path={where}
+                    figure={f}
+                    job={j}
+                    draw={(r) => void services.learn.illustrate(path, index, i, r)}
+                    cancel={() => services.learn.cancel(path, 'figure', id)}
+                    dismiss={() => services.learn.dismiss(path, 'figure', id)}
+                  />
+                ),
+                action: (
+                  <DrawButton
+                    figure={f}
+                    job={j}
+                    draw={() => void services.learn.illustrate(path, index, i)}
+                  />
+                ),
+              };
+            }}
             card={lessonCardTarget(services, lesson)}
             onCard={(id) => {
               if (lesson.mastery && lesson.objective) {

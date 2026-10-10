@@ -1,4 +1,5 @@
 import { isoDay } from './mastery';
+import { figureMarkdown } from './figures';
 import { tidyMermaid } from './mermaid';
 import type { Lesson } from './learn-types';
 
@@ -18,7 +19,7 @@ export function formatLessonNote(path: string, lesson: Lesson, summary: string) 
         : s.check.type === 'mcq'
           ? (s.check.options?.[a?.choice ?? -1] ?? '_No answer._')
           : a?.text?.trim() || '_No answer._';
-      return `### ${i + 1}. ${s.title}\n\n${s.explain}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map((x) => `> **Q:** ${x.q}\n> ${x.a.replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
+      return `### ${i + 1}. ${s.title}\n\n${s.explain}${st?.figure ? `\n\n${figureMarkdown(st.figure)}` : ''}\n\n${s.connect}\n\n**Check:** ${s.check.prompt}\n\n**My answer${st?.mark ? ` (${st.mark.score}/${s.check.marks})` : ''}:** ${answer}\n\n**Model answer:** ${s.check.model}${st?.asks.length ? '\n\n' + st.asks.map((x) => `> **Q:** ${x.q}\n> ${(x.figure ? `${x.a}\n\n${figureMarkdown(x.figure)}` : x.a).replace(/\n/g, '\n> ')}`).join('\n\n') : ''}`;
     })
     .filter(Boolean)
     .join('\n\n');

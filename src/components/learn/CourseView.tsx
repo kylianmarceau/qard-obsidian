@@ -14,6 +14,7 @@ import { Waiting } from '../common/FeedbackStatus';
 import { StateChip, relativeDay } from './learning-status';
 import { useLearn } from './useLearn';
 import { type LearnNav } from '../../views/navigation';
+import { StudyTimeLine } from '../usage/StudyTimeView';
 
 export function CourseView({
   services,
@@ -151,6 +152,7 @@ export function CourseView({
         <div>
           <span className="qard-muted">Course</span>
           <h1>{course.course}</h1>
+          <StudyTimeLine services={services} course={course.course} days={30} open={nav.time} />
         </div>
         <div className="qard-actions">
           <div className="qard-segmented" role="tablist">

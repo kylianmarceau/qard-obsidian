@@ -1,3 +1,4 @@
+import type { StudyLog } from '../time/study-time';
 import type { PluginData } from './review-store';
 import { readSessions, stableId } from './saved-session';
 import { readExams } from '../exams/exam-plan';
@@ -6,7 +7,7 @@ import { validFsrs } from './fsrs-scheduler';
 export type ReviewProgress = Pick<
   PluginData,
   'version' | 'states' | 'history' | 'statistics' | 'links' | 'sessions' | 'exams'
->;
+> & { study?: StudyLog };
 export interface ProgressBackup {
   version: 1;
   createdAt: number;
@@ -20,9 +21,9 @@ export interface BackupStorage {
   remove(name: string): Promise<void>;
 }
 export function progressSnapshot(data: PluginData): ReviewProgress {
-  const { version, states, history, statistics, links, sessions, exams } = data;
+  const { version, states, history, statistics, links, sessions, exams, study } = data;
   return JSON.parse(
-    JSON.stringify({ version, states, history, statistics, links, sessions, exams }),
+    JSON.stringify({ version, states, history, statistics, links, sessions, exams, study }),
   ) as ReviewProgress;
 }
 export function validateProgress(value: unknown): ReviewProgress {
@@ -74,6 +75,14 @@ export function validateProgress(value: unknown): ReviewProgress {
         typeof event.scheduled !== 'boolean' ||
         (event.introduced !== undefined && typeof event.introduced !== 'boolean'),
     ) ||
+    (data.study !== undefined &&
+      (!record(data.study) ||
+        Object.entries(data.study).some(
+          ([day, entries]) =>
+            !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+            !record(entries) ||
+            Object.values(entries).some((seconds) => !Number.isFinite(seconds) || seconds <= 0),
+        ))) ||
     Object.entries(data.statistics.daily).some(
       ([day, value]) => !/^\d{4}-\d{2}-\d{2}$/.test(day) || !counts(value),
     ) ||

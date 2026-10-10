@@ -9,6 +9,7 @@ import type { FlashcardGenerationService } from '../cards/generation-service';
 import type { JobClock } from '../jobs/job-clock';
 import type { SourceSyncService } from '../cards/source-sync-service';
 import type { CardImprovementService } from '../cards/improvement-service';
+import type { StudyClock } from '../time/study-time';
 export interface QardServices {
   app: App;
   owner: Component;
@@ -21,6 +22,7 @@ export interface QardServices {
   flashcards?: FlashcardGenerationService;
   sourceSync?: SourceSyncService;
   improvements?: CardImprovementService;
+  time?: StudyClock;
   host: HTMLElement;
   setFocus: (enabled: boolean) => void;
   isActive: () => boolean;

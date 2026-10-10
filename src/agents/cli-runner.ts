@@ -17,6 +17,7 @@ export interface SpawnOptions {
   windowsHide: boolean;
 }
 import { PREAMBLE } from '../tests/test-prompts';
+import { clip, debug } from '../debug/debug-log';
 import { SCHEMA_INSTRUCTION, extractJson, type AgentRunner, type AgentTask } from './runner';
 import { fromClaudeCode, fromCodexEvents } from './usage';
 
@@ -32,6 +33,8 @@ export interface NodeHost {
   windows: boolean;
 }
 const TIMEOUT = 10 * 60_000;
+const limit = (ms: number) =>
+  ms < 120_000 ? `${Math.round(ms / 1000)} seconds` : `${Math.round(ms / 60_000)} minutes`;
 
 /** Run a process, send `input` on stdin, and resolve with stdout. */
 export function runProcess(
@@ -39,15 +42,28 @@ export function runProcess(
   command: string,
   args: string[],
   input: string,
-  options: { cwd: string; path: string; signal?: AbortSignal; timeout?: number },
+  options: {
+    cwd: string;
+    path: string;
+    signal?: AbortSignal;
+    timeout?: number;
+    onOutput?: (chunk: string) => void;
+  },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    const span = debug.span('process', command.split(/[\\/]/).pop() ?? command, {
+      command,
+      args: args.map((a) => clip(a, 60)),
+      cwd: options.cwd,
+      inputChars: input.length,
+    });
     const child = host.spawn(command, args, {
       cwd: options.cwd,
       env: { ...host.env, PATH: options.path },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
+    span.note('spawned', { pid: (child as { pid?: number }).pid });
     let out = '',
       err = '',
       done = false;
@@ -62,23 +78,42 @@ export function runProcess(
     };
     const abort = () => {
       child.kill();
+      span.fail('cancelled', { stderr: clip(err, 400) });
       finish(() => reject(new Error('Cancelled.')));
     };
     const timer = window.setTimeout(() => {
       child.kill();
-      finish(() => reject(new Error('The agent took longer than 10 minutes and was stopped.')));
+      span.fail('timed out', { stdoutChars: out.length, stderr: clip(err, 400) });
+      finish(() =>
+        reject(
+          new Error(`It took longer than ${limit(options.timeout ?? TIMEOUT)} and was stopped.`),
+        ),
+      );
     }, options.timeout ?? TIMEOUT);
     options.signal?.addEventListener('abort', abort);
     child.stdout?.on('data', (chunk) => {
-      out += chunk.toString();
+      const text = chunk.toString();
+      out += text;
+      options.onOutput?.(text);
     });
     child.stderr?.on('data', (chunk) => {
       err += chunk.toString();
     });
-    child.on('error', (e) =>
-      finish(() => reject(new Error(`Could not start ${command}: ${e.message}`))),
-    );
-    child.on('close', (code) =>
+    child.on('error', (e) => {
+      span.fail(e);
+      finish(() => reject(new Error(`Could not start ${command}: ${e.message}`)));
+    });
+    child.on('close', (code) => {
+      // A killed process (timeout or cancel) was already logged; span ignores the second report.
+      if (code === 0) {
+        span.end({ code, stdoutChars: out.length, stderr: clip(err, 400) });
+      } else {
+        span.fail(`exit code ${code}`, {
+          stdoutChars: out.length,
+          stderr: clip(err, 1500),
+          stdout: clip(out, 400),
+        });
+      }
       finish(() =>
         code === 0
           ? resolve(out)
@@ -90,8 +125,8 @@ export function runProcess(
                   .join('\n'),
               ),
             ),
-      ),
-    );
+      );
+    });
     child.stdin?.on('error', () => {
       /* reported through close */
     });
@@ -324,6 +359,7 @@ export class CodexRunner extends CliRunner {
         cwd: this.vault,
         path,
         signal: task.signal,
+        onOutput: codexProgress(),
       });
       const usage = fromCodexEvents(out);
       if (usage) {
@@ -350,4 +386,39 @@ export class CodexRunner extends CliRunner {
       }
     }
   }
+}
+
+/** Logs what Codex is doing as its --json events arrive (reasoning, commands, messages), so a slow run can be followed. */
+function codexProgress() {
+  let buffer = '';
+  return (chunk: string) => {
+    buffer += chunk;
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      let event: {
+        type?: string;
+        item?: { type?: string; command?: string; text?: string; status?: string };
+        usage?: unknown;
+        error?: unknown;
+        message?: string;
+      };
+      try {
+        event = JSON.parse(line) as typeof event;
+      } catch {
+        continue;
+      }
+      if (!debug.enabled && event.type !== 'error' && event.type !== 'turn.failed') {
+        continue;
+      }
+      debug.log('codex', event.type ?? 'event', {
+        item: event.item?.type,
+        command: event.item?.command,
+        status: event.item?.status,
+        text: event.item?.text ? clip(event.item.text, 200) : undefined,
+        usage: event.usage,
+        error: event.error ?? event.message,
+      });
+    }
+  };
 }

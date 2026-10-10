@@ -20,6 +20,7 @@ export const ROLE: Record<string, AgentRole> = {
   map: 'tutor',
   revise: 'tutor',
   tutor: 'tutor',
+  figure: 'illustrator',
 };
 
 /** The role a kind of job runs as. */

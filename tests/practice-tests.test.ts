@@ -549,6 +549,7 @@ it('settings default to Claude Code with plans and per-section marking', () => {
     tutor: { provider: 'claude-code', model: 'haiku' },
     writer: { provider: 'claude-code', model: '' },
     marker: { provider: 'claude-code', model: '' },
+    illustrator: { provider: 'claude-code', model: '' },
   });
 });
 
@@ -560,6 +561,7 @@ it('moves the old single agent setting into roles, with a fast tutor', () => {
     tutor: { provider: 'anthropic', model: 'claude-haiku-4-5' },
     writer: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
     marker: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
+    illustrator: { provider: 'anthropic', model: 'claude-sonnet-5-5' },
   });
   expect(
     readSettings({ tests: { provider: 'codex', agentPath: '/bin/codex' } }).agents,

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { requestUrl } from 'obsidian';
+import { debug } from '../debug/debug-log';
 import { PREAMBLE } from '../tests/test-prompts';
 import { REQUEST_TIMEOUT, deadline, extractJson, type AgentRunner, type AgentTask } from './runner';
 import { VAULT_TOOLS, runVaultTool, type VaultReader } from './vault-tools';
@@ -77,6 +78,8 @@ export class AnthropicRunner implements AgentRunner {
     try {
       for (let turn = 0; turn < MAX_TURNS; turn++) {
         let response: Anthropic.Beta.BetaMessage;
+        const sent = Date.now();
+        debug.log('anthropic', 'request', { model, turn, messages: messages.length });
         try {
           response = await client.beta.messages.create(
             {
@@ -109,6 +112,16 @@ export class AnthropicRunner implements AgentRunner {
           throw error;
         }
         usage = addUsage(usage, fromAnthropic(response.usage, response.model));
+        debug.log('anthropic', 'response', {
+          turn,
+          ms: Date.now() - sent,
+          stop: response.stop_reason,
+          servedBy: response.model,
+          tools: response.content
+            .filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
+            .map((b) => b.name),
+          tokens: response.usage,
+        });
         if (response.stop_reason === 'refusal') {
           throw new Error('Claude declined this request.');
         }

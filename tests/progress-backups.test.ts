@@ -97,3 +97,16 @@ it('refuses to overwrite progress committed while the safety backup is being pre
   await expect(store.restoreProgress(backup, before)).rejects.toThrow(/Progress changed/);
   expect(store.getSnapshot().history).toHaveLength(1);
 });
+
+it('includes staging study time in backups and preserves it when restoring an older copy without that field', async () => {
+  const store = new ReviewStore(async () => {});
+  await store.recordStudy({ '2026-10-10': { 'cards|Networks': 120 } }, '2026-10-10');
+  const snapshot = progressSnapshot(store.getSnapshot());
+  expect(snapshot.study).toEqual(store.getSnapshot().study);
+  await store.recordStudy({ '2026-10-10': { 'cards|Networks': 60 } }, '2026-10-10');
+  await store.restoreProgress(snapshot);
+  expect(store.getSnapshot().study['2026-10-10']!['cards|Networks']).toBe(120);
+  const { study: _study, ...legacy } = snapshot;
+  await store.restoreProgress(legacy);
+  expect(store.getSnapshot().study['2026-10-10']!['cards|Networks']).toBe(120);
+});

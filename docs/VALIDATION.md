@@ -161,3 +161,5 @@ Focused coverage checks distinct introductions/local midnight/imports, failed sa
 Production components and stylesheet were exercised in an isolated browser preview at 380 × 820 and 1280 × 900. Narrow light/dark layouts retained the new controls without horizontal overflow. Typed recall stayed visible after reveal, the next batch cleared it, and reverse-pair creation completed. This is browser layout evidence, not mobile hardware testing.
 
 Full `npm run check` passed: formatting, TypeScript, JavaScript/CSS lint, **561 tests across 70 files**, production build and release-file verification.
+
+Integration retained the six existing `origin/staging` commits for lesson figures, study time and developer diagnostics, adapting them to the current module layout. Backups include study time and preserve it when restoring older snapshots without that field. After resolving the merge, full `npm run check` passed **574 tests across 74 files**, type checking, formatting, JavaScript/CSS lint, build and release verification.

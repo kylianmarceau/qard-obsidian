@@ -18,12 +18,15 @@ import { topicKey } from './decks/deck-index';
 import { parseCards, locationAtLine } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
-import { createRunner, type UsageEvent } from './agents/create-runner';
+import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
+import { pythonRunner } from './agents/python';
 import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
 import { VaultLearnStorage } from './learn/vault-learn-storage';
 import { isoDay, objectiveLines } from './learn/mastery';
 import { todayDueCards } from './review/today-cards';
+import { StudyClock } from './time/study-time';
+import { installDevTools } from './debug/dev-tools';
 import { JobClock } from './jobs/job-clock';
 import { studyNotes } from './vault-access';
 import { QARD_OBSIDIAN_ICON } from './icons/qard-icon';
@@ -39,6 +42,8 @@ export default class QardPlugin extends Plugin {
   tests!: TestService;
   learn!: LearnService;
   jobs!: JobClock;
+  time!: StudyClock;
+  private removeDevTools?: () => void;
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
   private backupModals = new Set<BackupModal>();
@@ -145,6 +150,20 @@ export default class QardPlugin extends Plugin {
       () => runner('writer'),
     );
     void this.improvements.load();
+    // Study time counts while a Qard view is in front, Obsidian has focus, and you've been active recently.
+    this.time = new StudyClock(
+      () => Date.now(),
+      () => {
+        const view = this.app.workspace.getActiveViewOfType(QardView);
+        return view && !activeDocument.hidden && activeDocument.hasFocus() ? view : undefined;
+      },
+      (log) => this.reviews.recordStudy(log, isoDay(Date.now())),
+    );
+    for (const event of ['keydown', 'pointerdown', 'pointermove', 'wheel'] as const) {
+      this.registerDomEvent(window, event, () => this.time.input(), { passive: true });
+    }
+    this.registerInterval(window.setInterval(() => this.time.tick(), 5000));
+    this.registerInterval(window.setInterval(() => void this.time.flush().catch(() => {}), 60_000));
     this.flashcards = new FlashcardGenerationService(
       new VaultTestStorage(this.app),
       () => settings().cardFolder,
@@ -170,6 +189,10 @@ export default class QardPlugin extends Plugin {
       (message) => new Notice(message, 8000),
       timing,
       captureSources,
+      (() => {
+        const host = nodeHost();
+        return host && pythonRunner(host);
+      })(),
     );
     this.tests = new TestService(
       new VaultTestStorage(this.app),
@@ -225,6 +248,12 @@ export default class QardPlugin extends Plugin {
       id: 'open-usage',
       name: 'Show token usage',
       callback: () => this.show('usage'),
+    });
+    this.removeDevTools = installDevTools(this, (command) => this.addCommand(command));
+    this.addCommand({
+      id: 'open-study-time',
+      name: 'Show study time',
+      callback: () => this.show('time'),
     });
     this.addCommand({
       id: 'teach-this-note',
@@ -377,7 +406,15 @@ export default class QardPlugin extends Plugin {
     new TransferModal(this, mode).open();
   }
   async show(
-    kind: 'tests' | 'new-test' | 'today' | 'learn' | 'usage' | 'statistics' | 'source-updates',
+    kind:
+      | 'tests'
+      | 'new-test'
+      | 'today'
+      | 'learn'
+      | 'usage'
+      | 'statistics'
+      | 'source-updates'
+      | 'time',
   ) {
     const view = await this.open();
     view.show({ serial: Date.now(), kind });
@@ -425,6 +462,8 @@ export default class QardPlugin extends Plugin {
     });
     this.sourceSync?.dispose();
     this.improvements?.dispose();
+    void this.time?.flush().catch(() => {});
+    this.removeDevTools?.();
     this.flashcards?.dispose();
     this.index?.dispose();
     this.tests?.dispose();
