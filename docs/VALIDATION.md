@@ -128,3 +128,7 @@ An isolated browser preview using production components and sample in-memory sto
 - Four new UI/integration tests cover deck identity, saved queue isolation, paused/deferred/new/future/duplicate exclusions, live note and review updates, and checks kept separate from cards. The existing check test also verifies returning to Today.
 - Full `npm run check` passed: 450 tests across 59 files, formatting, TypeScript, lint, styles, production build and release validation.
 - An isolated browser preview verified the actual Today component at desktop and 380px widths, no horizontal overflow, and the chosen deck opening in study. Installed assets match the build; all 23 other test-vault files are preserved.
+
+## Release 0.5.5 — 10 October 2026
+
+On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **450 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match. The release includes review editing and repair flags, advisory Often forgotten prompts, related-card separation, the bottom review toolbar and deck-specific Today queues described above. No dependencies or minimum Obsidian version changed.
