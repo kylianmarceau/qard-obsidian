@@ -129,7 +129,6 @@ export function DeckBrowser({
               )}
             </div>
           )}
-          <p className="qard-library-footer">From your Obsidian vault</p>
         </section>
         <aside className="qard-desk-review" aria-label="Study controls">
           <section className="qard-desk-review-main">

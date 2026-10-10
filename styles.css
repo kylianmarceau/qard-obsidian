@@ -6683,12 +6683,6 @@ div.qard-ask-q {
   gap: 3px;
 }
 
-.qard-study-desk .qard-library-footer {
-  margin-top: 16px;
-  font-size: 11px;
-  color: var(--qard-muted);
-}
-
 .qard-desk-review {
   min-width: 0;
   border-left: 1px solid var(--qard-border);
