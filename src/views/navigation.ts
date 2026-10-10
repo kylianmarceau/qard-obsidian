@@ -46,6 +46,7 @@ export type LearnNav = {
   check: (path: string) => void;
   lesson: (path: string) => void;
   studyDue: (deck: string, topic?: string) => void;
+  studyNew?: (deck: string) => void;
   usage?: () => void;
 };
 

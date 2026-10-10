@@ -63,6 +63,17 @@ export class QardSettingsTab extends PluginSettingTab {
       group('Practice tests', this.testDefinitions()),
       group('Lessons and checks', this.learnDefinitions()),
       group('Import and export', this.importDefinitions()),
+      group('Study-progress backups', [
+        {
+          name: 'Manage study-progress backups',
+          desc: 'Automatic local copies of reviews, schedules, saved sessions and exam plans. Preview before restoring.',
+          render: (row) => {
+            row.addButton((button) =>
+              button.setButtonText('Manage backups').onClick(() => this.qard.openBackups()),
+            );
+          },
+        },
+      ]),
     ];
   }
   private studyDefinitions(): SettingRow[] {
@@ -81,6 +92,22 @@ export class QardSettingsTab extends PluginSettingTab {
       }
     };
     return [
+      ...(['newCardsPerDay', 'reviewBatchSize'] as const).map((key) => ({
+        name: key === 'newCardsPerDay' ? 'New cards per day' : 'Review batch size',
+        desc:
+          key === 'newCardsPerDay'
+            ? 'Optional daily allowance across normal sessions. Learning repeats do not count. 0 means unlimited; cram and exam sessions are unrestricted.'
+            : 'Optional number of cards per sitting, with Continue afterwards. Remaining cards stay due. 0 means the full selection.',
+        render: (row: Setting) => {
+          row.addText((text) =>
+            text.setValue(String(settings[key])).onChange((value) => {
+              if (/^\d+$/.test(value) && Number(value) <= 10000) {
+                void save(key, Number(value));
+              }
+            }),
+          );
+        },
+      })),
       {
         name: 'Default study mode',
         desc: 'All cards includes selected cards except paused cards and related cards deferred for today. Cram includes deferred cards.',
@@ -169,7 +196,12 @@ export class QardSettingsTab extends PluginSettingTab {
           [
             'burySiblings',
             'Separate related cards',
-            'After a review, defer other variants of the same cloze sentence or image until tomorrow. Cram always includes them.',
+            'After a review, defer related cloze or image variants and linked reverse cards until tomorrow. Cram always includes them.',
+          ],
+          [
+            'typedAnswers',
+            'Type answers before revealing',
+            'Optional scratch answer during flashcard review. Compare it yourself and choose a rating. Answers stay in this visit.',
           ],
           [
             'audioEnabled',

@@ -414,6 +414,9 @@ Study material: ${JSON.stringify({ front: stable.frontMarkdown, back: stable.bac
         }
         if (applying.answerChanged) {
           await this.reviews.requireContentCheck(id, applying.at);
+          if (current.reverseId) {
+            await this.reviews.requireContentCheck(current.reverseId, applying.at);
+          }
         }
       }
       await this.reviews.markFixed(id, applying.at);

@@ -11,6 +11,8 @@ import { useLearn } from './useLearn';
 import { todayDueCards } from '../../review/today-cards';
 import { buildDecks } from '../../decks/deck-index';
 import { type LearnNav } from '../../views/navigation';
+import { newAllowance, introductionsToday } from '../../review/pacing';
+import { scheduler } from '../../review/scheduler';
 
 /** Loads Today and reloads it whenever the learn service changes. */
 function useToday(services: QardServices) {
@@ -69,6 +71,15 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const reviews = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const due = useMemo(() => todayDueCards(index.cards, reviews.states), [index, reviews.states]);
   const decks = useMemo(() => buildDecks(due), [due]);
+  const newDecks = buildDecks(
+    index.cards.filter(
+      (card) =>
+        !card.duplicateId &&
+        !reviews.states[card.id]?.reviewCount &&
+        scheduler.isDue(reviews.states[card.id], Date.now()),
+    ),
+  );
+  const allowance = newAllowance(reviews);
   useEffect(() => {
     if (today) {
       services.learn.prepare(today);
@@ -80,12 +91,20 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const minutes = Math.max(1, Math.round(today.checks.length * 2 + due.length / 6));
   const first = today.checks.find((c) => c.check);
   const start = () => first && nav.check(first.check!);
-  const nothing = !today.checks.length && !due.length && !today.lessons.length;
+  const nothing =
+    !today.checks.length &&
+    !due.length &&
+    !today.lessons.length &&
+    !(reviews.settings.newCardsPerDay && newDecks.length);
   const suggestion = due.length
     ? `Choose a deck or topic to review${today.checks.length ? ' or start with your checks' : ''}.`
     : today.checks.length
       ? 'Start with your checks.'
-      : 'Choose a lesson to keep learning.';
+      : reviews.settings.newCardsPerDay && newDecks.length
+        ? allowance > 0
+          ? 'Choose a deck to learn new cards.'
+          : 'Your new-card allowance is complete for today.'
+        : 'Choose a lesson to keep learning.';
   const open = (item: TodayItem) => (item.check ? nav.check(item.check) : undefined);
   return (
     <div className="qard-doc">
@@ -171,6 +190,32 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
               </ul>
             </div>
           ))}
+        </section>
+      )}
+      {reviews.settings.newCardsPerDay > 0 && newDecks.length > 0 && nav.studyNew && (
+        <section>
+          <h2>New cards</h2>
+          <p className="qard-muted qard-small">
+            {introductionsToday(reviews.history)} / {reviews.settings.newCardsPerDay} introduced
+            today · {allowance} remaining in your allowance
+          </p>
+          {newDecks.map((deck) => (
+            <button
+              key={deck.name}
+              className="qard-doc-row qard-row-button"
+              disabled={allowance === 0}
+              onClick={() => nav.studyNew!(deck.name)}
+            >
+              <strong>{deck.name}</strong>
+              <span>{Math.min(deck.cards.length, allowance)} new cards available</span>
+              <Play size={14} />
+            </button>
+          ))}
+          {allowance === 0 && (
+            <p className="qard-muted qard-small">
+              Your allowance is complete. The study builder lets you choose extra new cards today.
+            </p>
+          )}
         </section>
       )}
       {today.lessons.length > 0 && (

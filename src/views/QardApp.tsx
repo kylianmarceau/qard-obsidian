@@ -38,6 +38,8 @@ import { CheckView } from '../components/learn/CheckView';
 import { LessonView } from '../components/learn/LessonView';
 import type { LearnNav } from './navigation';
 import { todayDueCards } from '../review/today-cards';
+import type { PacingOptions } from '../review/pacing';
+import { scheduler, isBuried } from '../review/scheduler';
 import { ignoresStudyKey } from '../review/keyboard';
 import { RunningJobs } from '../components/jobs/RunningJobs';
 import { StatisticsView } from '../components/statistics/StatisticsView';
@@ -126,14 +128,23 @@ export function QardApp({ services, request }: { services: QardServices; request
       style: SessionStyle = 'normal',
       examId?: string,
       mode?: StudyMode,
+      options?: PacingOptions,
     ) => {
       if (!cards.length) {
         throw new Error('No cards are available for this session.');
       }
       const ready = await services.writer.ensureStable(cards);
-      const session = await services.reviews.startSession(ready, style, examId, mode);
+      const session = options
+        ? await services.reviews.startSession(ready, style, examId, mode, options)
+        : await services.reviews.startSession(ready, style, examId, mode);
       setSessionMessage('');
-      setScreen({ kind: 'study', cards: ready, serial: Date.now(), style, session });
+      setScreen({
+        kind: 'study',
+        cards: session.cardIds.map((id) => ready.find((card) => card.id === id)!),
+        serial: Date.now(),
+        style,
+        session,
+      });
     },
     [services],
   );
@@ -228,6 +239,21 @@ export function QardApp({ services, request }: { services: QardServices; request
       check: (path) => setScreen({ kind: 'check', path }),
       lesson: (path) => setScreen({ kind: 'lesson', path }),
       // Today reviews only cards already in rotation, most overdue first.
+      studyNew: (deck) => {
+        const data = services.reviews.getSnapshot();
+        const cards = services.index
+          .getSnapshot()
+          .cards.filter(
+            (card) =>
+              card.deck === deck &&
+              !card.duplicateId &&
+              !data.states[card.id]?.reviewCount &&
+              scheduler.isDue(data.states[card.id], Date.now()),
+          );
+        void start(cards, 'normal', undefined, 'new').catch((e) =>
+          setSessionMessage((e as Error).message),
+        );
+      },
       studyDue: (deck, topic) => {
         void start(
           todayDueCards(
@@ -600,7 +626,7 @@ export function QardApp({ services, request }: { services: QardServices; request
               cards={index.cards}
               decks={index.decks}
               initial={screen.selection}
-              start={(cards, style, mode) => start(cards, style, undefined, mode)}
+              start={(cards, style, mode, options) => start(cards, style, undefined, mode, options)}
               back={library}
             />
           )}
@@ -697,6 +723,30 @@ export function QardApp({ services, request }: { services: QardServices; request
               notice={screen.notice}
               exit={library}
               repeat={(cards) => start(cards, screen.style)}
+              continueBatch={
+                screen.session?.remainingIds?.length
+                  ? async () => {
+                      const data = services.reviews.getSnapshot();
+                      const remaining = new Set(screen.session!.remainingIds);
+                      const cards = services.index
+                        .getSnapshot()
+                        .cards.filter(
+                          (card) =>
+                            remaining.has(card.id) &&
+                            !data.states[card.id]?.paused &&
+                            !isBuried(data.states[card.id]) &&
+                            (screen.session!.mode !== 'due' ||
+                              scheduler.isDue(data.states[card.id], Date.now())),
+                        );
+                      const ordered = screen.session!.remainingIds!.flatMap((id) =>
+                        cards.filter((card) => card.id === id),
+                      );
+                      await start(ordered, screen.style, undefined, screen.session!.mode, {
+                        extraNew: screen.session!.extraNew,
+                      });
+                    }
+                  : undefined
+              }
             />
           )}
         </div>

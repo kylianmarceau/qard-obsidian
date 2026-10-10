@@ -2,7 +2,7 @@
 import { expect, it, vi } from 'vitest';
 import { SourceSyncService, sourceNoteText } from '../src/cards/source-sync-service';
 import { parseCards } from '../src/cards/parser';
-import { replaceCardInSource } from '../src/cards/source-patch';
+import { replaceCardInSource, serializeCard } from '../src/cards/source-patch';
 import { ReviewStore } from '../src/review/review-store';
 import { memoryStatistics } from '../src/review/fsrs-scheduler';
 import { scheduler } from '../src/review/scheduler';
@@ -15,6 +15,27 @@ const suggestion = {
   reason: 'The source now specifies twenty.',
   change: 'meaning',
 };
+it('excludes both linked directions from their own source evidence and flags both after an approved answer change', async () => {
+  const pair =
+    serializeCard('card-1', 'What is the limit?', 'Ten.', '\n', 'pair', undefined, 'reverse') +
+    '\n' +
+    serializeCard('reverse', 'Ten.', 'What is the limit?', '\n', 'pair', undefined, 'card-1');
+  expect(sourceNoteText('Original material.\n\n' + pair, 'Cards.md', ['card-1'])).toBe(
+    'Original material.',
+  );
+  const f = setup(undefined, {
+    'Notes/Limits.md': '# Limits\nThe limit is ten.\n',
+    'Cards.md': pair,
+  });
+  await f.track();
+  f.files['Notes/Limits.md'] = '# Limits\nThe limit is twenty.\n';
+  await f.service.refresh();
+  await f.service.suggest('card-1');
+  await f.service.accept('card-1', suggestion.front, suggestion.back, true);
+  expect(f.cards().find((card) => card.id === 'reverse')!.frontMarkdown).toBe('Twenty.');
+  expect(f.reviews.getSnapshot().states['card-1']!.needsContentCheck).toBe(true);
+  expect(f.reviews.getSnapshot().states.reverse!.needsContentCheck).toBe(true);
+});
 function setup(
   run = vi.fn<AgentRunner['run']>().mockResolvedValue(suggestion),
   files: Record<string, string> = {

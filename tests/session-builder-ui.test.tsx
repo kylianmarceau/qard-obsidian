@@ -8,6 +8,65 @@ import { CardIndex } from '../src/cards/card-index';
 import { ReviewStore } from '../src/review/review-store';
 import type { QardServices } from '../src/views/services';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+it('shows separate review/new counts and lets users explicitly exceed the daily allowance', async () => {
+  const index = new CardIndex();
+  index.update(
+    'a.md',
+    '<!-- qard-id: a -->\n> [!qard]- First\n> Answer\n\n<!-- qard-id: b -->\n> [!qard]- Second\n> Answer',
+  );
+  index.setLoading(false);
+  const reviews = new ReviewStore(async () => {});
+  await reviews.saveSettings({
+    ...reviews.getSnapshot().settings,
+    newCardsPerDay: 1,
+    reviewBatchSize: 1,
+  });
+  await reviews.review('introduced-elsewhere', 4);
+  const start = vi.fn();
+  const services = {
+    index,
+    reviews,
+    writer: { ensureStable: async (cards: QardCard[]) => cards },
+  } as unknown as QardServices;
+  const host = document.createElement('div'),
+    root = createRoot(host);
+  document.body.append(host);
+  try {
+    await act(async () =>
+      root.render(
+        <StudySessionBuilder
+          cards={index.getSnapshot().cards}
+          decks={index.getSnapshot().decks}
+          initial={{ decks: [], topics: [], cards: [] }}
+          services={services}
+          start={start}
+          back={vi.fn()}
+        />,
+      ),
+    );
+    await act(async () =>
+      [...host.querySelectorAll('button')]
+        .find((button) => button.textContent === 'Select all')!
+        .click(),
+    );
+    const button = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Start',
+    )!;
+    expect(button.disabled).toBe(true);
+    expect(host.textContent).toContain('2 new cards held for another day');
+    const extra = host.querySelector<HTMLInputElement>('.qard-pacing-summary input')!;
+    await act(async () => extra.click());
+    expect(button.disabled).toBe(false);
+    expect(host.textContent).toContain('0 reviews · 1 new card');
+    await act(async () => button.click());
+    expect(start).toHaveBeenCalledWith(index.getSnapshot().cards, 'normal', 'all', {
+      extraNew: true,
+    });
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
 it('selects all cards across collapsed decks and starts the complete session', async () => {
   const index = new CardIndex();
   index.update('a.md', '> [!qard]- First\n> Answer\n\n> [!qard]- Second\n> Answer');

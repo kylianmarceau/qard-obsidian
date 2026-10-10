@@ -6,6 +6,8 @@ export interface QardCard {
   duplicateId?: boolean;
   /** Variants of one cloze sentence or image, never a whole source note. */
   siblingGroup?: string;
+  /** Reciprocal ID of the basic card's other direction, in the same source note. */
+  reverseId?: string;
   location?: CardLocation;
   deck: string;
   topic: string;

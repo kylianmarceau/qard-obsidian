@@ -37,6 +37,7 @@ export function CardEditor({
   const submitting = useRef(false);
   const written = useRef<{ card: QardCard; front: string; back: string } | undefined>(undefined);
   const [kind, setKind] = useState(original.kind);
+  const [reverse, setReverse] = useState(initial?.reverse ?? false);
   const [front, setFront] = useState(original.text),
     [back, setBack] = useState(
       original.kind !== 'basic' && card?.backMarkdown === FORMAT_BACK
@@ -96,7 +97,9 @@ export function CardEditor({
       ? groups.length
       : kind === 'occlusion' && oneAtATime
         ? occlusion.masks.length
-        : 1;
+        : reverse
+          ? 2
+          : 1;
   async function submit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submitting.current) {
@@ -165,11 +168,15 @@ export function CardEditor({
             back: answer,
             folder: services.reviews.getSnapshot().settings.cardFolder,
             sourceFile: initial?.sourceFile,
+            reverse: kind === 'basic' && reverse,
           });
       if (card) {
         written.current = { card: result, front: encodedFront, back: answer };
         if (card.frontMarkdown !== encodedFront || card.backMarkdown !== answer) {
           await services.reviews.requireContentCheck(result.id);
+          if (result.reverseId) {
+            await services.reviews.requireContentCheck(result.reverseId);
+          }
         }
       }
       saved(result);
@@ -324,6 +331,25 @@ export function CardEditor({
                 />
               </label>
             </div>
+          )}
+          {kind === 'basic' && !card && (
+            <label className="qard-reverse-toggle">
+              <input
+                type="checkbox"
+                checked={reverse}
+                onChange={(event) => setReverse(event.target.checked)}
+              />
+              Also test the reverse
+              <span className="qard-muted qard-small">
+                Creates a linked pair with a separate schedule for each direction.
+              </span>
+            </label>
+          )}
+          {card?.reverseId && (
+            <p className="qard-muted qard-small">
+              Linked reverse pair · edits update both directions and preserve their review
+              histories.
+            </p>
           )}
           <button type="button" aria-expanded={preview} onClick={() => setPreview(!preview)}>
             {preview ? 'Hide' : 'Show'} preview

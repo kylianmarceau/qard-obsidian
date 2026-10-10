@@ -58,8 +58,19 @@ const equalSources = (a: SourceSnapshot[], b: SourceSnapshot[]) =>
   a.length === b.length && a.every((s, i) => s.path === b[i]?.path && s.text === b[i]?.text);
 /** Ignore the derived card itself when it lives in its source note, while retaining other study material. */
 export function sourceNoteText(source: string, path: string, ignore: string[] = []) {
-  for (const card of parseCards(source, path)
-    .cards.filter((c) => ignore.includes(c.id))
+  const cards = parseCards(source, path).cards;
+  const excluded = new Set(ignore);
+  for (const card of cards) {
+    if (
+      excluded.has(card.id) &&
+      card.reverseId &&
+      cards.some((partner) => partner.id === card.reverseId && partner.reverseId === card.id)
+    ) {
+      excluded.add(card.reverseId);
+    }
+  }
+  for (const card of cards
+    .filter((c) => excluded.has(c.id))
     .sort((a, b) => b.sourcePosition.start - a.sourcePosition.start)) {
     source = source.slice(0, card.sourcePosition.start) + source.slice(card.sourcePosition.end);
   }
@@ -608,6 +619,9 @@ export class SourceSyncService {
       }
       if (applying.substantive) {
         await this.requireCheck(id);
+        if (card.reverseId) {
+          await this.requireCheck(card.reverseId);
+        }
       }
       const sources = applying.sources;
       await this.commit((links) => ({ ...links, [id]: { sources } }));

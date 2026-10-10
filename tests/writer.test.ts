@@ -78,3 +78,41 @@ it('assigns IDs and persists legacy sibling groups before a variant is edited', 
   expect(edited.siblingGroup).toBe(stable[1]?.siblingGroup);
   expect(read().startsWith('Prose.\n\n')).toBe(true);
 });
+
+it('creates a linked basic pair atomically and editing either direction updates both identities', async () => {
+  const original = '---\r\nqard-deck: Networks\r\n---\r\n\r\nOriginal prose.\r\n';
+  const { writer, read } = setup(original);
+  const forward = await writer.create({ ...draft, reverse: true });
+  const pair = parseCards(read(), 'a.md').cards;
+  expect(pair).toHaveLength(2);
+  const reverse = pair.find((card) => card.id === forward.reverseId)!;
+  expect(reverse.reverseId).toBe(forward.id);
+  expect(reverse.siblingGroup).toBe(forward.siblingGroup);
+  expect(reverse.frontMarkdown).toBe(forward.backMarkdown);
+  expect(reverse.backMarkdown).toBe(forward.frontMarkdown);
+  expect(read().startsWith(original)).toBe(true);
+  expect(read().replace(/\r\n/g, '')).not.toContain('\n');
+  await writer.edit(reverse, 'Reliable delivery', 'TCP transport');
+  const changed = parseCards(read(), 'a.md').cards;
+  expect(changed.map((card) => card.id)).toEqual(pair.map((card) => card.id));
+  expect(changed[0]).toMatchObject({
+    frontMarkdown: 'TCP transport',
+    backMarkdown: 'Reliable delivery',
+    reverseId: reverse.id,
+  });
+  expect(changed[1]).toMatchObject({
+    frontMarkdown: 'Reliable delivery',
+    backMarkdown: 'TCP transport',
+    reverseId: forward.id,
+  });
+  await expect(writer.edit(forward, 'Stale', 'Answer')).rejects.toThrow(/changed/);
+});
+
+it('does not write half a reverse pair when the opposite content cannot be safely serialized', async () => {
+  const source = '---\nqard-deck: Networks\n---\nProse.\n';
+  const { writer, read } = setup(source);
+  await expect(
+    writer.create({ ...draft, reverse: true, back: '```md\nUnfinished fence' }),
+  ).rejects.toThrow();
+  expect(read()).toBe(source);
+});

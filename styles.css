@@ -1533,6 +1533,40 @@
   margin-bottom: 12px;
 }
 
+.qard-typing-toggle,
+.qard-pacing-summary label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.qard-typed-recall {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+  font-size: 13px;
+}
+
+.qard-typed-recall textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+
+.qard-editor .qard-reverse-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.qard-editor .qard-reverse-toggle span {
+  grid-column: 2;
+}
+
 .qard-study progress {
   display: block;
   width: 100%;

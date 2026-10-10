@@ -150,3 +150,14 @@ Only Again now queues a same-session FSRS repeat. Tests verify Hard, Good and Ea
 On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **468 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match.
 
 FSRS interval previews now sit inside the rating buttons beside the keyboard shortcuts, and both schedulers use the same button dimensions. The existing interval-preview test verifies each button contains and describes its interval accessibly and removes that description when scheduling is disabled. An isolated browser preview using the production StudyView and stylesheet measured identical Simple/FSRS button dimensions: 164 × 43.5 px at desktop width, and 71 × 66.5 px at 380 px. Light and dark previews retained all interval labels. Native Obsidian and mobile hardware were not exercised for this presentation change.
+
+
+## Study pacing, typed recall, reverse pairs and backups — 10 October 2026
+
+Implemented on `codex/study-pacing-typed-reverse-backups` for staging. Daily new-card pacing and batch limits default to unlimited; typed recall defaults off. Cram and exam sessions retain unrestricted queues. Automatic backups contain only study metadata and keep current preferences when restored.
+
+Focused coverage checks distinct introductions/local midnight/imports, failed saves, quota enforcement across sessions, learning repeats and undo, saved batch remainder/overrides across restart, explicit extra study, typed keyboard safety and clearing, continuation click guards, reverse creation and atomic edits from either direction, stable identities/CRLF/prose, stale or missing partners, deletion/moving, sibling deferral/undo, source evidence and content-check flags in both directions, backup checksum/rotation/failure recovery, restore preview, safety copies, stale-progress refusal and persistence failure.
+
+Production components and stylesheet were exercised in an isolated browser preview at 380 × 820 and 1280 × 900. Narrow light/dark layouts retained the new controls without horizontal overflow. Typed recall stayed visible after reveal, the next batch cleared it, and reverse-pair creation completed. This is browser layout evidence, not mobile hardware testing.
+
+Full `npm run check` passed: formatting, TypeScript, JavaScript/CSS lint, **561 tests across 70 files**, production build and release-file verification.

@@ -6,6 +6,8 @@ import { CardImprovementService } from './cards/improvement-service';
 import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
+import { ProgressBackups } from './review/progress-backups';
+import { BackupModal } from './settings/BackupModal';
 import { QardSettingsTab } from './settings/SettingsTab';
 import { TransferModal, type TransferMode } from './settings/TransferModal';
 import { SelectionModal } from './views/SelectionModal';
@@ -32,24 +34,65 @@ export default class QardPlugin extends Plugin {
   sourceSync!: SourceSyncService;
   improvements!: CardImprovementService;
   reviews!: ReviewStore;
+  backups!: ProgressBackups;
+  private backupWarning = false;
   tests!: TestService;
   learn!: LearnService;
   jobs!: JobClock;
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
+  private backupModals = new Set<BackupModal>();
   async onload() {
-    this.reviews = new ReviewStore((data) => this.saveData(data));
+    const folder = `${this.app.vault.configDir}/plugins/${this.manifest.id}/study-backups`;
+    const adapter = this.app.vault.adapter;
+    this.backups = new ProgressBackups({
+      list: async () =>
+        (await adapter.exists(folder))
+          ? (await adapter.list(folder)).files.map((path) => path.split('/').pop()!)
+          : [],
+      read: (name) => adapter.read(`${folder}/${name}`),
+      write: async (name, text) => {
+        if (!(await adapter.exists(folder))) {
+          await adapter.mkdir(folder);
+        }
+        await adapter.write(`${folder}/${name}`, text);
+      },
+      remove: (name) => adapter.remove(`${folder}/${name}`),
+    });
+    this.reviews = new ReviewStore(async (data) => {
+      await this.saveData(data);
+      await this.backups.capture(data).catch(() => this.warnBackup());
+    });
     try {
       this.reviews.load(await this.loadData());
     } catch {
       new Notice('Could not load review data. Reload the plugin before reviewing.');
       throw new Error('Unable to load Qard review metadata');
     }
+    await this.backups.capture(this.reviews.getSnapshot(), true).catch(() => this.warnBackup());
     this.initializeServices();
     this.registerWorkspace();
     this.registerCommands();
     this.addSettingTab(new QardSettingsTab(this));
     this.app.workspace.onLayoutReady(() => this.startBackgroundWork());
+  }
+  private warnBackup() {
+    if (!this.backupWarning) {
+      this.backupWarning = true;
+      new Notice(
+        'Study progress is saved, but Qard could not create a backup. Check vault storage and try back up now in settings.',
+      );
+    }
+  }
+  openBackups() {
+    const modal = new BackupModal(this);
+    this.backupModals.add(modal);
+    const close = modal.onClose.bind(modal);
+    modal.onClose = () => {
+      close();
+      this.backupModals.delete(modal);
+    };
+    modal.open();
   }
 
   private initializeServices() {
@@ -373,6 +416,8 @@ export default class QardPlugin extends Plugin {
     this.disposed = true;
     this.selectionModals.forEach((modal) => modal.close());
     this.selectionModals.clear();
+    this.backupModals.forEach((modal) => modal.close());
+    this.backupModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach((leaf) => {
       if (leaf.view instanceof QardView) {
         leaf.view.release();

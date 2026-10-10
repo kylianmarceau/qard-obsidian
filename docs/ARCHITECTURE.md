@@ -43,6 +43,12 @@ Write queues remain specific to their owners. Review metadata, per-file lesson/c
 
 ## Invariants for changes
 
+`review/pacing.ts` selects bounded batches without changing schedules and counts distinct introductions from history using local calendar days. Daily allowances are checked again inside the serialized rating transaction. Batch remainder IDs, selection mode and the explicit new-card override live with saved sessions; cram and exam queues bypass pacing. Typed recall is component-local scratch state.
+
+Basic reverse pairs use reciprocal Markdown IDs and a shared sibling group. Source patches validate and replace both directions in one `Vault.process` operation; deletion unlinks the surviving direction. Independent review metadata remains keyed by each stable ID.
+
+`review/progress-backups.ts` stores immutable checksummed study metadata through the vault adapter, excludes preferences and credentials, serializes capture/rotation, and verifies a new file before removing old copies. Main saves live plugin data first; backup failures never roll back a durable review. Restoration validates the snapshot, preserves current settings/usage, checks that progress has not changed since the safety copy, and publishes only after persistence succeeds.
+
 Keep stable card identities, surrounding note bytes, and existing file formats intact. Reparse inside `Vault.process` before editing a card or note. Reject conflicting edits rather than replacing user changes. Save a review before advancing a study session, and preserve retry state after a failed write.
 
 Validate provider replies before using them. Cancellation guards check before a run and after its reply, so a provider that cannot abort does not apply a cancelled result. Existing prompts, schemas, retry behavior, and source snapshots are part of the feature contract.

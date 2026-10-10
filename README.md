@@ -13,6 +13,8 @@
 - **Manage cards together:** search questions and answers, then select cards or whole topics to move, pause, resume or flag for repair. Moves keep source notes, attachments and review history.
 - **Improve a card:** use AI to clarify a card, shorten its answer, or split a basic card into smaller ones. Review and edit the draft before applying it. Wording edits keep history and scheduling; splits add fresh cards and pause the original with its history preserved.
 - **Saved sessions:** leave normal or cram study midway and resume the same card order and position after reopening Qard.
+- **Study at your pace:** optionally limit new cards per day and finish reviews in smaller batches, with Continue at the end. Type an answer before revealing it, or create linked reverse pairs with separate schedules.
+- **Progress backups:** automatic rotating local copies protect review history, schedules, saved sessions and exam plans. Preview a dated backup before restoring it from Qard settings.
 - **Learning reviews:** in normal study sessions with FSRS, only cards rated Again return when their scheduled interval arrives. Hard, Good and Easy finish the card for the current session while preserving their FSRS schedules. Progress counts completed cards separately from learning repeats. Wait for the next card, save and leave, or finish the session with your reviews preserved.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.

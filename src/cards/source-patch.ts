@@ -2,6 +2,7 @@ import { locationComment, type CardLocation } from './card-location';
 import type { QardCard } from './card-types';
 import { parseCards, sameContent } from './parser';
 import { siblingGroup } from './siblings';
+import { readCardFormat } from './card-format';
 
 /** Persist legacy group identities before an edit or ID assignment can change their content. */
 export function ensureSiblingGroupsInSource(source: string, path: string): string {
@@ -31,7 +32,7 @@ export function locateCard(
     );
   }
   const match = matches[0]!;
-  if (!sameContent(match, card)) {
+  if (!sameContent(match, card) || match.reverseId !== card.reverseId) {
     throw new Error('This card changed in your note. Reopen it to avoid overwriting your edits.');
   }
   return match;
@@ -63,6 +64,7 @@ export function serializeCard(
   eol = '\n',
   group?: string,
   location?: CardLocation,
+  reverseId?: string,
 ): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error('Invalid card ID.');
@@ -82,6 +84,16 @@ export function serializeCard(
   }
   if (location) {
     lines.unshift(locationComment(location));
+  }
+  if (reverseId) {
+    if (
+      !/^[A-Za-z0-9_-]+$/.test(reverseId) ||
+      reverseId === id ||
+      readCardFormat(front).kind !== 'basic'
+    ) {
+      throw new Error('Reverse pairs need distinct IDs and basic question/answer content.');
+    }
+    lines.unshift(`<!-- qard-reverse: ${reverseId} -->`);
   }
   const content = rest.length
     ? [...rest, '<!-- qard-answer -->', ...back.split('\n')]
@@ -109,8 +121,50 @@ export function replaceCardInSource(
 ): string {
   source = ensureSiblingGroupsInSource(source, original.sourceFile);
   const current = locateCard(source, original);
+  if (current.reverseId) {
+    const partner = parseCards(source, original.sourceFile).cards.filter(
+      (card) => card.id === current.reverseId,
+    );
+    if (
+      partner.length !== 1 ||
+      partner[0]!.reverseId !== current.id ||
+      partner[0]!.frontMarkdown !== current.backMarkdown ||
+      partner[0]!.backMarkdown !== current.frontMarkdown
+    ) {
+      throw new Error(
+        'This reverse pair changed in the note. Restore matching opposite content and links before editing.',
+      );
+    }
+    if (readCardFormat(front).kind !== 'basic' || readCardFormat(back).kind !== 'basic') {
+      throw new Error('Linked reverse pairs must remain basic cards.');
+    }
+    for (const entry of [
+      { card: current, front, back, id },
+      { card: partner[0]!, front: back, back: front, id: partner[0]!.id },
+    ].sort((a, b) => b.card.sourcePosition.start - a.card.sourcePosition.start)) {
+      source = replaceSingleCard(source, entry.card, entry.front, entry.back, entry.id);
+    }
+    return source;
+  }
+  return replaceSingleCard(source, current, front, back, id);
+}
+function replaceSingleCard(
+  source: string,
+  current: QardCard,
+  front: string,
+  back: string,
+  id: string,
+) {
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  let replacement = serializeCard(id, front, back, eol, current.siblingGroup, current.location);
+  let replacement = serializeCard(
+    id,
+    front,
+    back,
+    eol,
+    current.siblingGroup,
+    current.location,
+    current.reverseId,
+  );
   if (!/[\r\n]$/.test(current.sourceText)) {
     replacement = replacement.slice(0, -eol.length);
   }
@@ -122,7 +176,25 @@ export function replaceCardInSource(
 }
 export function deleteCardInSource(source: string, original: QardCard): string {
   const current = locateCard(source, original);
-  return source.slice(0, current.sourcePosition.start) + source.slice(current.sourcePosition.end);
+  const next =
+    source.slice(0, current.sourcePosition.start) + source.slice(current.sourcePosition.end);
+  return unlinkRemovedReverse(next, original.sourceFile, new Set([current.id]));
+}
+function unlinkRemovedReverse(source: string, path: string, removed: Set<string>) {
+  for (const card of parseCards(source, path).cards.sort(
+    (a, b) => b.sourcePosition.start - a.sourcePosition.start,
+  )) {
+    if (card.reverseId && removed.has(card.reverseId)) {
+      const prefix = source
+        .slice(card.sourcePosition.start, card.sourcePosition.calloutStart)
+        .replace(/^\s*<!-- qard-reverse: [A-Za-z0-9_-]+ -->[\r\n]*/m, '');
+      source =
+        source.slice(0, card.sourcePosition.start) +
+        prefix +
+        source.slice(card.sourcePosition.calloutStart);
+    }
+  }
+  return source;
 }
 
 /** Remove a deck/topic's current callouts by range; preserve all other note content. */
@@ -138,7 +210,7 @@ export function deleteGroupInSource(
   for (const card of cards.sort((a, b) => b.sourcePosition.start - a.sourcePosition.start)) {
     source = source.slice(0, card.sourcePosition.start) + source.slice(card.sourcePosition.end);
   }
-  return source;
+  return unlinkRemovedReverse(source, path, new Set(cards.map((card) => card.id)));
 }
 
 /** Only placement metadata changes; the callout, note prose and attachment paths stay byte-for-byte intact. */

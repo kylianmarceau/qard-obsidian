@@ -19,6 +19,8 @@ export interface ReviewState {
   buriedUntil?: number;
 }
 export interface ReviewEvent {
+  /** Explicitly false for imported history; absent in older local history. */
+  introduced?: boolean;
   cardId: string;
   at: number;
   rating: Rating;

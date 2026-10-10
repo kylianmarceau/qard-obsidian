@@ -4,6 +4,9 @@ import { isBuried, type ReviewState } from './scheduler';
 import { pendingLearning, type LearningReview } from './learning-queue';
 
 export interface SavedSession {
+  remainingIds?: string[];
+  extraNew?: true;
+  mode?: 'all' | 'due' | 'new' | 'difficult';
   id: string;
   title: string;
   cardIds: string[];
@@ -136,6 +139,15 @@ export function readSessions(raw: unknown): SavedSession[] {
       results: s.results.map((r) => ({ cardId: r.cardId, rating: r.rating })),
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
+      ...(Array.isArray(s.remainingIds)
+        ? {
+            remainingIds: [
+              ...new Set(s.remainingIds.filter((id) => stableId(id) && !s.cardIds.includes(id))),
+            ],
+          }
+        : {}),
+      ...(s.extraNew === true ? { extraNew: true as const } : {}),
+      ...(['all', 'due', 'new', 'difficult'].includes(s.mode ?? '') ? { mode: s.mode } : {}),
       ...(stableId(s.examId) ? { examId: s.examId } : {}),
       ...(Array.isArray(s.deferredIds)
         ? {

@@ -11,6 +11,8 @@ import {
 } from './saved-session';
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle, StudyMode } from './session';
+import { newAllowance, paceCards, type PacingOptions } from './pacing';
+import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
 import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/settings';
@@ -247,6 +249,34 @@ export class ReviewStore {
       return { ...data, settings: next, states, sessions };
     });
   }
+  /** Restore study metadata only; current preferences, connections and usage stay in place. */
+  restoreProgress(raw: unknown, expected?: PluginData) {
+    return this.change(
+      (data) => {
+        if (expected && data !== expected) {
+          throw new Error(
+            'Progress changed while preparing the restore. Preview the backup again.',
+          );
+        }
+        const progress = validateProgress(raw);
+        const restored = new ReviewStore(async () => {});
+        restored.load({ ...progress, settings: data.settings });
+        const parsed = restored.getSnapshot();
+        return {
+          ...data,
+          states: parsed.states,
+          history: parsed.history,
+          statistics: parsed.statistics,
+          links: parsed.links,
+          sessions: parsed.sessions,
+          exams: parsed.exams,
+        };
+      },
+      () => {
+        this.undo = undefined;
+      },
+    );
+  }
   review(
     cardId: string,
     rating: Rating,
@@ -274,6 +304,18 @@ export class ReviewStore {
           );
         }
         const previous = data.states[cardId];
+        const activeSession = step ? data.sessions.find((s) => s.id === step.id) : undefined;
+        if (
+          !previous?.reviewCount &&
+          activeSession &&
+          !activeSession.examId &&
+          !activeSession.extraNew &&
+          newAllowance(data, now) === 0
+        ) {
+          throw new Error(
+            'Your daily new-card allowance is complete. Skip this card or start a session with extra new cards.',
+          );
+        }
         if (step?.learningDue !== undefined && previous?.due !== step.learningDue) {
           throw new Error(
             'This learning card changed in another view. Return to Qard and resume it.',
@@ -328,6 +370,7 @@ export class ReviewStore {
             )
           : data.sessions;
         const event: ReviewEvent = {
+          introduced: !previous?.reviewCount,
           cardId,
           at: now,
           rating,
@@ -662,7 +705,10 @@ export class ReviewStore {
       return {
         ...data,
         states: next,
-        history: [...data.history, ...events].sort((a, b) => a.at - b.at),
+        history: [
+          ...data.history,
+          ...events.map((event) => ({ ...event, introduced: false })),
+        ].sort((a, b) => a.at - b.at),
         statistics,
       };
     });
@@ -693,7 +739,8 @@ export class ReviewStore {
     cards: QardCard[],
     style: SessionStyle = 'normal',
     examId?: string,
-    _mode: StudyMode = 'all',
+    mode: StudyMode = 'all',
+    options: PacingOptions = {},
   ): Promise<SavedSession> {
     if (
       !cards.length ||
@@ -713,6 +760,8 @@ export class ReviewStore {
       results: [],
       createdAt: now,
       updatedAt: now,
+      mode,
+      ...(options.extraNew ? { extraNew: true as const } : {}),
       ...(examId ? { examId } : {}),
     };
     await this.change((data) => {
@@ -737,6 +786,16 @@ export class ReviewStore {
       ) {
         session.repeatLearning = true;
         session.learning = [];
+      }
+      if (style === 'normal' && !examId) {
+        const paced = paceCards(cards, data, options, now);
+        if (!paced.batch.length) {
+          throw new Error(
+            'Your daily new-card allowance is complete. Choose extra new cards to study more today.',
+          );
+        }
+        session.cardIds = paced.batch.map((card) => card.id);
+        session.remainingIds = paced.remaining.map((card) => card.id);
       }
       return { ...data, sessions: [...data.sessions, session] };
     });

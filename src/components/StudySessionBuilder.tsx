@@ -10,6 +10,7 @@ import {
 } from '../review/session';
 import type { QardServices } from '../views/services';
 import { topicKey } from '../decks/deck-index';
+import { paceCards, introductionsToday, type PacingOptions } from '../review/pacing';
 const modes: { id: StudyMode; name: string; description: string }[] = [
   { id: 'all', name: 'All cards', description: 'Every selected card. No due-date restrictions.' },
   { id: 'due', name: 'Due cards', description: 'New cards and cards ready for another review.' },
@@ -28,7 +29,12 @@ export function StudySessionBuilder({
   decks: Deck[];
   initial: Selection;
   services: QardServices;
-  start: (cards: QardCard[], style?: SessionStyle, mode?: StudyMode) => void | Promise<void>;
+  start: (
+    cards: QardCard[],
+    style?: SessionStyle,
+    mode?: StudyMode,
+    options?: PacingOptions,
+  ) => void | Promise<void>;
   back: () => void;
 }) {
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
@@ -47,6 +53,7 @@ export function StudySessionBuilder({
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [style, setStyle] = useState<SessionStyle>('normal');
+  const [extraNew, setExtraNew] = useState(false);
   const selected = useMemo(
     () =>
       selectCards(cards, saved.states, {
@@ -57,6 +64,12 @@ export function StudySessionBuilder({
       }),
     [cards, saved.states, saved.settings.scheduling, chosen, mode, style],
   );
+  const planned =
+    style === 'cram'
+      ? { batch: selected, remaining: [], heldNew: 0 }
+      : paceCards(selected, saved, { extraNew });
+  const reviewCount = planned.batch.filter((card) => !!saved.states[card.id]?.reviewCount).length;
+  const newCount = planned.batch.length - reviewCount;
   const available = cards.filter((c) => !saved.states[c.id]?.paused);
   const eligible = (group: QardCard[]) => group.filter((c) => !saved.states[c.id]?.paused);
   const toggle = (group: QardCard[]) => {
@@ -85,7 +98,9 @@ export function StudySessionBuilder({
           : ready;
       if (style === 'cram') {
         await start(ordered, style);
-      } else if (mode === 'due') {
+      } else if (extraNew || saved.settings.reviewBatchSize || saved.settings.newCardsPerDay) {
+        await start(ordered, style, mode, { extraNew });
+      } else if (mode !== 'all') {
         await start(ordered, style, mode);
       } else {
         await start(ordered);
@@ -241,13 +256,45 @@ export function StudySessionBuilder({
             </span>
             <button
               className="qard-primary"
-              disabled={busy || !selected.length || services.index.getSnapshot().loading}
+              disabled={busy || !planned.batch.length || services.index.getSnapshot().loading}
               onClick={() => void begin()}
             >
               <Play size={16} />
               {busy ? 'Preparing…' : 'Start'}
             </button>
           </div>
+          {style === 'normal' &&
+            (saved.settings.reviewBatchSize > 0 || saved.settings.newCardsPerDay > 0) && (
+              <div className="qard-pacing-summary">
+                <p className="qard-muted qard-small">
+                  {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'} · {newCount} new{' '}
+                  {newCount === 1 ? 'card' : 'cards'}
+                </p>
+                <p className="qard-muted qard-small">
+                  {planned.batch.length} in this batch · {planned.remaining.length} available
+                  afterwards
+                  {planned.heldNew > 0
+                    ? ` · ${planned.heldNew} new cards held for another day`
+                    : ''}
+                </p>
+                {saved.settings.newCardsPerDay > 0 && (
+                  <>
+                    <p className="qard-muted qard-small">
+                      {introductionsToday(saved.history)} / {saved.settings.newCardsPerDay} new
+                      cards introduced today
+                    </p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={extraNew}
+                        onChange={(event) => setExtraNew(event.target.checked)}
+                      />
+                      Study extra new cards today
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
           {error && (
             <p className="qard-error" role="alert">
               {error}

@@ -14,7 +14,9 @@ import { parseCards } from './parser';
 import { readCardLocation, type CardLocation } from './card-location';
 import { siblingGroup } from './siblings';
 import type { SourceSnapshot } from './source-sync-types';
+import { readCardFormat } from './card-format';
 export interface CardDraft {
+  reverse?: boolean;
   deck: string;
   topic: string;
   front: string;
@@ -183,6 +185,13 @@ export class CardWriter {
   }
   async edit(card: QardCard, front: string, back: string) {
     this.unique(card);
+    if (card.reverseId) {
+      const partner = this.index.getSnapshot().cards.find((c) => c.id === card.reverseId);
+      if (!partner) {
+        throw new Error('The linked reverse card is missing. Restore the pair before editing.');
+      }
+      this.unique(partner);
+    }
     const file = this.file(card.sourceFile),
       id = card.stable ? card.id : crypto.randomUUID();
     await this.app.vault.process(file, (source) =>
@@ -430,10 +439,27 @@ export class CardWriter {
       throw new Error('Deck and topic names must be nonempty single lines.');
     }
     const id = crypto.randomUUID();
+    const reverseId = draft.reverse ? crypto.randomUUID() : undefined;
+    const group = reverseId ? crypto.randomUUID() : undefined;
+    if (
+      reverseId &&
+      (readCardFormat(draft.front).kind !== 'basic' || readCardFormat(draft.back).kind !== 'basic')
+    ) {
+      throw new Error('Only basic cards can test the reverse.');
+    }
+    const content = (eol = '\n') =>
+      serializeCard(id, draft.front, draft.back, eol, group, undefined, reverseId) +
+      (reverseId
+        ? eol + serializeCard(reverseId, draft.back, draft.front, eol, group, undefined, id)
+        : '');
     // Validate before creating directories or notes.
     serializeCard(id, draft.front, draft.back);
+    content();
     if (draft.generatedFrom?.length) {
       await this.trackSources?.(id, draft.generatedFrom, draft.sourceSnapshots);
+      if (reverseId) {
+        await this.trackSources?.(reverseId, draft.generatedFrom, draft.sourceSnapshots);
+      }
     }
     let file: TFile | undefined;
     if (draft.sourceFile) {
@@ -463,7 +489,7 @@ export class CardWriter {
           source +
           (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) +
           `# ${topic}${eol}${eol}` +
-          serializeCard(id, draft.front, draft.back, eol);
+          content(eol);
         const created = parseCards(next, file!.path).cards.find((c) => c.id === id);
         if (!created || created.deck !== deck || created.topic !== topic) {
           throw new Error(
@@ -498,7 +524,7 @@ export class CardWriter {
       }
       file = await this.app.vault.create(
         path,
-        `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${serializeCard(id, draft.front, draft.back)}`,
+        `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${content()}`,
       );
     }
     await this.index.refresh(file);

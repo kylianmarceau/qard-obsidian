@@ -189,6 +189,7 @@ export function parseCards(
     }
     let identity: string | undefined,
       siblingGroup: string | undefined,
+      reverseId: string | undefined,
       location: CardLocation | undefined;
     let first = line,
       invalidLocation = false;
@@ -196,11 +197,14 @@ export function parseCards(
       const text = lines[n]!.text;
       const id = text.match(idComment)?.[1];
       const group = text.match(/^\s*<!-- qard-siblings: ([A-Za-z0-9_-]+) -->\s*$/)?.[1];
+      const reverse = text.match(/^\s*<!-- qard-reverse: ([A-Za-z0-9_-]+) -->\s*$/)?.[1];
       const placement = text.match(/^\s*<!-- qard-location: (.+) -->\s*$/)?.[1];
       if (id && !identity) {
         identity = id;
       } else if (group && !siblingGroup) {
         siblingGroup = group;
+      } else if (reverse && !reverseId) {
+        reverseId = reverse;
       } else if (placement && !location) {
         try {
           location = readCardLocation(JSON.parse(placement));
@@ -232,6 +236,7 @@ export function parseCards(
       id: identity || `volatile:${path}:${fingerprint}:${occurrence}`,
       stable: !!identity,
       ...(siblingGroup ? { siblingGroup } : {}),
+      ...(reverseId ? { reverseId } : {}),
       ...(location ? { location } : {}),
       deck: location?.deck || deck,
       topic: location?.topic || topicOverride || topic,

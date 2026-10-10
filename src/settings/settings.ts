@@ -32,6 +32,9 @@ export interface QardSettings {
   burySiblings: boolean;
   scheduler: 'simple' | 'fsrs';
   desiredRetention: number;
+  newCardsPerDay: number;
+  reviewBatchSize: number;
+  typedAnswers: boolean;
   tests: TestSettings;
   agents: AgentSettings;
   learn: LearnSettings;
@@ -66,6 +69,9 @@ export const DEFAULT_SETTINGS: QardSettings = {
   burySiblings: true,
   scheduler: 'fsrs',
   desiredRetention: 0.9,
+  newCardsPerDay: 0,
+  reviewBatchSize: 0,
+  typedAnswers: false,
   tests: DEFAULT_TEST_SETTINGS,
   agents: DEFAULT_AGENT_SETTINGS,
   learn: DEFAULT_LEARN_SETTINGS,
@@ -152,6 +158,17 @@ export function readSettings(raw: unknown): QardSettings {
     burySiblings: s.burySiblings !== false,
     scheduler: s.scheduler === 'simple' ? 'simple' : 'fsrs',
     desiredRetention: retention(s.desiredRetention),
+    newCardsPerDay:
+      Number.isSafeInteger(s.newCardsPerDay) && s.newCardsPerDay! >= 0 && s.newCardsPerDay! <= 10000
+        ? s.newCardsPerDay!
+        : 0,
+    reviewBatchSize:
+      Number.isSafeInteger(s.reviewBatchSize) &&
+      s.reviewBatchSize! >= 0 &&
+      s.reviewBatchSize! <= 10000
+        ? s.reviewBatchSize!
+        : 0,
+    typedAnswers: s.typedAnswers === true,
     tests: readTestSettings(s.tests),
     agents: readAgentSettings(s.agents, s.tests),
     learn: readLearnSettings(s.learn),

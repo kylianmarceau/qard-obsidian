@@ -42,6 +42,79 @@ async function key(key: string, target: HTMLElement = host) {
     await services.reviews.flush().catch(() => {});
   });
 }
+
+it('keeps typed recall private and ungraded, protects typing keys, reveals on Ctrl+Enter and clears on the next card', async () => {
+  await services.reviews.saveSettings({
+    ...services.reviews.getSnapshot().settings,
+    typedAnswers: true,
+  });
+  const many = parseCards(
+    '<!-- qard-id: first -->\n> [!qard]- First\n> First answer\n\n<!-- qard-id: second -->\n> [!qard]- Second\n> Second answer',
+    'a.md',
+  ).cards;
+  await act(async () =>
+    root.render(<StudyView cards={many} services={services} exit={exit} repeat={vi.fn()} />),
+  );
+  const input = host.querySelector<HTMLTextAreaElement>('[aria-label="Your answer"]')!;
+  await act(async () => {
+    input.value = 'My private recall';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await key('3', input);
+  await key(' ', input);
+  expect(services.reviews.getSnapshot().history).toHaveLength(0);
+  expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  await act(async () => {
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+    );
+  });
+  expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('false');
+  expect(input.value).toBe('My private recall');
+  expect(input.readOnly).toBe(true);
+  expect(services.reviews.getSnapshot().history).toHaveLength(0);
+  await key('4');
+  expect(host.querySelector<HTMLTextAreaElement>('[aria-label="Your answer"]')!.value).toBe('');
+  expect(JSON.stringify(services.reviews.getSnapshot())).not.toContain('My private recall');
+});
+
+it('offers batch continuation only at completion and prevents duplicate continuation clicks', async () => {
+  await services.reviews.saveSettings({
+    ...services.reviews.getSnapshot().settings,
+    scheduler: 'simple',
+    reviewBatchSize: 1,
+  });
+  const many = parseCards(
+    '<!-- qard-id: first -->\n> [!qard]- First\n> Answer\n\n<!-- qard-id: second -->\n> [!qard]- Second\n> Answer',
+    'a.md',
+  ).cards;
+  const session = await services.reviews.startSession(many);
+  const next = vi.fn(async () => {});
+  await act(async () =>
+    root.render(
+      <StudyView
+        cards={[many[0]!]}
+        session={session}
+        services={services}
+        exit={exit}
+        repeat={vi.fn()}
+        continueBatch={next}
+      />,
+    ),
+  );
+  expect(host.textContent).not.toContain('Continue studying');
+  await key(' ');
+  await key('4');
+  const button = [...host.querySelectorAll('button')].find((button) =>
+    button.textContent?.includes('Continue studying'),
+  )!;
+  expect(button.textContent).toContain('1 remaining');
+  await act(async () => {
+    button.click();
+    button.click();
+  });
+  expect(next).toHaveBeenCalledOnce();
+});
 it('requires reveal, rates exactly once, completes every card, and escapes focus on the summary', async () => {
   await mount();
   await key('3');

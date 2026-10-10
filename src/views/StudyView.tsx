@@ -27,6 +27,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { CardEditor } from '../components/CardEditor';
+import { TypedRecall } from '../components/TypedRecall';
 import { CardRepairActions } from '../components/CardRepairActions';
 import { siblingIds } from '../cards/siblings';
 import { isBuried } from '../review/scheduler';
@@ -52,6 +53,7 @@ export function StudyView({
   style = 'normal',
   session,
   notice,
+  continueBatch,
 }: {
   cards: QardCard[];
   services: QardServices;
@@ -60,13 +62,21 @@ export function StudyView({
   style?: SessionStyle;
   session?: SavedSession;
   notice?: string;
+  continueBatch?: () => void | Promise<void>;
 }) {
   const intervalId = useId();
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, QardCard>>({});
+  const applyEdit = (next: QardCard) => {
+    const partner = next.reverseId
+      ? services.index.getSnapshot().cards.find((card) => card.id === next.reverseId)
+      : undefined;
+    setEdits((old) => ({ ...old, [next.id]: next, ...(partner ? { [partner.id]: partner } : {}) }));
+  };
   cards = cards.map((card) => edits[card.id] ?? card);
   const cram = style === 'cram';
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const [typing, setTyping] = useState(saved.settings.typedAnswers);
   const [learning, setLearning] = useState<LearningReview | undefined>(() =>
     session?.repeatLearning
       ? pendingLearning(session, saved.states).find((entry) => entry.due <= Date.now())
@@ -550,7 +560,7 @@ export function StudyView({
             }, 0);
           }}
           saved={(next) => {
-            setEdits((old) => ({ ...old, [next.id]: next }));
+            applyEdit(next);
             const current = services.reviews
               .getSnapshot()
               .sessions.find((s) => s.id === session?.id)
@@ -664,6 +674,29 @@ export function StudyView({
           </p>
         )}
         <div className="qard-actions">
+          {!!session?.remainingIds?.length && continueBatch && (
+            <button
+              className="qard-primary"
+              disabled={busy}
+              onClick={() => {
+                if (lock.current) {
+                  return;
+                }
+                lock.current = true;
+                setBusy(true);
+                setError('');
+                void Promise.resolve()
+                  .then(continueBatch)
+                  .catch((e: unknown) => {
+                    lock.current = false;
+                    setBusy(false);
+                    setError((e as Error).message);
+                  });
+              }}
+            >
+              Continue studying · {session.remainingIds.length} remaining
+            </button>
+          )}
           {canUndo && (
             <button disabled={busy} onClick={() => void undoLast()}>
               <Undo2 size={16} />
@@ -803,7 +836,28 @@ export function StudyView({
             today.
           </p>
         )}
+        <label className="qard-typing-toggle">
+          <input
+            type="checkbox"
+            checked={typing}
+            disabled={busy || recording || confirmExit}
+            onChange={(event) => setTyping(event.target.checked)}
+          />
+          Type my answer
+        </label>
         <StudyCard key={card.id} card={card} revealed={revealed} services={services} />
+        {typing && (
+          <TypedRecall
+            key={`${card.id}:${currentLearning?.due ?? position}`}
+            revealed={revealed}
+            reveal={() => {
+              setRevealed(true);
+              surface.current?.focus();
+            }}
+            disabled={busy || recording || confirmExit || paused || buried}
+            cram={cram}
+          />
+        )}
         {saved.settings.audioEnabled && <VoiceAnswer key={card.id} onBusy={onRecording} />}
         {error && (
           <p className="qard-error" role="alert">
@@ -889,7 +943,7 @@ export function StudyView({
             disabled={busy || recording || confirmExit || !!courseUndo}
             onBusy={onRepairBusy}
             changed={(next) => {
-              setEdits((old) => ({ ...old, [card.id]: next }));
+              applyEdit(next);
               setRevealed(false);
               setUndo(undefined);
             }}
