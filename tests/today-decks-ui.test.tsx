@@ -26,9 +26,9 @@ const nav: LearnNav = {
   lesson: vi.fn(),
   studyDue: vi.fn(),
 };
-function note(deck: string, ids: string[]) {
+function note(deck: string, ids: string[], topic?: string) {
   return (
-    `---\nqard-deck: ${deck}\n---\n` +
+    `---\nqard-deck: ${deck}\n${topic ? `qard-topic: ${topic}\n` : ''}---\n` +
     ids.map((id) => serializeCard(id, `Question ${id}`, `Answer ${id}`)).join('\n')
   );
 }
@@ -116,8 +116,8 @@ it('shows each eligible deck with an accurate count and sends its identity to St
   await mount();
   expect(host.textContent).toContain('3 due cards · 2 decks');
   expect([...host.querySelectorAll('.qard-today-deck')].map((row) => row.textContent)).toEqual([
-    'Biology1 card due for review Study',
-    'Networks2 cards due for review Study',
+    'Biology1 card due for review Study all',
+    'Networks2 cards due for review Study all',
   ]);
   expect(host.querySelector('.qard-doc-footer')).toBeNull();
   await click(host.querySelector('[aria-label="Study Networks: 2 due cards"]'));
@@ -129,12 +129,81 @@ it('shows each eligible deck with an accurate count and sends its identity to St
   ).toEqual(['oldest', 'recent', 'bio']);
 });
 
-it('starts and saves only the chosen deck in overdue order', async () => {
+async function addTopics() {
+  index.update(
+    'Networks.md',
+    note('Networks', ['recent', 'new', 'paused', 'buried', 'future', 'duplicate'], 'Routing'),
+  );
+  index.update('Transport.md', note('Networks', ['oldest', 'transport-oldest'], 'Transport'));
+  index.update('Biology.md', note('Biology', ['bio', 'duplicate'], 'Transport'));
+  index.update('Not-due.md', note('Networks', ['topic-new'], 'Not due'));
+  await services.reviews.review('transport-oldest', 3, now - 50 * DAY);
+}
+
+it('shows only due topics under their deck, including the default General topic', async () => {
+  await mount();
+  expect(host.querySelectorAll('.qard-today-topic')).toHaveLength(2);
+  expect(
+    host.querySelector('[aria-label="Study General in Networks: 2 due cards"]'),
+  ).not.toBeNull();
+  await act(addTopics);
+  expect(host.textContent).toContain('4 due cards · 2 decks');
+  const topics = [...host.querySelectorAll('.qard-today-topic')].map((row) =>
+    row.getAttribute('aria-label'),
+  );
+  expect(topics).toEqual([
+    'Study Transport in Biology: 1 due card',
+    'Study Routing in Networks: 1 due card',
+    'Study Transport in Networks: 2 due cards',
+  ]);
+  expect(host.textContent).not.toContain('Not due');
+  await click(host.querySelector('[aria-label="Study Transport in Networks: 2 due cards"]'));
+  expect(nav.studyDue).toHaveBeenCalledWith('Networks', 'Transport');
+});
+
+it('starts and saves only the chosen topic in the chosen deck, oldest due first', async () => {
+  await addTopics();
+  const start = vi.spyOn(services.reviews, 'startSession');
   await mount(true);
-  await click(host.querySelector('[aria-label="Study Networks: 2 due cards"]'));
-  expect(host.textContent).toContain('Question oldest');
+  await click(host.querySelector('[aria-label="Study Transport in Networks: 2 due cards"]'));
+  expect(host.textContent).toContain('Question transport-oldest');
   expect(services.reviews.getSnapshot().sessions[0]).toMatchObject({
-    cardIds: ['oldest', 'recent'],
+    cardIds: ['transport-oldest', 'oldest'],
+    title: 'Networks',
+    style: 'normal',
+  });
+  expect(start).toHaveBeenCalledWith(expect.any(Array), 'normal', undefined, 'due');
+  expect(host.textContent).not.toContain('Question bio');
+  expect(host.textContent).not.toContain('Question recent');
+});
+
+it('updates topic membership and removes topics when their last due card is paused', async () => {
+  await addTopics();
+  await mount();
+  await act(async () => services.reviews.setPaused('recent', true));
+  expect(host.querySelector('[aria-label="Study Routing in Networks: 1 due card"]')).toBeNull();
+  await act(async () =>
+    index.update(
+      'Transport.md',
+      note('Networks', ['oldest', 'transport-oldest'], 'Reliable delivery'),
+    ),
+  );
+  expect(host.querySelector('[aria-label="Study Transport in Networks: 2 due cards"]')).toBeNull();
+  expect(
+    host.querySelector('[aria-label="Study Reliable delivery in Networks: 2 due cards"]'),
+  ).not.toBeNull();
+  expect(
+    host.querySelector('[aria-label="Study Transport in Biology: 1 due card"]'),
+  ).not.toBeNull();
+});
+
+it('starts and saves only the chosen deck in overdue order', async () => {
+  await addTopics();
+  await mount(true);
+  await click(host.querySelector('[aria-label="Study Networks: 3 due cards"]'));
+  expect(host.textContent).toContain('Question transport-oldest');
+  expect(services.reviews.getSnapshot().sessions[0]).toMatchObject({
+    cardIds: ['transport-oldest', 'oldest', 'recent'],
     title: 'Networks',
     style: 'normal',
   });

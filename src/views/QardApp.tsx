@@ -224,12 +224,12 @@ export function QardApp({ services, request }: { services: QardServices; request
       check: (path) => setScreen({ kind: 'check', path }),
       lesson: (path) => setScreen({ kind: 'lesson', path }),
       // Today reviews only cards already in rotation, most overdue first.
-      studyDue: (deck) => {
+      studyDue: (deck, topic) => {
         void start(
           todayDueCards(
             services.index.getSnapshot().cards,
             services.reviews.getSnapshot().states,
-          ).filter((card) => card.deck === deck),
+          ).filter((card) => card.deck === deck && (topic === undefined || card.topic === topic)),
           'normal',
           undefined,
           'due',
