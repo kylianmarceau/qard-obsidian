@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { State } from 'ts-fsrs';
 import { ReviewStore } from '../src/review/review-store';
 import { parseCards } from '../src/cards/parser';
-import { pendingLearning } from '../src/review/learning-queue';
+import { completedReviewCount, pendingLearning } from '../src/review/learning-queue';
 import { readSessions } from '../src/review/saved-session';
 
 const now = new Date('2026-10-09T12:00:00Z').getTime();
@@ -13,7 +13,7 @@ const cards = ['a', 'b', 'c'].map(
 const dueSession = (store: ReviewStore, selected = cards) =>
   store.startSession(selected, 'normal', undefined, 'due');
 
-it('persists learning steps, forbids early repeats, and completes only after FSRS graduation', async () => {
+it('requeues Again, forbids early repeats, and finishes on Good while preserving the FSRS learning step', async () => {
   const store = new ReviewStore(async () => {});
   const session = await dueSession(store, [cards[0]!]);
   await store.review('a', 1, now, { id: session.id, position: 0 });
@@ -30,22 +30,23 @@ it('persists learning steps, forbids early repeats, and completes only after FSR
     }),
   ).rejects.toThrow('not due yet');
   expect(store.getSnapshot()).toBe(waiting);
-  await store.review('a', 3, now + 60_000, {
+  await store.review('a', 1, now + 60_000, {
     id: session.id,
     position: 1,
     learningDue: now + 60_000,
   });
   expect(store.getSnapshot().sessions[0]).toMatchObject({
     position: 1,
-    learning: [{ cardId: 'a', due: now + 660_000 }],
+    learning: [{ cardId: 'a', due: now + 120_000 }],
   });
-  await store.review('a', 3, now + 660_000, {
+  await store.review('a', 3, now + 120_000, {
     id: session.id,
     position: 1,
-    learningDue: now + 660_000,
+    learningDue: now + 120_000,
   });
   expect(store.getSnapshot().sessions).toEqual([]);
-  expect(store.getSnapshot().states.a!.fsrs?.state).toBe(State.Review);
+  expect(store.getSnapshot().states.a!.fsrs?.state).toBe(State.Learning);
+  expect(store.getSnapshot().states.a!.due).toBe(now + 720_000);
   expect(store.getSnapshot().history).toHaveLength(3);
 });
 
@@ -88,7 +89,7 @@ it('keeps the first-pass cursor when interleaving repeats and rejects duplicate/
 it('survives restart when the first pass is exhausted and resolves current content for waiting cards', async () => {
   const store = new ReviewStore(async () => {});
   const session = await dueSession(store, [cards[0]!]);
-  await store.review('a', 3, now, { id: session.id, position: 0 });
+  await store.review('a', 1, now, { id: session.id, position: 0 });
   const restarted = new ReviewStore(async () => {});
   restarted.load(JSON.parse(JSON.stringify(store.getSnapshot())));
   const resumed = await restarted.resumeSession(session.id, [
@@ -97,7 +98,7 @@ it('survives restart when the first pass is exhausted and resolves current conte
   expect(resumed.session).toMatchObject({
     position: 1,
     repeatLearning: true,
-    learning: [{ cardId: 'a', due: now + 600_000 }],
+    learning: [{ cardId: 'a', due: now + 60_000 }],
   });
   expect(resumed.cards[0]!.frontMarkdown).toBe('Edited');
   expect(resumed.session.results).toHaveLength(1);
@@ -180,8 +181,9 @@ it.each([false, true])(
 
 it('orders waiting repeats by their real due times and finishing preserves the schedule and history', async () => {
   const store = new ReviewStore(async () => {});
+  await store.review('a', 4, now - 86_400_000);
   const session = await dueSession(store);
-  await store.review('a', 3, now, { id: session.id, position: 0 });
+  await store.review('a', 1, now, { id: session.id, position: 0 });
   await store.review('b', 1, now + 1000, { id: session.id, position: 1 });
   expect(
     pendingLearning(store.getSnapshot().sessions[0], store.getSnapshot().states).map(
@@ -194,6 +196,66 @@ it('orders waiting repeats by their real due times and finishing preserves the s
   expect(store.getSnapshot().history).toBe(before.history);
   expect(store.getSnapshot().sessions).toEqual([]);
 });
+
+it.each([2, 3, 4] as const)(
+  'finishes rating %s on the first pass or an Again repeat and preserves the FSRS schedule on restart',
+  async (rating) => {
+    for (const repeated of [false, true]) {
+      const store = new ReviewStore(async () => {});
+      const session = await dueSession(store);
+      if (repeated) {
+        await store.review('a', 1, now, { id: session.id, position: 0 });
+      }
+      const at = repeated ? now + 60_000 : now;
+      await store.review('a', rating, at, {
+        id: session.id,
+        position: repeated ? 1 : 0,
+        ...(repeated ? { learningDue: at } : {}),
+      });
+      const data = store.getSnapshot();
+      expect(data.sessions[0]!.learning).toEqual([]);
+      expect(completedReviewCount(data.sessions[0]!, data.states)).toBe(1);
+      expect(data.states.a!.due).toBeGreaterThan(at);
+      if (rating !== 4) {
+        expect(data.states.a!.fsrs?.state).toBe(State.Learning);
+      }
+      const restored = new ReviewStore(async () => {});
+      restored.load(JSON.parse(JSON.stringify(data)));
+      const resumed = await restored.resumeSession(session.id, cards);
+      expect(resumed.session.learning).toEqual([]);
+      expect(completedReviewCount(resumed.session, restored.getSnapshot().states)).toBe(1);
+      expect(restored.getSnapshot().states).toEqual(data.states);
+      expect(restored.getSnapshot().history).toEqual(data.history);
+    }
+  },
+);
+
+it.each([2, 3] as const)(
+  'removes legacy rating %s repeats on reload while retaining Again and original unvisited cards',
+  async (rating) => {
+    const store = new ReviewStore(async () => {});
+    const session = await dueSession(store);
+    await store.review('a', rating, now, { id: session.id, position: 0 });
+    await store.review('b', 1, now, { id: session.id, position: 1 });
+    const data = JSON.parse(JSON.stringify(store.getSnapshot()));
+    data.sessions[0].learning.push({ cardId: 'a', due: data.states.a.due });
+    const restored = new ReviewStore(async () => {});
+    restored.load(data);
+    expect(restored.getSnapshot().sessions[0]).toMatchObject({
+      position: 2,
+      learning: [{ cardId: 'b', due: now + 60_000 }],
+    });
+    expect(restored.getSnapshot().history).toEqual(data.history);
+    expect(restored.getSnapshot().states).toEqual(data.states);
+    const resumed = await restored.resumeSession(session.id, cards);
+    expect(resumed.session.learning).toEqual([{ cardId: 'b', due: now + 60_000 }]);
+    expect(completedReviewCount(resumed.session, restored.getSnapshot().states)).toBe(1);
+    data.sessions[0].position = 3;
+    data.sessions[0].learning = [{ cardId: 'a', due: data.states.a.due }];
+    restored.load(data);
+    expect(restored.getSnapshot().sessions).toEqual([]);
+  },
+);
 
 it.each(['all', 'due', 'new', 'difficult'] as const)(
   'keeps missed cards in normal %s sessions until learning is finished',

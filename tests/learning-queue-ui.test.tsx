@@ -96,17 +96,17 @@ it('keeps a missed card unfinished in a 52-card deck and completes it only after
   expect(host.textContent).toContain('0 / 52 completed · 1 learning');
   expect(progress()).toBe(0);
   await key(' ');
-  await key('4');
+  await key('2');
   expect(progress()).toBe(1);
   await elapsed(60_000);
   expect(host.textContent).toContain('Deck question 2');
   await key(' ');
-  await key('4');
+  await key('3');
   expect(host.textContent).toContain('Deck question 0');
   expect(host.textContent).toContain('Learning review · 2 / 52 completed');
   expect(progress()).toBe(2);
   await key(' ');
-  await key('4');
+  await key('3');
   expect(host.textContent).toContain('Deck question 3');
   expect(host.textContent).toContain('3 / 52 completed');
   expect(progress()).toBe(3);
@@ -133,14 +133,11 @@ it('waits for real FSRS intervals, returns hidden questions automatically, and c
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   await key(' ');
   await key('3');
-  expect(host.textContent).toContain('next card returns in 10 minutes');
-  expect(host.textContent).toContain('0 / 1 completed');
+  expect(host.textContent).toContain('Session complete');
   await elapsed(600_000);
-  await key(' ');
-  await key('3');
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('1 / 1');
-  expect(host.textContent).toContain('3 reviews, including learning repeats');
+  expect(host.textContent).toContain('2 reviews, including learning repeats');
   expect(services.reviews.getSnapshot().sessions).toEqual([]);
 });
 
@@ -187,7 +184,7 @@ it('saves waiting sessions and resumes the pending card after a full restart', a
   expect(restored.getSnapshot().history).toHaveLength(1);
 });
 
-it('undo restores the first-pass card from waiting and the repeated card after graduation', async () => {
+it('undo restores the first-pass card from waiting and a repeat finished with Good', async () => {
   const session = await services.reviews.startSession([cards[0]!], 'normal', undefined, 'due');
   await mount(session, [cards[0]!]);
   await key(' ');
@@ -197,8 +194,8 @@ it('undo restores the first-pass card from waiting and the repeated card after g
   expect(host.textContent).toContain('Question a');
   expect(services.reviews.getSnapshot().history).toEqual([]);
   await key(' ');
-  await key('3');
-  await elapsed(600_000);
+  await key('1');
+  await elapsed(60_000);
   await key(' ');
   await key('3');
   expect(host.textContent).toContain('Session complete');
@@ -208,6 +205,21 @@ it('undo restores the first-pass card from waiting and the repeated card after g
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   expect(services.reviews.getSnapshot().sessions[0]!.learning).toHaveLength(1);
 });
+
+it.each(['2', '3', '4'])(
+  'completes a single-card session on rating %s without returning it later',
+  async (rating) => {
+    const session = await services.reviews.startSession([cards[0]!]);
+    await mount(session, [cards[0]!]);
+    await key(' ');
+    await key(rating);
+    expect(host.textContent).toContain('Session complete');
+    expect(services.reviews.getSnapshot().sessions).toEqual([]);
+    await elapsed(1_200_000);
+    expect(host.textContent).toContain('Session complete');
+    expect(services.reviews.getSnapshot().history).toHaveLength(1);
+  },
+);
 
 it('finishes early without changing schedules, reports a failed finish and allows retry', async () => {
   const session = await services.reviews.startSession([cards[0]!], 'normal', undefined, 'due');

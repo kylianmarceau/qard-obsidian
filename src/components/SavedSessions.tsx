@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { InlineMarkdown } from './Markdown';
 import { Play, X } from 'lucide-react';
 import type { QardServices } from '../views/services';
-import { completedReviewCount } from '../review/learning-queue';
+import { completedReviewCount, pendingLearning } from '../review/learning-queue';
 export function SavedSessions({
   services,
   resume,
@@ -57,7 +57,8 @@ export function SavedSessions({
                 {s.style === 'cram' ? 'Cram · ' : ''}
                 {s.style === 'cram' ? s.position : completedReviewCount(s, saved.states)} of{' '}
                 {s.cardIds.length} completed
-                {!!s.learning?.length && ` · ${s.learning.length} learning`}
+                {!!pendingLearning(s, saved.states).length &&
+                  ` · ${pendingLearning(s, saved.states).length} learning`}
               </span>
             </div>
             <div className="qard-saved-session-actions">

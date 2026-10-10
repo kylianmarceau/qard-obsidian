@@ -8,10 +8,11 @@ export interface LearningReview {
   due: number;
 }
 
-/** FSRS learning/relearning steps return within a normal study session. */
+/** Only an Again rating returns an FSRS learning/relearning card within the session. */
 export function learningReview(state: ReviewState | undefined): LearningReview | undefined {
   if (
     !state ||
+    state.lastRating !== 1 ||
     state.paused ||
     isBuried(state) ||
     !validFsrs(state.fsrs) ||

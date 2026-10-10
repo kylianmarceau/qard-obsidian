@@ -10,7 +10,7 @@
 - **Review controls:** edit without leaving your session, flag cards that need fixing, undo the last rating, skip, or pause. Related cloze and image variants are separated until tomorrow; cram includes every variant.
 - **Card repair:** find flagged and often-forgotten cards with the Needs fixing filter. Repeated failures across five study days suggest editing or pausing a card; Mark fixed starts a new repair window without deleting history.
 - **Saved sessions:** leave normal or cram study midway and resume the same card order and position after reopening Qard.
-- **Learning reviews:** in normal study sessions with FSRS, learning and forgotten cards return when their scheduled interval arrives. Progress counts completed cards separately from learning repeats. Wait for the next card, save and leave, or finish the session with your reviews preserved.
+- **Learning reviews:** in normal study sessions with FSRS, only cards rated Again return when their scheduled interval arrives. Hard, Good and Easy finish the card for the current session while preserving their FSRS schedules. Progress counts completed cards separately from learning repeats. Wait for the next card, save and leave, or finish the session with your reviews preserved.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
 - **Learn:** map a course into connected topics, follow guided lessons and check what you remember. Track your progress and what to study next.

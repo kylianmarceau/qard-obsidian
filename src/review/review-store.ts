@@ -11,7 +11,7 @@ import {
 } from './saved-session';
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle, StudyMode } from './session';
-import { learningReview } from './learning-queue';
+import { learningReview, pendingLearning } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
 import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/settings';
 import { scheduler, isBuried, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
@@ -155,19 +155,27 @@ export class ReviewStore {
         states[id] = memory;
       }
     }
+    const scheduledStates =
+      settings.scheduler === 'fsrs'
+        ? migrateFsrs(states, history, settings.desiredRetention)
+        : states;
     this.data = {
       version: 1,
       settings,
-      states:
-        settings.scheduler === 'fsrs'
-          ? migrateFsrs(states, history, settings.desiredRetention)
-          : states,
+      states: scheduledStates,
       history,
       links,
       timings,
       usage,
       statistics: readStatistics(value.statistics, history),
-      sessions: readSessions(value.sessions),
+      sessions: readSessions(value.sessions).flatMap((session) => {
+        if (!session.repeatLearning) {
+          return [session];
+        }
+        // Remove Hard/Good repeats saved by older versions without changing review memory.
+        const next = { ...session, learning: pendingLearning(session, scheduledStates) };
+        return hasRemainingSession(next) ? [next] : [];
+      }),
       exams: readExams(value.exams),
     };
   }
