@@ -1,6 +1,6 @@
 import type { QardCard } from '../cards/card-types';
 import type { SessionResult, SessionStyle } from './session';
-import type { ReviewState } from './scheduler';
+import { isBuried, type ReviewState } from './scheduler';
 import { pendingLearning, type LearningReview } from './learning-queue';
 
 export interface SavedSession {
@@ -14,6 +14,7 @@ export interface SavedSession {
   updatedAt: number;
   examId?: string;
   skippedIds?: string[];
+  deferredIds?: string[];
   /** Opt-in for new normal Due sessions; older/manual/cram sessions stay single-pass. */
   repeatLearning?: true;
   learning?: LearningReview[];
@@ -28,6 +29,35 @@ export const stableId = (id: unknown): id is string =>
   typeof id === 'string' && /^[A-Za-z0-9_-]+$/.test(id);
 export const hasRemainingSession = (session: SavedSession): boolean =>
   session.position < session.cardIds.length || !!session.learning?.length;
+
+/** Keep the original queue for undo, but move past siblings deferred for today. */
+export function deferSiblings(
+  session: SavedSession,
+  states: Record<string, ReviewState>,
+  now: number,
+): SavedSession {
+  if (session.style === 'cram') {
+    return session;
+  }
+  let position = session.position;
+  const deferred = new Set(session.deferredIds ?? []);
+  while (position < session.cardIds.length && isBuried(states[session.cardIds[position]!], now)) {
+    deferred.add(session.cardIds[position++]!);
+  }
+  const learning = session.learning?.filter((entry) => {
+    if (!isBuried(states[entry.cardId], now)) {
+      return true;
+    }
+    deferred.add(entry.cardId);
+    return false;
+  });
+  return {
+    ...session,
+    position,
+    ...(deferred.size ? { deferredIds: [...deferred] } : {}),
+    ...(learning ? { learning } : {}),
+  };
+}
 
 function readLearning(session: SavedSession): LearningReview[] {
   if (session.repeatLearning !== true || session.style !== 'normal' || session.examId) {
@@ -107,6 +137,13 @@ export function readSessions(raw: unknown): SavedSession[] {
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
       ...(stableId(s.examId) ? { examId: s.examId } : {}),
+      ...(Array.isArray(s.deferredIds)
+        ? {
+            deferredIds: [
+              ...new Set(s.deferredIds.filter((id) => stableId(id) && s.cardIds.includes(id))),
+            ],
+          }
+        : {}),
       ...(s.repeatLearning === true && s.style === 'normal' && !s.examId
         ? { repeatLearning: true as const, learning: readLearning(s) }
         : {}),
@@ -139,7 +176,10 @@ export function resolveSession(
   }
   const available = (id: string) => byId.has(id) && !ambiguous.has(id);
   const cardIds = session.cardIds.filter(
-    (id, index) => available(id) && (index < session.position || !states[id]?.paused),
+    (id, index) =>
+      available(id) &&
+      (index < session.position ||
+        (!states[id]?.paused && (session.style === 'cram' || !isBuried(states[id])))),
   );
   const position = session.cardIds.slice(0, session.position).filter(available).length;
   const learning = pendingLearning(session, states).filter(

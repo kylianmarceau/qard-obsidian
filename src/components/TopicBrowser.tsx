@@ -1,3 +1,5 @@
+import { isBuried } from '../review/scheduler';
+import { REPAIR_FAILURE_DAYS } from '../review/card-repair';
 import type { ReviewState } from '../review/scheduler';
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Sparkles, Plus, Play } from 'lucide-react';
@@ -13,9 +15,11 @@ export function TopicBrowser({
   removeDeck,
   removeTopic,
   states = {},
+  repairDays = new Map<string, number>(),
 }: {
   deck: Deck;
   states?: Record<string, ReviewState>;
+  repairDays?: Map<string, number>;
   select: (card: QardCard) => void;
   study: (topic?: string) => void;
   create: () => void;
@@ -100,6 +104,15 @@ export function TopicBrowser({
                     >
                       <span>{cardTitle(card.frontMarkdown)}</span>
                       {states[card.id]?.paused && <span className="qard-paused-label">Paused</span>}
+                      {states[card.id]?.needsFixing && (
+                        <span className="qard-warning-label">Needs fixing</span>
+                      )}
+                      {(repairDays.get(card.id) ?? 0) >= REPAIR_FAILURE_DAYS && (
+                        <span className="qard-warning-label">Often forgotten</span>
+                      )}
+                      {isBuried(states[card.id]) && (
+                        <span className="qard-paused-label">Tomorrow</span>
+                      )}
                       {card.duplicateId && <span className="qard-warning-label">Duplicate ID</span>}
                       <ChevronRight size={15} />
                     </button>

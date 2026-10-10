@@ -113,3 +113,18 @@ On `main`, `npm run check` passes formatting, strict TypeScript, source and styl
 The release adds persistent FSRS learning queues for normal Due cards sessions. Regression coverage includes timed learning/relearning returns, interleaving without interrupting the current question, waiting and restart/resume after the initial pass, undo, skip/pause, finishing early, failed saves, stale or premature ratings, malformed saved queues and settings changes. Other study modes and older saved sessions retain single-pass behavior.
 
 Before the version bump, the feature build was installed in the registered `/Users/kyliandabancourt/Documents/Qard/qard/obsidian-plugin/.test-vault`. The three installed assets matched the build, and all 19 other vault files retained their hashes, including notes, settings and review data. Native Obsidian interaction and mobile hardware were not exercised for this change; the study-flow checks use the production UI with mocked Obsidian services.
+
+## Review editing, sibling separation and card repair — 10 October 2026
+
+On `feature/review-card-repair-and-siblings`, `npm run check` passes formatting, strict TypeScript, source and stylesheet lint with zero warnings, **446 tests across 58 files**, the production build and release-content verification. Release metadata remains at 0.5.4; these changes are on the feature branch.
+
+New coverage exercises in-session editing and cancellation, identity/history/queue preservation, retry after an edited note's content-check save fails, flag persistence and failed writes, precise legacy cloze/image grouping, group migration and preservation across edits/renames, grouped batch retries, atomic deferral and undo with both schedulers, concurrent sibling changes, restart and local-midnight availability, cram and scheduling-off behavior, learning-step edits, exam coverage, failure counting across distinct study days, advisory repair actions and the library repair filter.
+
+An isolated browser preview using production components and sample in-memory storage verified the repair prompt, opening/cancelling the existing editor and the Needs fixing library filter. At desktop and 380 px widths, the prompt and controls fit within the viewport and remained accessible through the existing scroll area. Native Obsidian interaction and mobile hardware were not exercised, and no live AI provider was contacted.
+
+### Today deck selection — 10 October 2026
+
+- Today lists eligible due cards by deck, with accurate per-deck counts and a Study action that creates a queue for only that deck, oldest due first. Checks finish by returning to Today for deck selection.
+- Four new UI/integration tests cover deck identity, saved queue isolation, paused/deferred/new/future/duplicate exclusions, live note and review updates, and checks kept separate from cards. The existing check test also verifies returning to Today.
+- Full `npm run check` passed: 450 tests across 59 files, formatting, TypeScript, lint, styles, production build and release validation.
+- An isolated browser preview verified the actual Today component at desktop and 380px widths, no horizontal overflow, and the chosen deck opening in study. Installed assets match the build; all 23 other test-vault files are preserved.

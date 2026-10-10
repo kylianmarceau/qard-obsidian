@@ -1,13 +1,14 @@
 import { plural } from '../common/labels';
 import { teach } from './lesson-navigation';
-import { useEffect, useState } from 'react';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { ArrowRight, ChevronRight, Play } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import { InlineMarkdown } from '../Markdown';
 import type { Today, TodayItem } from '../../learn/learn-types';
 import { JobError, Waiting } from '../common/FeedbackStatus';
 import { StateChip } from './learning-status';
 import { useLearn } from './useLearn';
+import { todayDueCards } from '../../review/today-cards';
 import { type LearnNav } from '../../views/navigation';
 
 /** Loads Today and reloads it whenever the learn service changes. */
@@ -55,18 +56,33 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
   const today = useToday(services),
     { job } = useLearn(services),
     [error, setError] = useState('');
+  const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
+  const reviews = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const due = useMemo(() => todayDueCards(index.cards, reviews.states), [index, reviews.states]);
+  const decks = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const card of due) {
+      counts.set(card.deck, (counts.get(card.deck) ?? 0) + 1);
+    }
+    return [...counts].sort(([a], [b]) => a.localeCompare(b));
+  }, [due]);
   useEffect(() => {
     if (today) {
       services.learn.prepare(today);
     }
   }, [services, today]);
-  if (!today) {
+  if (!today || index.loading) {
     return <Waiting text="Loading…" />;
   }
-  const minutes = Math.max(1, Math.round(today.checks.length * 2 + today.cards / 6));
+  const minutes = Math.max(1, Math.round(today.checks.length * 2 + due.length / 6));
   const first = today.checks.find((c) => c.check);
-  const start = () => (first ? nav.check(first.check!) : today.cards ? nav.studyDue() : undefined);
-  const nothing = !today.checks.length && !today.cards && !today.lessons.length;
+  const start = () => first && nav.check(first.check!);
+  const nothing = !today.checks.length && !due.length && !today.lessons.length;
+  const suggestion = due.length
+    ? `Choose a deck to review${today.checks.length ? ' or start with your checks' : ''}.`
+    : today.checks.length
+      ? 'Start with your checks.'
+      : 'Choose a lesson to keep learning.';
   const open = (item: TodayItem) => (item.check ? nav.check(item.check) : undefined);
   return (
     <div className="qard-doc">
@@ -75,7 +91,7 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
         <p className="qard-muted">
           {nothing
             ? 'Nothing is due. Map a course or make a test to keep going.'
-            : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. Checks first, then cards.`}
+            : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. ${suggestion}`}
         </p>
       </header>
       {today.checks.length > 0 && (
@@ -110,13 +126,28 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
           })}
         </section>
       )}
-      {today.cards > 0 && (
-        <section>
+      {due.length > 0 && (
+        <section className="qard-today-decks">
           <h2>Cards</h2>
-          <button className="qard-doc-row qard-row-button" onClick={nav.studyDue}>
-            <span>{plural(today.cards, 'card')} due for review</span>
-            <ChevronRight size={15} />
-          </button>
+          <p className="qard-muted qard-small">
+            {plural(due.length, 'due card')} · {plural(decks.length, 'deck')}
+          </p>
+          {decks.map(([deck, count]) => (
+            <button
+              key={deck}
+              className="qard-doc-row qard-row-button qard-today-deck"
+              aria-label={`Study ${deck}: ${plural(count, 'due card')}`}
+              onClick={() => nav.studyDue(deck)}
+            >
+              <span className="qard-today-deck-copy">
+                <strong>{deck}</strong>
+                <small>{plural(count, 'card')} due for review</small>
+              </span>
+              <span className="qard-today-deck-action">
+                <Play size={14} /> Study
+              </span>
+            </button>
+          ))}
         </section>
       )}
       {today.lessons.length > 0 && (
@@ -159,10 +190,10 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
           {error}
         </p>
       )}
-      {(first || today.cards > 0) && (
+      {first && (
         <div className="qard-doc-footer is-end">
           <button className="qard-primary" onClick={start}>
-            Start
+            Start checks
             <ArrowRight size={15} />
           </button>
         </div>

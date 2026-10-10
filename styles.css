@@ -6223,13 +6223,6 @@ div.qard-ask-q {
   }
 }
 
-.qard-study-secondary {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
 .qard-paused-label {
   flex-shrink: 0;
   padding: 2px 7px;
@@ -6239,4 +6232,163 @@ div.qard-ask-q {
   font-size: 10px;
   font-weight: 500;
   line-height: 1.4;
+}
+
+/* Secondary card actions stay below the review controls. */
+.qard-app .qard-card-repair {
+  min-width: 0;
+  margin-block: 12px;
+}
+
+.qard-study-foot .qard-card-repair {
+  flex: 1;
+  margin: 0;
+}
+
+.qard-study-foot .qard-repair-edit {
+  margin-inline-start: auto;
+}
+
+.qard-repair-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.qard-app .qard-repair-tools > button,
+.qard-app .qard-card-more > button,
+.qard-app button.qard-repair-fixed {
+  border-color: transparent;
+  color: var(--qard-muted);
+  font-size: 11px;
+}
+
+.qard-app .qard-card-more > button[aria-expanded='true'] {
+  color: var(--qard-text);
+  background: var(--qard-soft);
+}
+
+.qard-repair-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--qard-border);
+  color: var(--qard-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.qard-repair-notice > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.qard-repair-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.qard-repair-copy strong {
+  color: var(--qard-text);
+  font-weight: 500;
+}
+
+.qard-repair-copy p {
+  margin: 3px 0 0;
+}
+
+.qard-repair-fixed {
+  flex-shrink: 0;
+}
+
+.qard-card-more {
+  position: relative;
+}
+
+.qard-repair-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: 240px;
+  padding: 4px;
+  border: 1px solid var(--qard-border);
+  border-radius: 8px;
+  background: var(--qard-bg);
+  box-shadow: var(--shadow-s);
+}
+
+.qard-app .qard-repair-menu > button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  color: var(--qard-text);
+  font-size: 12px;
+}
+
+@container (max-width: 440px) {
+  .qard-study-foot .qard-repair-edit {
+    margin-inline-start: 0;
+  }
+
+  .qard-app .qard-repair-tools > button,
+  .qard-app .qard-card-more > button {
+    padding-inline: 8px;
+  }
+}
+
+.qard-app .qard-study-editor {
+  width: min(100%, 800px);
+  margin-inline: auto;
+  padding: 24px;
+}
+
+.qard-app .qard-repair-filter {
+  margin-block: 8px;
+}
+
+.qard-app .qard-repair-filter[aria-pressed='true'] {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
+/* Today makes the deck and its review queue explicit before studying. */
+.qard-today-decks > p {
+  margin: 0 0 14px;
+}
+
+.qard-app .qard-today-deck {
+  padding: 14px 4px;
+  gap: 16px;
+}
+
+.qard-row-button > span.qard-today-deck-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.qard-today-deck-copy strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.qard-today-deck-copy small {
+  color: var(--qard-muted);
+  font-size: 12px;
+}
+
+.qard-today-deck-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--qard-blue);
+  font-size: 12px;
 }

@@ -128,7 +128,7 @@ it('offers cards while waiting, keeps you there once you start, and shows a read
   expect(onEngage).toHaveBeenCalledOnce();
   expect(host.textContent).toContain('Back other');
   await click(buttons('Good')[0]);
-  expect(review).toHaveBeenCalledWith('other', 3);
+  expect(review).toHaveBeenCalledWith('other', 3, expect.any(Number), undefined, []);
   expect(host.textContent).toContain('1 card reviewed');
   await render(true);
   expect(host.querySelector('.qard-wait-ready')?.textContent).toContain('Your test is ready');

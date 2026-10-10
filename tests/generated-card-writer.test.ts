@@ -47,6 +47,18 @@ const cards = [
   { id: 'card-1', front: 'TCP?', back: '**Reliable.**' },
   { id: 'card-2', front: 'UDP?', back: 'No delivery guarantee.' },
 ];
+it('persists explicit variant groups and keeps them on a batch retry', async () => {
+  const { writer, index, create } = setup();
+  const grouped = { ...target, label: 'cloze' as const, siblingGroup: 'sentence-1' };
+  await writer.createBatch(grouped, cards);
+  const first = index.getSnapshot().cards;
+  expect(first.map((card) => card.siblingGroup)).toEqual(['sentence-1', 'sentence-1']);
+  await writer.createBatch(grouped, cards);
+  expect(create).toHaveBeenCalledOnce();
+  await expect(
+    writer.createBatch({ ...grouped, siblingGroup: 'different' }, cards),
+  ).rejects.toThrow('changed');
+});
 it('saves a whole batch in one note and indexes stable cards in the chosen deck and topic', async () => {
   const { writer, create, index } = setup();
   const result = await writer.createBatch(target, cards);

@@ -34,6 +34,8 @@ export function CardEditor({
 }) {
   const original = readCardFormat(card?.frontMarkdown || initial?.front || '');
   const batch = useRef({ id: crypto.randomUUID(), ids: new Map<string, string>() });
+  const submitting = useRef(false);
+  const written = useRef<{ card: QardCard; front: string; back: string } | undefined>(undefined);
   const [kind, setKind] = useState(original.kind);
   const [front, setFront] = useState(original.text),
     [back, setBack] = useState(
@@ -97,6 +99,10 @@ export function CardEditor({
         : 1;
   async function submit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting.current) {
+      return;
+    }
+    submitting.current = true;
     setBusy(true);
     setError('');
     try {
@@ -127,6 +133,7 @@ export function CardEditor({
             folder,
             batchId: batch.current.id,
             label: kind === 'cloze' ? 'cloze' : 'occlusion',
+            siblingGroup: batch.current.id,
           },
           variants.map((value) => {
             const format = readCardFormat(value);
@@ -148,7 +155,9 @@ export function CardEditor({
         return;
       }
       const result = card
-        ? await services.writer.edit(card, encodedFront, answer)
+        ? written.current?.front === encodedFront && written.current.back === answer
+          ? written.current.card
+          : await services.writer.edit(written.current?.card ?? card, encodedFront, answer)
         : await services.writer.create({
             deck,
             topic,
@@ -157,8 +166,15 @@ export function CardEditor({
             folder: services.reviews.getSnapshot().settings.cardFolder,
             sourceFile: initial?.sourceFile,
           });
+      if (card) {
+        written.current = { card: result, front: encodedFront, back: answer };
+        if (card.frontMarkdown !== encodedFront || card.backMarkdown !== answer) {
+          await services.reviews.requireContentCheck(result.id);
+        }
+      }
       saved(result);
     } catch (e) {
+      submitting.current = false;
       setError((e as Error).message);
       setBusy(false);
     }
@@ -389,7 +405,7 @@ export function CardEditor({
             </p>
           )}
           <div className="qard-form-actions">
-            <button type="button" onClick={cancel}>
+            <button type="button" disabled={!!written.current && !!error} onClick={cancel}>
               Cancel
             </button>
             <button className="qard-primary" type="submit" disabled={uploading}>

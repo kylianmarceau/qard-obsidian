@@ -1,6 +1,6 @@
 import type { QardCard } from '../cards/card-types';
 import { selectCards, type Selection } from '../review/session';
-import { scheduler, type ReviewEvent, type ReviewState } from '../review/scheduler';
+import { scheduler, isBuried, type ReviewEvent, type ReviewState } from '../review/scheduler';
 import { stableId } from '../review/saved-session';
 export interface ExamPlan {
   id: string;
@@ -130,7 +130,9 @@ export function examProgress(
   const due = selected
     .filter((c) => covered.has(c.id) && scheduler.isDue(states[c.id], now))
     .sort((a, b) => (states[a.id]?.due ?? 0) - (states[b.id]?.due ?? 0));
-  const firstPass = uncovered.slice(0, Math.min(coverageToday, remainingToday));
+  const firstPass = uncovered
+    .filter((c) => !isBuried(states[c.id], now))
+    .slice(0, Math.min(coverageToday, remainingToday));
   const queue = [...firstPass, ...due.slice(0, Math.max(0, remainingToday - firstPass.length))];
   const capacity = Math.max(
     0,

@@ -1,3 +1,4 @@
+import { failureDays, needsRepair } from '../review/card-repair';
 import type { ReviewUndo } from '../review/review-store';
 import type { SavedSession, SessionStep } from '../review/saved-session';
 import { pendingLearning, type LearningReview } from '../review/learning-queue';
@@ -13,6 +14,10 @@ import {
   SkipForward,
   Pause,
 } from 'lucide-react';
+import { CardEditor } from '../components/CardEditor';
+import { CardRepairActions } from '../components/CardRepairActions';
+import { siblingIds } from '../cards/siblings';
+import { isBuried } from '../review/scheduler';
 import { StudyCard } from '../components/StudyCard';
 import { SessionDifficultyChart } from '../components/SessionDifficultyChart';
 import { VoiceAnswer } from '../audio/VoiceAnswer';
@@ -44,6 +49,9 @@ export function StudyView({
   session?: SavedSession;
   notice?: string;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [edits, setEdits] = useState<Record<string, QardCard>>({});
+  cards = cards.map((card) => edits[card.id] ?? card);
   const cram = style === 'cram';
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const [learning, setLearning] = useState<LearningReview | undefined>(() =>
@@ -63,12 +71,23 @@ export function StudyView({
     review: ReviewUndo;
     position: number;
     learning?: LearningReview;
+    deferred: string[];
     undoLapse?: () => Promise<void>;
   }>();
+  const [deferred, setDeferred] = useState<string[]>(session?.deferredIds ?? []);
   const [skipped, setSkipped] = useState<string[]>(session?.skippedIds ?? []);
   const [courseUndo, setCourseUndo] = useState<{ run: () => Promise<void> }>();
   const canUndo = services.reviews.canUndoReview(undo?.review);
-  const activeCards = cards.filter((c) => !saved.states[c.id]?.paused);
+  const repairDays = useMemo(
+    () => failureDays(saved.history, saved.states),
+    [saved.history, saved.states],
+  );
+  const repairCount = cards.filter((c) =>
+    needsRepair(saved.states[c.id], repairDays.get(c.id)),
+  ).length;
+  const activeCards = cards.filter(
+    (c) => !saved.states[c.id]?.paused && (cram || !isBuried(saved.states[c.id])),
+  );
   const [confirmExit, setConfirmExit] = useState(false);
   const lock = useRef(false),
     surface = useRef<HTMLDivElement>(null),
@@ -90,13 +109,22 @@ export function StudyView({
     setClock(Date.now());
     const data = services.reviews.getSnapshot();
     const next = session ? data.sessions.find((s) => s.id === session.id) : undefined;
-    setPosition(next?.position ?? (currentLearning ? position : position + 1));
+    let nextPosition = next?.position ?? (currentLearning ? position : position + 1);
+    const newlyDeferred = [...(next?.deferredIds ?? deferred)];
+    if (!cram && data.settings.scheduling) {
+      while (nextPosition < cards.length && isBuried(data.states[cards[nextPosition]!.id])) {
+        newlyDeferred.push(cards[nextPosition++]!.id);
+      }
+    }
+    setDeferred([...new Set(newlyDeferred)]);
+    setPosition(nextPosition);
     setLearning(
       learningEnabled
         ? pendingLearning(next, data.states).find((entry) => entry.due <= Date.now())
         : undefined,
     );
   }
+  const buried = !!card && !cram && saved.settings.scheduling && isBuried(saved.states[card.id]);
   const paused = !!card && !!saved.states[card.id]?.paused;
   const intervals = useMemo(
     () =>
@@ -157,11 +185,13 @@ export function StudyView({
       cram ||
       !card ||
       paused ||
+      buried ||
       !revealed ||
       lock.current ||
       recording ||
       confirmExit ||
-      courseUndo
+      courseUndo ||
+      editing
     ) {
       return;
     }
@@ -169,14 +199,23 @@ export function StudyView({
     setBusy(true);
     setError('');
     try {
-      const review = await services.reviews.review(card.id, rating, Date.now(), step);
+      const review = await services.reviews.review(
+        card.id,
+        rating,
+        Date.now(),
+        step,
+        siblingIds(
+          card,
+          services.index?.getSnapshot().cards.length ? services.index.getSnapshot().cards : cards,
+        ),
+      );
       // Two lapses on a card made for a mastered objective mark it as slipping.
       const undoLapse =
         rating === 1
           ? await services.learn?.cardLapse?.(card.id).catch(() => undefined)
           : undefined;
       if (mounted.current) {
-        setUndo({ review, position, learning: currentLearning, undoLapse });
+        setUndo({ review, position, learning: currentLearning, deferred, undoLapse });
         setResults((old) => [...old, { cardId: card.id, rating }]);
         nextCard();
         setRevealed(false);
@@ -241,6 +280,7 @@ export function StudyView({
       if (mounted.current) {
         setPosition(undo.position);
         setLearning(undo.learning);
+        setDeferred(undo.deferred);
         setResults((old) => old.slice(0, -1));
         setRevealed(false);
         setUndo(undefined);
@@ -355,8 +395,21 @@ export function StudyView({
       }
     }
   }
+  function editCard() {
+    if (!card || lock.current || recording || confirmExit || courseUndo || card.duplicateId) {
+      return;
+    }
+    setFocus(false);
+    setEditing(true);
+  }
+  const onRepairBusy = useCallback((value: boolean) => {
+    lock.current = value;
+    setBusy(value);
+  }, []);
   const actions = useRef({
     rate,
+    editCard,
+    editing,
     advance,
     undoLast,
     skip,
@@ -365,7 +418,18 @@ export function StudyView({
     recording,
     confirmExit,
   });
-  actions.current = { rate, advance, undoLast, skip, focus, revealed, recording, confirmExit };
+  actions.current = {
+    rate,
+    editCard,
+    editing,
+    advance,
+    undoLast,
+    skip,
+    focus,
+    revealed,
+    recording,
+    confirmExit,
+  };
   useEffect(() => {
     const doc = services.host.ownerDocument;
     const handler = (event: KeyboardEvent) => {
@@ -373,6 +437,9 @@ export function StudyView({
         return;
       }
       const current = actions.current;
+      if (current.editing) {
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -412,6 +479,12 @@ export function StudyView({
         return;
       }
       const key = event.key.toLowerCase();
+      if (key === 'e') {
+        event.preventDefault();
+        event.stopPropagation();
+        current.editCard();
+        return;
+      }
       if (key === 's') {
         event.preventDefault();
         event.stopPropagation();
@@ -439,6 +512,42 @@ export function StudyView({
     return () => doc.removeEventListener('keydown', handler, true);
   }, [services, card, exit, cram, waiting]);
   const onRecording = useCallback((value: boolean) => setRecording(value), []);
+  if (editing && card) {
+    return (
+      <div className="qard-study-editor" data-qard-keyboard-ignore>
+        <CardEditor
+          services={services}
+          card={card}
+          cancel={() => {
+            setEditing(false);
+            window.setTimeout(() => {
+              if (mounted.current && services.isActive()) {
+                surface.current?.focus();
+              }
+            }, 0);
+          }}
+          saved={(next) => {
+            setEdits((old) => ({ ...old, [next.id]: next }));
+            const current = services.reviews
+              .getSnapshot()
+              .sessions.find((s) => s.id === session?.id)
+              ?.learning?.find((entry) => entry.cardId === next.id);
+            if (currentLearning) {
+              setLearning(current);
+            }
+            setRevealed(false);
+            setEditing(false);
+            setUndo(undefined);
+            window.setTimeout(() => {
+              if (mounted.current && services.isActive()) {
+                surface.current?.focus();
+              }
+            }, 0);
+          }}
+        />
+      </div>
+    );
+  }
   if (waiting) {
     const minutes = Math.max(1, Math.ceil((pending[0]!.due - clock) / 60000));
     return (
@@ -507,8 +616,20 @@ export function StudyView({
           </div>
         </div>
         {!cram && <SessionDifficultyChart results={results} />}
+        {!!repairCount && (
+          <p className="qard-muted">
+            {repairCount} {repairCount === 1 ? 'card needs' : 'cards need'} attention. Find them
+            with the Needs fixing filter in your library.
+          </p>
+        )}
         {!cram && results.length > new Set(results.map((r) => r.cardId)).size && (
           <p className="qard-muted">{results.length} reviews, including learning repeats</p>
+        )}
+        {!!deferred.length && (
+          <p className="qard-muted">
+            {deferred.length} related {deferred.length === 1 ? 'card deferred' : 'cards deferred'}{' '}
+            until tomorrow · available in cram
+          </p>
         )}
         {!!skipped.length && (
           <p className="qard-muted">
@@ -647,6 +768,12 @@ export function StudyView({
             This card is paused. Skip it here, or resume it from its card preview.
           </p>
         )}
+        {!cram && isBuried(saved.states[card.id]) && (
+          <p role="status" className="qard-muted">
+            This related card is deferred until tomorrow. Skip it here, or use cram to study it
+            today.
+          </p>
+        )}
         <StudyCard key={card.id} card={card} revealed={revealed} services={services} />
         {saved.settings.audioEnabled && <VoiceAnswer key={card.id} onBusy={onRecording} />}
         {error && (
@@ -666,7 +793,7 @@ export function StudyView({
           {revealed && cram ? (
             <button
               className="qard-primary qard-reveal"
-              disabled={busy || recording || confirmExit || paused || !!courseUndo}
+              disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}
               onClick={() => void advance()}
             >
               Next card {saved.settings.keyboardHints && <kbd>Space</kbd>}
@@ -681,7 +808,7 @@ export function StudyView({
                       'qard-rating qard-rating-' + r.rating + (intervals ? ' with-interval' : '')
                     }
                     title={r.hint}
-                    disabled={busy || recording || confirmExit || paused || !!courseUndo}
+                    disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}
                     onClick={() => void rate(r.rating)}
                   >
                     <strong>{r.name}</strong>
@@ -716,7 +843,15 @@ export function StudyView({
           )}
         </div>
         <div className="qard-study-foot">
-          <div className="qard-study-secondary">
+          <CardRepairActions
+            key={`repair-${card.id}`}
+            card={card}
+            services={services}
+            edit={editCard}
+            disabled={busy || recording || confirmExit || !!courseUndo}
+            onBusy={onRepairBusy}
+            shortcut
+          >
             {!cram && (
               <button
                 disabled={busy || recording || confirmExit || !canUndo}
@@ -736,14 +871,14 @@ export function StudyView({
               Skip{saved.settings.keyboardHints && <kbd>S</kbd>}
             </button>
             <button
-              disabled={busy || recording || confirmExit || paused || !!courseUndo}
+              disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}
               title="Keep this card out of study sessions until you resume it in its preview"
               onClick={() => void skip(true)}
             >
               <Pause size={14} />
               Pause card
             </button>
-          </div>
+          </CardRepairActions>
           <span role="status">{busy ? 'Saving…' : ''}</span>
         </div>
       </div>

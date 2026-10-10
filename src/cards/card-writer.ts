@@ -5,10 +5,12 @@ import {
   deleteCardInSource,
   deleteGroupInSource,
   ensureIdInSource,
+  ensureSiblingGroupsInSource,
   replaceCardInSource,
   serializeCard,
 } from './source-patch';
 import { parseCards } from './parser';
+import { siblingGroup } from './siblings';
 import type { SourceSnapshot } from './source-sync-types';
 export interface CardDraft {
   deck: string;
@@ -61,7 +63,7 @@ export class CardWriter {
     const resolved = new Map<string, QardCard>();
     for (const [path, group] of groups) {
       const file = this.file(path);
-      if (group.every((c) => c.stable)) {
+      if (group.every((c) => c.stable && (!siblingGroup(c) || c.siblingGroup))) {
         const current = parseCards(await this.app.vault.read(file), path).cards;
         for (const card of group) {
           const found = current.filter((c) => c.id === card.id);
@@ -72,7 +74,7 @@ export class CardWriter {
         }
       } else {
         await this.app.vault.process(file, (source) => {
-          let next = source;
+          let next = ensureSiblingGroupsInSource(source, path);
           for (const card of group) {
             const result = ensureIdInSource(next, card, crypto.randomUUID());
             next = result.source;
@@ -127,6 +129,7 @@ export class CardWriter {
       folder: string;
       batchId: string;
       label?: 'cloze' | 'occlusion';
+      siblingGroup?: string;
     },
     cards: {
       id: string;
@@ -157,7 +160,7 @@ export class CardWriter {
       if (!name || name.length > 200 || /[\r\n]/.test(name)) {
         throw new Error('Card topics must be nonempty single lines, up to 200 characters each.');
       }
-      serializeCard(c.id, c.front, c.back);
+      serializeCard(c.id, c.front, c.back, '\n', target.siblingGroup);
     });
     const slug =
       deck
@@ -179,7 +182,12 @@ export class CardWriter {
         const matches = existing.filter((c) => c.id === card.id);
         if (
           matches.length > 1 ||
-          matches.some((c) => c.deck !== deck || c.topic !== topicOf(card))
+          matches.some(
+            (c) =>
+              c.deck !== deck ||
+              c.topic !== topicOf(card) ||
+              (target.siblingGroup !== undefined && c.siblingGroup !== target.siblingGroup),
+          )
         ) {
           throw new Error(
             'A saved card changed its deck, topic or ID. Check the generated note before retrying.',
@@ -203,7 +211,9 @@ export class CardWriter {
           .map(
             ([name, group]) =>
               `# ${name}${eol}${eol}` +
-              group.map((c) => serializeCard(c.id, c.front, c.back, eol)).join(eol),
+              group
+                .map((c) => serializeCard(c.id, c.front, c.back, eol, target.siblingGroup))
+                .join(eol),
           )
           .join(eol);
       const parsed = parseCards(next, path).cards;

@@ -19,7 +19,7 @@ import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
 import { VaultLearnStorage } from './learn/vault-learn-storage';
 import { isoDay, objectiveLines } from './learn/mastery';
-import { scheduler } from './review/scheduler';
+import { todayDueCards } from './review/today-cards';
 import { JobClock } from './jobs/job-clock';
 import { studyNotes } from './vault-access';
 export default class QardPlugin extends Plugin {
@@ -65,15 +65,8 @@ export default class QardPlugin extends Plugin {
         this.reviews.link(id, link),
     };
     // Today counts only cards already in review; brand-new cards are studied on purpose, not scheduled.
-    const dueCards = () => {
-      const { states } = this.reviews.getSnapshot(),
-        now = Date.now();
-      return this.index
-        .getSnapshot()
-        .cards.filter(
-          (c) => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now),
-        ).length;
-    };
+    const dueCards = () =>
+      todayDueCards(this.index.getSnapshot().cards, this.reviews.getSnapshot().states).length;
     this.jobs = new JobClock(
       () => this.reviews.getSnapshot().timings,
       (key, ms) => this.reviews.recordTiming(key, ms),

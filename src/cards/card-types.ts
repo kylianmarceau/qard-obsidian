@@ -3,6 +3,8 @@ export interface QardCard {
   id: string;
   stable: boolean;
   duplicateId?: boolean;
+  /** Variants of one cloze sentence or image, never a whole source note. */
+  siblingGroup?: string;
   deck: string;
   topic: string;
   frontMarkdown: string;

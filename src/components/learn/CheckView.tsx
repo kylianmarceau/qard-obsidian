@@ -79,8 +79,6 @@ export function CheckView({
       following = today.checks.find((c) => c.check && c.check !== path);
     if (following) {
       nav.check(following.check!);
-    } else if (today.cards) {
-      nav.studyDue();
     } else {
       nav.today();
     }

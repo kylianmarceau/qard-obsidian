@@ -83,7 +83,7 @@ export class QardSettingsTab extends PluginSettingTab {
     return [
       {
         name: 'Default study mode',
-        desc: 'All cards always includes every selected card.',
+        desc: 'All cards includes selected cards except paused cards and related cards deferred for today. Cram includes deferred cards.',
         render: (row) => {
           row.addDropdown((d) =>
             d
@@ -154,7 +154,7 @@ export class QardSettingsTab extends PluginSettingTab {
           [
             'keyboardHints',
             'Show keyboard hints',
-            'Space to reveal. 1–4 to rate. F for focus. Escape to leave focus.',
+            'Space to reveal. 1–4 to rate. E to edit. F for focus. Escape to leave focus.',
           ],
           [
             'autoFocus',
@@ -165,6 +165,11 @@ export class QardSettingsTab extends PluginSettingTab {
             'scheduling',
             'Enable spaced repetition',
             'Ratings update future due dates. Turning this off never limits manual study.',
+          ],
+          [
+            'burySiblings',
+            'Separate related cards',
+            'After a review, defer other variants of the same cloze sentence or image until tomorrow. Cram always includes them.',
           ],
           [
             'audioEnabled',

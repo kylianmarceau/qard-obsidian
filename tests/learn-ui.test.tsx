@@ -203,6 +203,9 @@ it('a check: answer, "I don\'t know" disables the input, submit marks and moves 
   expect(host.textContent).toContain('Half there.');
   expect(host.querySelector('.qard-state')?.textContent).toBe('Shaky');
   expect(files.get(MASTERY)).toContain('check explain 2/3');
+  await click(buttons('Next')[0]);
+  expect(nav.today).toHaveBeenCalled();
+  expect(nav.studyDue).not.toHaveBeenCalled();
 });
 
 it('a lesson plan is shown for approval before teaching starts', async () => {

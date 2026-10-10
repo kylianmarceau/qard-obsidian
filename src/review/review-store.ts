@@ -5,6 +5,7 @@ import {
   stableId,
   hasRemainingSession,
   matchesSessionStep,
+  deferSiblings,
   type SavedSession,
   type SessionStep,
 } from './saved-session';
@@ -13,7 +14,7 @@ import type { SessionStyle, StudyMode } from './session';
 import { learningReview } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
 import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/settings';
-import { scheduler, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
+import { scheduler, isBuried, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 import { addToLog, type UsageLog } from '../agents/usage-report';
 import type { Usage } from '../agents/usage';
 import {
@@ -35,6 +36,7 @@ interface ReviewCheckpoint extends ReviewUndo {
   sessionBefore?: SavedSession;
   sessionAfter?: SavedSession;
   settings: QardSettings;
+  siblings: { id: string; before?: ReviewState; after: ReviewState }[];
 }
 /** A card made for a mastery objective; lapses count Again ratings since the objective was last marked. */
 export interface CardLink {
@@ -91,8 +93,19 @@ export class ReviewStore {
         Number.isFinite(state.ease) &&
         state.ease > 0
       ) {
-        const { paused, ...memory } = state;
-        states[id] = { ...memory, cardId: id, ...(paused === true ? { paused: true } : {}) };
+        const { paused, needsFixing, repairSince, buriedUntil, ...memory } = state;
+        states[id] = {
+          ...memory,
+          cardId: id,
+          ...(paused === true ? { paused: true } : {}),
+          ...(needsFixing === true ? { needsFixing: true as const } : {}),
+          ...(typeof repairSince === 'number' && Number.isFinite(new Date(repairSince).getTime())
+            ? { repairSince }
+            : {}),
+          ...(typeof buriedUntil === 'number' && Number.isFinite(new Date(buriedUntil).getTime())
+            ? { buriedUntil }
+            : {}),
+        };
       }
     }
     const history = Array.isArray(value.history)
@@ -135,6 +148,12 @@ export class ReviewStore {
     // An existing vault opts in; a vault without saved plugin data starts with FSRS.
     if (!value.settings?.scheduler) {
       settings.scheduler = 'simple';
+    }
+    if (!settings.scheduling || !settings.burySiblings) {
+      for (const id of Object.keys(states)) {
+        const { buriedUntil: _buried, ...memory } = states[id]!;
+        states[id] = memory;
+      }
     }
     this.data = {
       version: 1,
@@ -195,6 +214,17 @@ export class ReviewStore {
                 ),
               );
       }
+      if (!next.scheduling || !next.burySiblings) {
+        states = Object.assign(
+          Object.create(null) as Record<string, ReviewState>,
+          Object.fromEntries(
+            Object.entries(states).map(([id, state]) => {
+              const { buriedUntil: _buried, ...memory } = state;
+              return [id, memory];
+            }),
+          ),
+        );
+      }
       const sessions =
         !next.scheduling || next.scheduler !== 'fsrs'
           ? data.sessions.flatMap((session) => {
@@ -208,9 +238,18 @@ export class ReviewStore {
       return { ...data, settings: next, states, sessions };
     });
   }
-  review(cardId: string, rating: Rating, now = Date.now(), step?: SessionStep) {
+  review(
+    cardId: string,
+    rating: Rating,
+    now = Date.now(),
+    step?: SessionStep,
+    siblings: string[] = [],
+  ) {
     if (!/^[A-Za-z0-9_-]+$/.test(cardId)) {
       return Promise.reject(new Error('A stable card ID is required before reviewing.'));
+    }
+    if (siblings.some((id) => !stableId(id) || id === cardId)) {
+      return Promise.reject(new Error('Invalid sibling IDs.'));
     }
     if (![1, 2, 3, 4].includes(rating) || !Number.isFinite(new Date(now).getTime())) {
       return Promise.reject(new Error('A valid rating and review date are required.'));
@@ -219,6 +258,11 @@ export class ReviewStore {
       (data) => {
         if (data.states[cardId]?.paused) {
           throw new Error('This card is paused. Resume it before reviewing.');
+        }
+        if (data.settings.scheduling && isBuried(data.states[cardId], now)) {
+          throw new Error(
+            'This related card is deferred until tomorrow. Use cram to study it today.',
+          );
         }
         const previous = data.states[cardId];
         if (step?.learningDue !== undefined && previous?.due !== step.learningDue) {
@@ -231,14 +275,38 @@ export class ReviewStore {
           data.settings.scheduler === 'fsrs'
             ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
             : scheduler.reviewCard(cardId, previous, rating, now);
+        const metadata = {
+          ...(previous?.needsFixing ? { needsFixing: true as const } : {}),
+          ...(previous?.repairSince !== undefined ? { repairSince: previous.repairSince } : {}),
+        };
         const state = scheduled
-          ? computed
+          ? { ...computed, ...metadata }
           : {
               ...computed,
+              ...metadata,
               due: previous?.due,
               interval: previous?.interval ?? 0,
               ease: previous?.ease ?? 2.5,
             };
+        const states = Object.assign(
+          Object.create(null) as Record<string, ReviewState>,
+          data.states,
+          { [cardId]: state },
+        );
+        if (scheduled && data.settings.burySiblings && siblings.length) {
+          const tomorrow = new Date(now);
+          tomorrow.setHours(24, 0, 0, 0);
+          for (const id of new Set(siblings)) {
+            const old = states[id] ?? {
+              cardId: id,
+              interval: 0,
+              ease: 2.5,
+              reviewCount: 0,
+              lapses: 0,
+            };
+            states[id] = { ...old, buriedUntil: tomorrow.getTime() };
+          }
+        }
         const sessions = step
           ? this.advanceSession(
               data.sessions,
@@ -247,6 +315,7 @@ export class ReviewStore {
               rating,
               now,
               scheduled ? state : undefined,
+              states,
             )
           : data.sessions;
         const event: ReviewEvent = {
@@ -263,9 +332,7 @@ export class ReviewStore {
         return {
           ...data,
           sessions,
-          states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
-            [cardId]: state,
-          }),
+          states,
           history: [...data.history, event],
           statistics: recordReview(data.statistics, cardId, rating, now),
         };
@@ -279,6 +346,9 @@ export class ReviewStore {
           before: before.states[cardId],
           after: after.states[cardId]!,
           settings: before.settings,
+          siblings: [...new Set(siblings)]
+            .filter((id) => before.states[id] !== after.states[id])
+            .map((id) => ({ id, before: before.states[id], after: after.states[id]! })),
           ...(step
             ? {
                 sessionBefore: before.sessions.find((s) => s.id === step.id),
@@ -304,6 +374,7 @@ export class ReviewStore {
       data.settings.scheduler === checkpoint.settings.scheduler &&
       data.settings.scheduling === checkpoint.settings.scheduling &&
       data.settings.desiredRetention === checkpoint.settings.desiredRetention &&
+      checkpoint.siblings.every((sibling) => data.states[sibling.id] === sibling.after) &&
       (!checkpoint.sessionBefore ||
         data.sessions.find((s) => s.id === checkpoint.sessionBefore!.id) ===
           checkpoint.sessionAfter)
@@ -325,6 +396,13 @@ export class ReviewStore {
         } else {
           delete states[checkpoint.cardId];
         }
+        for (const sibling of checkpoint.siblings) {
+          if (sibling.before) {
+            states[sibling.id] = sibling.before;
+          } else {
+            delete states[sibling.id];
+          }
+        }
         const sessions = checkpoint.sessionBefore
           ? [
               ...data.sessions.filter((s) => s.id !== checkpoint.sessionBefore!.id),
@@ -343,6 +421,34 @@ export class ReviewStore {
         this.undo = undefined;
       },
     );
+  }
+  setNeedsFixing(cardId: string, flagged: boolean) {
+    return this.repairCard(cardId, (state) => {
+      const { needsFixing: _flag, ...rest } = state;
+      return { ...rest, ...(flagged ? { needsFixing: true as const } : {}) };
+    });
+  }
+  markFixed(cardId: string, now = Date.now()) {
+    if (!Number.isFinite(new Date(now).getTime())) {
+      return Promise.reject(new Error('A valid repair date is required.'));
+    }
+    return this.repairCard(cardId, (state) => {
+      const { needsFixing: _flag, ...rest } = state;
+      return { ...rest, repairSince: now };
+    });
+  }
+  private repairCard(cardId: string, update: (state: ReviewState) => ReviewState) {
+    if (!stableId(cardId)) {
+      return Promise.reject(new Error('A stable card ID is required.'));
+    }
+    return this.change((data) => ({
+      ...data,
+      states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
+        [cardId]: update(
+          data.states[cardId] ?? { cardId, interval: 0, ease: 2.5, reviewCount: 0, lapses: 0 },
+        ),
+      }),
+    }));
   }
   setPaused(cardId: string, paused: boolean) {
     if (!stableId(cardId)) {
@@ -386,15 +492,19 @@ export class ReviewStore {
         if (!session || !matchesSessionStep(session, step, cardId)) {
           throw new Error('This session changed in another view. Return to Qard and resume it.');
         }
-        const next = {
-          ...session,
-          position: session.position + (step.learningDue === undefined ? 1 : 0),
-          updatedAt: Date.now(),
-          skippedIds: [...new Set([...(session.skippedIds ?? []), cardId])],
-          ...(session.repeatLearning
-            ? { learning: session.learning?.filter((entry) => entry.cardId !== cardId) ?? [] }
-            : {}),
-        };
+        const next = deferSiblings(
+          {
+            ...session,
+            position: session.position + (step.learningDue === undefined ? 1 : 0),
+            updatedAt: Date.now(),
+            skippedIds: [...new Set([...(session.skippedIds ?? []), cardId])],
+            ...(session.repeatLearning
+              ? { learning: session.learning?.filter((entry) => entry.cardId !== cardId) ?? [] }
+              : {}),
+          },
+          data.states,
+          Date.now(),
+        );
         return {
           ...data,
           states: pause ? this.pauseState(data.states, cardId, true) : data.states,
@@ -423,6 +533,18 @@ export class ReviewStore {
       };
       return {
         ...data,
+        sessions: data.sessions.map((session) =>
+          session.learning?.some((entry) => entry.cardId === cardId)
+            ? {
+                ...session,
+                learning: session.learning.map((entry) =>
+                  entry.cardId === cardId
+                    ? { ...entry, due: Math.min(state.due ?? now, now) }
+                    : entry,
+                ),
+              }
+            : session,
+        ),
         states: Object.assign(Object.create(null) as Record<string, ReviewState>, data.states, {
           [cardId]: { ...state, due: Math.min(state.due ?? now, now), needsContentCheck: true },
         }),
@@ -509,6 +631,16 @@ export class ReviewStore {
         throw new Error('Some cards are paused. Resume them before starting a session.');
       }
       if (
+        style !== 'cram' &&
+        data.settings.scheduling &&
+        data.settings.burySiblings &&
+        cards.some((c) => isBuried(data.states[c.id], now))
+      ) {
+        throw new Error(
+          'Some related cards are deferred until tomorrow. Use cram to study them today.',
+        );
+      }
+      if (
         style === 'normal' &&
         mode === 'due' &&
         !examId &&
@@ -547,6 +679,7 @@ export class ReviewStore {
     rating: Rating | undefined,
     now: number,
     state?: ReviewState,
+    states: Record<string, ReviewState> = {},
   ) {
     const session = sessions.find((s) => s.id === step.id);
     if (!session || !matchesSessionStep(session, step, cardId)) {
@@ -559,20 +692,24 @@ export class ReviewStore {
       throw new Error('This learning card is not due yet.');
     }
     const repeat = session.repeatLearning ? learningReview(state) : undefined;
-    const next = {
-      ...session,
-      position: session.position + (step.learningDue === undefined ? 1 : 0),
-      updatedAt: now,
-      results: rating ? [...session.results, { cardId, rating }] : session.results,
-      ...(session.repeatLearning
-        ? {
-            learning: [
-              ...(session.learning ?? []).filter((entry) => entry.cardId !== cardId),
-              ...(repeat ? [repeat] : []),
-            ],
-          }
-        : {}),
-    };
+    const next = deferSiblings(
+      {
+        ...session,
+        position: session.position + (step.learningDue === undefined ? 1 : 0),
+        updatedAt: now,
+        results: rating ? [...session.results, { cardId, rating }] : session.results,
+        ...(session.repeatLearning
+          ? {
+              learning: [
+                ...(session.learning ?? []).filter((entry) => entry.cardId !== cardId),
+                ...(repeat ? [repeat] : []),
+              ],
+            }
+          : {}),
+      },
+      states,
+      now,
+    );
     return sessions.flatMap((s) =>
       s.id !== step.id ? [s] : hasRemainingSession(next) ? [next] : [],
     );

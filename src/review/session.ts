@@ -1,6 +1,6 @@
 import type { QardCard } from '../cards/card-types';
 import { topicKey } from '../decks/deck-index';
-import { scheduler, type ReviewState, type Rating } from './scheduler';
+import { scheduler, isBuried, type ReviewState, type Rating } from './scheduler';
 export type StudyMode = 'all' | 'due' | 'new' | 'difficult';
 export type CardOrder = 'note' | 'shuffle';
 export type SessionStyle = 'normal' | 'cram';
@@ -16,6 +16,7 @@ export interface SessionOptions {
   now?: number;
   /** Library/plan membership may include paused cards; study queues never do. */
   includePaused?: boolean;
+  includeBuried?: boolean;
 }
 export function shuffle<T>(values: readonly T[], random = Math.random): T[] {
   const result = [...values];
@@ -39,6 +40,9 @@ export function selectCards(
       if (states[card.id]?.paused && !options.includePaused) {
         return false;
       }
+      if (isBuried(states[card.id], now) && !options.includeBuried && !options.includePaused) {
+        return false;
+      }
       if (
         !decks.has(card.deck) &&
         !topics.has(topicKey(card.deck, card.topic)) &&
@@ -55,7 +59,10 @@ export function selectCards(
         return !state?.reviewCount;
       }
       if (options.mode === 'due') {
-        return scheduler.isDue(state, now);
+        return scheduler.isDue(
+          options.includeBuried && state ? { ...state, buriedUntil: undefined } : state,
+          now,
+        );
       }
       return state?.lastRating === 1 || state?.lastRating === 2;
     })

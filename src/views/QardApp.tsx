@@ -1,3 +1,4 @@
+import { failureDays, needsRepair } from '../review/card-repair';
 import type { Screen } from './navigation';
 import { SavedSessions } from '../components/SavedSessions';
 import { ExamPlanner } from '../components/ExamPlanner';
@@ -34,7 +35,7 @@ import { TodayRow, TodayView } from '../components/learn/TodayView';
 import { CheckView } from '../components/learn/CheckView';
 import { LessonView } from '../components/learn/LessonView';
 import type { LearnNav } from './navigation';
-import { scheduler } from '../review/scheduler';
+import { todayDueCards } from '../review/today-cards';
 import { ignoresStudyKey } from '../review/keyboard';
 import { RunningJobs } from '../components/jobs/RunningJobs';
 import { StatisticsView } from '../components/statistics/StatisticsView';
@@ -85,10 +86,26 @@ export function QardApp({ services, request }: { services: QardServices; request
       setScreen({ kind: 'library' });
     }
   }, [request]);
+  const [repairOnly, setRepairOnly] = useState(false);
+  const repairDays = useMemo(
+    () => failureDays(reviews.history, reviews.states),
+    [reviews.history, reviews.states],
+  );
+  const repairCount = index.cards.filter((c) =>
+    needsRepair(reviews.states[c.id], repairDays.get(c.id)),
+  ).length;
   const filtered = useMemo(
     () =>
-      search.trim() ? buildDecks(index.cards.filter((c) => matchesSearch(c, search))) : index.decks,
-    [index, search],
+      search.trim() || repairOnly
+        ? buildDecks(
+            index.cards.filter(
+              (c) =>
+                matchesSearch(c, search) &&
+                (!repairOnly || needsRepair(reviews.states[c.id], repairDays.get(c.id))),
+            ),
+          )
+        : index.decks,
+    [index, search, repairOnly, reviews.states, repairDays],
   );
   const activeDeck =
     screen.kind === 'deck' ? screen.deck : screen.kind === 'card' ? screen.card.deck : '';
@@ -124,7 +141,7 @@ export function QardApp({ services, request }: { services: QardServices; request
     }
     const result = await services.reviews.resumeSession(id, services.index.getSnapshot().cards);
     const notice = result.skipped
-      ? `${result.skipped} unavailable, paused or ambiguous cards were skipped. Your remaining card order is preserved.`
+      ? `${result.skipped} unavailable, paused, deferred or ambiguous cards were skipped. Your remaining card order is preserved.`
       : '';
     if (!hasRemainingSession(result.session)) {
       setSessionMessage(
@@ -206,16 +223,12 @@ export function QardApp({ services, request }: { services: QardServices; request
       check: (path) => setScreen({ kind: 'check', path }),
       lesson: (path) => setScreen({ kind: 'lesson', path }),
       // Today reviews only cards already in rotation, most overdue first.
-      studyDue: () => {
-        const { states } = services.reviews.getSnapshot(),
-          now = Date.now();
+      studyDue: (deck) => {
         void start(
-          services.index
-            .getSnapshot()
-            .cards.filter(
-              (c) => (states[c.id]?.reviewCount ?? 0) > 0 && scheduler.isDue(states[c.id], now),
-            )
-            .sort((a, b) => (states[a.id]?.due ?? 0) - (states[b.id]?.due ?? 0)),
+          todayDueCards(
+            services.index.getSnapshot().cards,
+            services.reviews.getSnapshot().states,
+          ).filter((card) => card.deck === deck),
           'normal',
           undefined,
           'due',
@@ -418,6 +431,11 @@ export function QardApp({ services, request }: { services: QardServices; request
             <DeckBrowser
               remove={(name) => services.writer.deleteGroup(name)}
               decks={filtered}
+              repairFilter={{
+                active: repairOnly,
+                count: repairCount,
+                toggle: () => setRepairOnly((v) => !v),
+              }}
               search={search}
               onSearch={setSearch}
               open={(name) => setScreen({ kind: 'deck', deck: name })}
@@ -457,6 +475,7 @@ export function QardApp({ services, request }: { services: QardServices; request
                 <SavedSessions services={services} resume={resume} deck={deck.name} />
                 <TopicBrowser
                   states={reviews.states}
+                  repairDays={repairDays}
                   key={deck.name}
                   deck={deck}
                   removeDeck={async () => {

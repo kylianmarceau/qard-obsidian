@@ -1,6 +1,8 @@
+import { CardRepairActions } from './CardRepairActions';
+import { isBuried } from '../review/scheduler';
 import { CardSourceLinks } from './CardSourceLinks';
 import { useState, useSyncExternalStore } from 'react';
-import { Pencil, Trash2, Play, Pause } from 'lucide-react';
+import { Trash2, Play, Pause } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { CardContent } from './CardContent';
@@ -67,10 +69,6 @@ export function CardPreview({
     <>
       <div className="qard-preview-toolbar">
         <div className="qard-actions">
-          <button disabled={card.duplicateId} onClick={() => setEditing(true)}>
-            <Pencil size={15} />
-            Edit
-          </button>
           <button
             disabled={busy || card.duplicateId}
             onClick={() => void togglePaused()}
@@ -102,6 +100,11 @@ export function CardPreview({
           Study
         </button>
       </div>
+      {isBuried(saved.states[card.id]) && (
+        <p className="qard-muted" role="status">
+          Related card deferred until tomorrow · available in cram.
+        </p>
+      )}
       {paused && (
         <p className="qard-muted" role="status">
           Paused · excluded from study sessions. Your review history and schedule are preserved.
@@ -128,6 +131,13 @@ export function CardPreview({
           />
         </div>
       </div>
+      <CardRepairActions
+        card={card}
+        services={services}
+        edit={() => setEditing(true)}
+        disabled={busy}
+        changed={changed}
+      />
       {services.sourceSync && <CardSourceLinks card={card} services={services} changed={changed} />}
       {card.duplicateId && (
         <p className="qard-error">

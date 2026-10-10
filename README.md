@@ -7,7 +7,8 @@
 - **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic with FSRS spaced repetition, or use Cram mode to reveal and advance without ratings. Generated cards track their source notes; review suggested edits when the material changes.
 - **Plans:** set up an exam in three steps, track coverage across selected decks/topics, launch practice tests, and see exams and revision in a monthly calendar.
 - **Card formats:** select text to create numbered cloze blanks, or draw image masks to recall diagram labels. Each variant has its own review history and works with normal or cram study.
-- **Review controls:** undo the last rating, skip a card for this session, or pause it until you resume it. Schedules and history are preserved when skipping or pausing.
+- **Review controls:** edit without leaving your session, flag cards that need fixing, undo the last rating, skip, or pause. Related cloze and image variants are separated until tomorrow; cram includes every variant.
+- **Card repair:** find flagged and often-forgotten cards with the Needs fixing filter. Repeated failures across five study days suggest editing or pausing a card; Mark fixed starts a new repair window without deleting history.
 - **Saved sessions:** leave normal or cram study midway and resume the same card order and position after reopening Qard.
 - **Learning reviews:** in normal Due sessions with FSRS, learning and forgotten cards return when their scheduled interval arrives. Wait for the next card, save and leave, or finish the session with your reviews preserved.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.

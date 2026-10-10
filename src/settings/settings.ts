@@ -29,6 +29,7 @@ export interface QardSettings {
   audioEnabled: boolean;
   cardFolder: string;
   scheduling: boolean;
+  burySiblings: boolean;
   scheduler: 'simple' | 'fsrs';
   desiredRetention: number;
   tests: TestSettings;
@@ -62,6 +63,7 @@ export const DEFAULT_SETTINGS: QardSettings = {
   audioEnabled: false,
   cardFolder: 'Qard',
   scheduling: true,
+  burySiblings: true,
   scheduler: 'fsrs',
   desiredRetention: 0.9,
   tests: DEFAULT_TEST_SETTINGS,
@@ -147,6 +149,7 @@ export function readSettings(raw: unknown): QardSettings {
     audioEnabled: s.audioEnabled === true,
     cardFolder: typeof s.cardFolder === 'string' ? s.cardFolder : 'Qard',
     scheduling: s.scheduling !== false,
+    burySiblings: s.burySiblings !== false,
     scheduler: s.scheduler === 'simple' ? 'simple' : 'fsrs',
     desiredRetention: retention(s.desiredRetention),
     tests: readTestSettings(s.tests),
