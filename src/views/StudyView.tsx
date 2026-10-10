@@ -76,7 +76,6 @@ export function StudyView({
   cards = cards.map((card) => edits[card.id] ?? card);
   const cram = style === 'cram';
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
-  const [typing, setTyping] = useState(saved.settings.typedAnswers);
   const [learning, setLearning] = useState<LearningReview | undefined>(() =>
     session?.repeatLearning
       ? pendingLearning(session, saved.states).find((entry) => entry.due <= Date.now())
@@ -840,17 +839,8 @@ export function StudyView({
             today.
           </p>
         )}
-        <label className="qard-typing-toggle">
-          <input
-            type="checkbox"
-            checked={typing}
-            disabled={busy || recording || confirmExit}
-            onChange={(event) => setTyping(event.target.checked)}
-          />
-          Type my answer
-        </label>
         <StudyCard key={card.id} card={card} revealed={revealed} services={services} />
-        {typing && (
+        {saved.settings.typedAnswers && (
           <TypedRecall
             key={`${card.id}:${currentLearning?.due ?? position}`}
             revealed={revealed}

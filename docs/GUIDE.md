@@ -201,7 +201,7 @@ In **Settings → Qard → Study**, **New cards per day** sets an optional allow
 
 After completing a batch, choose **Continue studying** to start the next part of your selection. Remaining cards retain their original due dates; saved unfinished batches keep their remaining selection after a restart. **Study extra new cards today** in the builder explicitly bypasses the allowance for that session. Cram and exam sessions are unrestricted. With a daily allowance enabled, **Today** also offers new cards by deck.
 
-**Type my answer** on the study screen adds an optional scratch field. **Type answers before revealing** in settings enables it by default. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
+**Type answers before revealing** in **Settings → Qard → Study preferences** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
 
 | Mode | Includes |
 | --- | --- |

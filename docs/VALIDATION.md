@@ -163,3 +163,5 @@ Production components and stylesheet were exercised in an isolated browser previ
 Full `npm run check` passed: formatting, TypeScript, JavaScript/CSS lint, **561 tests across 70 files**, production build and release-file verification.
 
 Integration retained the six existing `origin/staging` commits for lesson figures, study time and developer diagnostics, adapting them to the current module layout. Backups include study time and preserve it when restoring older snapshots without that field. After resolving the merge, full `npm run check` passed **574 tests across 74 files**, type checking, formatting, JavaScript/CSS lint, build and release verification.
+
+The typed-answer control now lives only in Settings → Qard → Study preferences and remains off by default. The study-screen switch was removed. A regression verifies that changing the saved setting shows or hides the answer field in an already mounted session; existing recall, reveal and clearing checks still pass. Full `npm run check` passed **575 tests across 74 files** and all other checks.

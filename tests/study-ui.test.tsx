@@ -43,6 +43,28 @@ async function key(key: string, target: HTMLElement = host) {
   });
 }
 
+it('keeps typed recall off by default and responds only to the saved setting', async () => {
+  await mount();
+  expect(services.reviews.getSnapshot().settings.typedAnswers).toBe(false);
+  expect(host.querySelector('[aria-label="Your answer"]')).toBeNull();
+  expect(host.textContent).not.toContain('Type my answer');
+  await act(async () => {
+    await services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      typedAnswers: true,
+    });
+  });
+  expect(host.querySelector('[aria-label="Your answer"]')).not.toBeNull();
+  expect(host.textContent).not.toContain('Type my answer');
+  await act(async () => {
+    await services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      typedAnswers: false,
+    });
+  });
+  expect(host.querySelector('[aria-label="Your answer"]')).toBeNull();
+});
+
 it('keeps typed recall private and ungraded, protects typing keys, reveals on Ctrl+Enter and clears on the next card', async () => {
   await services.reviews.saveSettings({
     ...services.reviews.getSnapshot().settings,
