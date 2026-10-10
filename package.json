@@ -1,6 +1,6 @@
 {
   "name": "qard-obsidian",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "packageManager": "npm@10.9.4",
   "private": true,
   "type": "module",
