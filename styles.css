@@ -1636,11 +1636,13 @@
 
 .qard-ratings {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .qard-app button.qard-rating {
+  min-width: 0;
+  width: 100%;
   padding: 11px 10px;
   justify-content: space-between;
 }
@@ -2005,6 +2007,16 @@ body.qard-focus-active .status-bar {
   .qard-app button.qard-rating {
     flex-direction: column;
     gap: 6px;
+  }
+
+  .qard-app button.qard-rating.without-hints {
+    flex-direction: row;
+    gap: 4px;
+    padding-inline: 4px;
+  }
+
+  .qard-rating .qard-rating-interval {
+    font-size: 10px;
   }
 
   .qard-study-back .qard-study-question,
@@ -5119,16 +5131,28 @@ div.qard-ask-q {
   margin-top: 20px;
 }
 
+.qard-rating-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.qard-rating-meta kbd {
+  flex-shrink: 0;
+}
+
 .qard-rating-interval {
   display: block;
   font-size: var(--font-smallest);
+  line-height: 1;
+  min-width: 0;
   opacity: 0.85;
-  margin-top: 4px;
-}
-
-.qard-app button.qard-rating.with-interval {
-  flex-direction: column;
-  gap: 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .qard-answer-selection {

@@ -7,7 +7,15 @@ import {
   type LearningReview,
 } from '../review/learning-queue';
 import { reviewIntervals } from '../review/fsrs-scheduler';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import {
   ArrowLeft,
   Maximize2,
@@ -53,6 +61,7 @@ export function StudyView({
   session?: SavedSession;
   notice?: string;
 }) {
+  const intervalId = useId();
   const [editing, setEditing] = useState(false);
   const [edits, setEdits] = useState<Record<string, QardCard>>({});
   cards = cards.map((card) => edits[card.id] ?? card);
@@ -825,22 +834,31 @@ export function StudyView({
                   <button
                     key={r.rating}
                     className={
-                      'qard-rating qard-rating-' + r.rating + (intervals ? ' with-interval' : '')
+                      'qard-rating qard-rating-' +
+                      r.rating +
+                      (saved.settings.keyboardHints ? '' : ' without-hints')
                     }
                     title={r.hint}
+                    aria-describedby={intervals ? `${intervalId}-${r.rating}` : undefined}
                     disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}
                     onClick={() => void rate(r.rating)}
                   >
                     <strong>{r.name}</strong>
-                    {intervals && (
-                      <small
-                        className="qard-rating-interval"
-                        aria-label={`Next review in ${intervals[r.rating - 1]}`}
-                      >
-                        {intervals[r.rating - 1]}
-                      </small>
+                    {(intervals || saved.settings.keyboardHints) && (
+                      <span className="qard-rating-meta">
+                        {intervals && (
+                          <small
+                            id={`${intervalId}-${r.rating}`}
+                            className="qard-rating-interval"
+                            aria-label={`Next review in ${intervals[r.rating - 1]}`}
+                            title={`Next review in ${intervals[r.rating - 1]}`}
+                          >
+                            {intervals[r.rating - 1]}
+                          </small>
+                        )}
+                        {saved.settings.keyboardHints && <kbd>{r.rating}</kbd>}
+                      </span>
                     )}
-                    {saved.settings.keyboardHints && <kbd>{r.rating}</kbd>}
                   </button>
                 ))}
               </div>

@@ -144,3 +144,9 @@ Normal FSRS All, New and Difficult deck sessions now use the learning/relearning
 On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **468 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match. No dependencies or minimum Obsidian version changed.
 
 Only Again now queues a same-session FSRS repeat. Tests verify Hard, Good and Easy complete a card on both the initial pass and an Again repeat, including when FSRS retains a short learning interval. Repeated Again ratings still return at the scheduled time. The 52-card regression uses Hard and Good for subsequent cards and Good to finish the returning card; progress and undo remain accurate. Reload/resume tests remove legacy Hard/Good repeats while preserving Again repeats, unvisited cards, memory and history. Native Obsidian and mobile hardware were not exercised for this correction.
+
+## Release 0.5.10 — 10 October 2026
+
+On `main`, `npm run check` passed formatting, strict TypeScript, source and stylesheet lint with zero warnings, **468 tests across 59 files**, the production build and release-content verification. Package, lock file, manifest and compatibility-table versions match.
+
+FSRS interval previews now sit inside the rating buttons beside the keyboard shortcuts, and both schedulers use the same button dimensions. The existing interval-preview test verifies each button contains and describes its interval accessibly and removes that description when scheduling is disabled. An isolated browser preview using the production StudyView and stylesheet measured identical Simple/FSRS button dimensions: 164 × 43.5 px at desktop width, and 71 × 66.5 px at 380 px. Light and dark previews retained all interval labels. Native Obsidian and mobile hardware were not exercised for this presentation change.
