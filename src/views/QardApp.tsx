@@ -164,6 +164,7 @@ export function QardApp({ services, request }: { services: QardServices; request
   };
   const study = screen.kind === 'study';
   const deskShell = screen.kind === 'library' || screen.kind === 'deck';
+  const libraryShell = deskShell || ['tests', 'learn', 'exams'].includes(screen.kind);
   const dueCount = todayDueCards(index.cards, reviews.states).length;
   useEffect(() => {
     // StudyView owns focus and its shortcuts during a card session.
@@ -267,7 +268,14 @@ export function QardApp({ services, request }: { services: QardServices; request
   );
   return (
     <div
-      className={'qard-app ' + (study ? 'qard-is-studying' : deskShell ? 'qard-desk-shell' : '')}
+      className={[
+        'qard-app',
+        study ? 'qard-is-studying' : '',
+        libraryShell ? 'qard-library-shell' : '',
+        deskShell ? 'qard-desk-shell' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <main className="qard-main">
         {!study && (
@@ -397,7 +405,7 @@ export function QardApp({ services, request }: { services: QardServices; request
             study
               ? 'qard-study-container'
               : deskShell
-                ? 'qard-page qard-page-desk'
+                ? 'qard-page qard-page-library qard-page-desk'
                 : screen.kind === 'review'
                   ? 'qard-page qard-page-review'
                   : screen.kind === 'source-updates'
