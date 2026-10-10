@@ -45,16 +45,21 @@ const click = async (el: Element | null) => {
   await act(async () => (el as HTMLElement).click());
 };
 const button = (label: string) =>
-  [...host.querySelectorAll('button')].find((b) => b.textContent === label)!;
+  [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!;
 
 it('shows honest empty states and offers studying without fabricating performance', async () => {
   await act(async () =>
     root.render(<StatisticsView services={services} back={back} study={study} />),
   );
-  expect(host.textContent).toContain('Your first review starts the story.');
+  expect(host.textContent).toContain(
+    'No reviews yet. Rate a card to start recording your progress.',
+  );
   expect(host.querySelectorAll('.qard-stats-cell')).toHaveLength(365);
   expect(host.querySelectorAll('.qard-stats-cell:not([disabled])')).toHaveLength(275);
-  expect(host.textContent).toContain('Review a card to see its difficulty here.');
+  expect(host.querySelector('.qard-stats-metrics dd')?.textContent).toBe('0');
+  expect(host.querySelector('.qard-stats-rating-stack')?.getAttribute('aria-label')).toBe(
+    'No ratings in this period',
+  );
   expect(host.textContent).not.toContain('NaN');
   await click(button('Study cards'));
   expect(study).toHaveBeenCalledWith();
@@ -73,7 +78,11 @@ it('updates after a review, filters periods, navigates years and supports keyboa
   expect(host.querySelector('.qard-stats-metrics')?.textContent).toContain('50%');
   await click(button('7 days'));
   expect(host.querySelector('.qard-stats-metrics')?.textContent).toContain('100%');
-  await click(button('Saved history'));
+  expect(host.querySelector('.qard-stats-rating-stack')?.getAttribute('aria-label')).toContain(
+    'Again: 0 reviews',
+  );
+  expect(host.querySelector('.qard-stats-deck')?.textContent).toContain('67%');
+  await click(button('All time'));
   expect(host.querySelector('.qard-stats-metrics dd')?.textContent).toBe('3');
   await act(async () => {
     await services.reviews.review('a', 2, Date.now());
@@ -131,6 +140,9 @@ it('shows real FSRS memory estimates and explains incomplete migrated history', 
     root.render(<StatisticsView services={services} back={back} study={study} />),
   );
   const panel = host.querySelector('[aria-label="FSRS memory estimates"]')!;
+  expect(panel.hasAttribute('open')).toBe(false);
+  await click(panel.querySelector('summary'));
+  expect(panel.hasAttribute('open')).toBe(true);
   expect(panel.textContent).toContain('90% target retention');
   expect(panel.textContent).toContain('Predicted recall now100%');
   expect(panel.textContent).toContain('Median stability');
@@ -147,5 +159,32 @@ it('shows real FSRS memory estimates and explains incomplete migrated history', 
     }),
   );
   expect(host.querySelector('[aria-label="FSRS memory estimates"]')).toBeNull();
-  expect(host.textContent).toContain('Choose FSRS in Settings');
+  expect(host.textContent).not.toContain('Memory estimates');
+});
+
+it('keeps postponed cards in the forecast, excludes paused cards and explains disabled scheduling', async () => {
+  const now = Date.now();
+  await services.reviews.review('a', 3, now);
+  const snapshot = services.reviews.getSnapshot();
+  services.reviews.load({
+    ...snapshot,
+    states: {
+      ...snapshot.states,
+      a: { ...snapshot.states.a, due: now - 86400000, buriedUntil: now + 86400000 },
+    },
+  });
+  await act(async () =>
+    root.render(<StatisticsView services={services} back={back} study={study} />),
+  );
+  const forecast = () =>
+    [...host.querySelectorAll('.qard-stats-forecast strong')].map((el) => el.textContent);
+  expect(forecast()).toEqual(['0', '1', '0', '0', '0', '0', '0']);
+  expect(host.querySelector('.qard-stats-deck-value.has-due')).toBeNull();
+  await act(async () => services.reviews.setPaused('a', true));
+  expect(forecast()).toEqual(['0', '0', '0', '0', '0', '0', '0']);
+  await act(async () => services.reviews.saveSettings({ ...snapshot.settings, scheduling: false }));
+  expect(host.querySelector('.qard-stats-forecast')).toBeNull();
+  expect(host.querySelector('[aria-label="Upcoming reviews"]')?.textContent).toContain(
+    'Scheduling is off',
+  );
 });
