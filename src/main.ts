@@ -22,6 +22,7 @@ import { isoDay, objectiveLines } from './learn/mastery';
 import { todayDueCards } from './review/today-cards';
 import { JobClock } from './jobs/job-clock';
 import { studyNotes } from './vault-access';
+import { QARD_OBSIDIAN_ICON } from './icons/qard-icon';
 export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
   writer!: CardWriter;
@@ -134,10 +135,7 @@ export default class QardPlugin extends Plugin {
   }
 
   private registerWorkspace() {
-    addIcon(
-      'qard',
-      '<path d="M17 34 50 16 83 34 50 52Z M17 50 50 68 83 50 M17 66 50 84 83 66" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>',
-    );
+    addIcon('qard', QARD_OBSIDIAN_ICON);
     this.registerView(VIEW_TYPE, (leaf) => new QardView(leaf, this));
     this.addRibbonIcon('qard', 'Open study workspace', () => {
       void this.open().catch((e) => new Notice(String(e)));

@@ -4,7 +4,8 @@ import { SavedSessions } from '../components/SavedSessions';
 import { ExamPlanner } from '../components/ExamPlanner';
 import { SourceUpdates, SourceUpdatesRow } from '../components/SourceUpdates';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Layers, ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
+import { ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
+import { QardLogo } from '../components/QardLogo';
 import type { QardCard } from '../cards/card-types';
 import type { CardDraft } from '../cards/card-writer';
 import type { Selection, SessionStyle, StudyMode } from '../review/session';
@@ -268,7 +269,7 @@ export function QardApp({ services, request }: { services: QardServices; request
           <header className="qard-topbar">
             <nav className="qard-breadcrumb" aria-label="Breadcrumb">
               <button className="qard-wordmark" onClick={library} aria-label="Qard — all decks">
-                <Layers size={19} />
+                <QardLogo size={19} />
                 Qard
               </button>
               {onLearn ? (
