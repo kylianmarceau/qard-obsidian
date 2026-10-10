@@ -1653,11 +1653,6 @@
   font-weight: 500;
 }
 
-.qard-app button.qard-rating-3 {
-  border-color: color-mix(in srgb, var(--qard-blue) 35%, var(--qard-border));
-  background: var(--qard-tint);
-}
-
 .qard-app button.qard-hide-answer {
   border-color: transparent;
   font-size: 11px;
@@ -6820,8 +6815,6 @@ div.qard-ask-q {
 .qard-deck-detail .qard-question-list {
   margin: 0 0 16px 26px;
   padding: 8px;
-  border-radius: 4px;
-  background: var(--qard-soft);
 }
 
 @container (max-width: 820px) {
