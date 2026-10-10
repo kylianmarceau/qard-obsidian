@@ -44,6 +44,7 @@ export class QardView extends ItemView {
       jobs: this.plugin.jobs,
       flashcards: this.plugin.flashcards,
       sourceSync: this.plugin.sourceSync,
+      improvements: this.plugin.improvements,
       setFocus: (enabled) => this.setFocus(enabled),
       isActive: () => this.app.workspace.getActiveViewOfType(QardView) === this,
       openSource: (card) => this.plugin.openSource(card),

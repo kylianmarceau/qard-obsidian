@@ -219,6 +219,16 @@ Under **Learn**, trash icons remove courses, lessons and pending course mappings
 
 Previews offer edit, delete, study and pause/resume. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
 
+### Improving a card
+
+Open a card preview or its study screen and choose **More actions → Improve this card**. This is also available on cards found through **Needs fixing**. Choose **Make clearer**, **Shorten answer**, or **Split into smaller cards**. Qard uses the existing Writer AI connection and sends the card and its linked source notes only when you request a suggestion. Usage appears under **Improving flashcards**. No new AI setup is needed.
+
+Read the explanation, expand **Original card** to compare, and edit the proposed questions and answers. **Preview suggestion** renders Markdown before saving. **Apply improvement** preserves the card's identity, review history and schedule, clears Needs fixing and starts a new repair window. If your edits change the correct answer, check **The correct answer changed** to make it due for a fresh review while retaining its history. AI is instructed to preserve the tested facts; contradictory sources are reported in the explanation rather than silently correcting the card.
+
+**Split into smaller cards** proposes two to six basic cards. **Add cards and pause original** inserts them beside the original in the same note, deck and topic. Each new card starts with a fresh identity and review history and inherits linked source notes. The original stays in Markdown and is paused with its complete history preserved; it can be resumed from its preview. The current study session retains its existing queue; study the new cards from the deck when ready. Cloze and image cards support improvements to their extra notes; their blanks and masks stay unchanged and splitting is unavailable. Use **Edit** to adjust those formats.
+
+**Close** keeps the prepared draft; **Discard draft** removes it without changing card content. Cancelling generation ignores late provider replies. Drafts and pending saves live in `Qard/Card improvements.json`. Card or source changes invalidate unapplied suggestions. If a note was saved but a later save failed, use **Finish saving**; stable IDs prevent duplicate split cards, including after a restart. A pending save freezes its approved content until completed.
+
 ## Commands
 
 - Qard: Open study workspace

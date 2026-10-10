@@ -23,6 +23,7 @@ import {
 } from '../learn/learn-schema';
 import type { Usage } from './usage';
 import { sourceSuggestionSchema } from '../cards/source-sync-schema';
+import { improvementSchema } from '../cards/improvement-schema';
 
 /** Per-day totals, keyed "feature|role|connection|model". */
 export interface UsageTotals {
@@ -38,6 +39,7 @@ export type UsageLog = Record<string, Record<string, UsageTotals>>;
 
 /** Which feature a run served, from the reply format it was asked for. No call site needs to say. */
 const PURPOSES = new Map<Schema, string>([
+  [improvementSchema, 'Improving flashcards'],
   [sourceSuggestionSchema, 'Updating flashcards'],
   [flashcardsSchema, 'Writing flashcards'],
   [flashcardBatchSchema, 'Writing flashcards'],

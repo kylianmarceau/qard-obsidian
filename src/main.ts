@@ -2,6 +2,7 @@ import { Plugin, addIcon, Notice, MarkdownView, TFile } from 'obsidian';
 import { QardView, VIEW_TYPE } from './views/QardView';
 import { VaultIndexer } from './cards/indexer';
 import { SourceSyncService, sourceSyncPath } from './cards/source-sync-service';
+import { CardImprovementService } from './cards/improvement-service';
 import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
 import { ReviewStore } from './review/review-store';
@@ -28,6 +29,7 @@ export default class QardPlugin extends Plugin {
   writer!: CardWriter;
   flashcards!: FlashcardGenerationService;
   sourceSync!: SourceSyncService;
+  improvements!: CardImprovementService;
   reviews!: ReviewStore;
   tests!: TestService;
   learn!: LearnService;
@@ -90,6 +92,15 @@ export default class QardPlugin extends Plugin {
       await this.sourceSync.track(id, [...saved, ...(await captureSources(missing))]);
     };
     void this.sourceSync.load();
+    this.improvements = new CardImprovementService(
+      new VaultTestStorage(this.app),
+      () => this.index.getSnapshot().cards,
+      this.writer,
+      this.reviews,
+      this.sourceSync,
+      () => runner('writer'),
+    );
+    void this.improvements.load();
     this.flashcards = new FlashcardGenerationService(
       new VaultTestStorage(this.app),
       () => settings().cardFolder,
@@ -369,6 +380,7 @@ export default class QardPlugin extends Plugin {
       }
     });
     this.sourceSync?.dispose();
+    this.improvements?.dispose();
     this.flashcards?.dispose();
     this.index?.dispose();
     this.tests?.dispose();

@@ -85,7 +85,7 @@ export function CardPreview({
             className="qard-icon-button"
             aria-label="Delete card"
             title="Delete card"
-            disabled={card.duplicateId}
+            disabled={busy || card.duplicateId}
             onClick={() => setConfirm(true)}
           >
             <Trash2 size={16} />
@@ -136,6 +136,7 @@ export function CardPreview({
         services={services}
         edit={() => setEditing(true)}
         disabled={busy}
+        onBusy={setBusy}
         changed={changed}
       />
       {services.sourceSync && <CardSourceLinks card={card} services={services} changed={changed} />}

@@ -6,6 +6,7 @@ import {
   deleteGroupInSource,
   ensureIdInSource,
   ensureSiblingGroupsInSource,
+  locateCard,
   replaceCardInSource,
   serializeCard,
 } from './source-patch';
@@ -97,11 +98,78 @@ export class CardWriter {
     await this.index.refresh(file);
     return this.index.getSnapshot().cards.find((c) => c.id === id)!;
   }
+  /** Read the latest note before resuming a save whose index refresh may have failed. */
+  async refresh(card: QardCard) {
+    this.unique(card);
+    await this.index.refresh(this.file(card.sourceFile));
+  }
   async delete(card: QardCard) {
     this.unique(card);
     const file = this.file(card.sourceFile);
     await this.app.vault.process(file, (source) => deleteCardInSource(source, card));
     await this.index.refresh(file);
+  }
+  /** Add split cards beside their original in one note write. Stable IDs make retries safe. */
+  async insertSplit(card: QardCard, additions: { id: string; front: string; back: string }[]) {
+    this.unique(card);
+    if (
+      additions.length < 2 ||
+      new Set(additions.map((c) => c.id)).size !== additions.length ||
+      additions.some((c) => c.id === card.id)
+    ) {
+      throw new Error('Choose distinct new identities for split cards.');
+    }
+    additions.forEach((c) => serializeCard(c.id, c.front, c.back));
+    for (const addition of additions) {
+      const elsewhere = this.index.getSnapshot().cards.filter((c) => c.id === addition.id);
+      if (elsewhere.some((c) => c.sourceFile !== card.sourceFile || c.duplicateId)) {
+        throw new Error('A split card ID is already in use.');
+      }
+    }
+    const file = this.file(card.sourceFile);
+    await this.app.vault.process(file, (source) => {
+      const current = locateCard(source, card);
+      if (current.deck !== card.deck || current.topic !== card.topic) {
+        throw new Error('This card moved to another deck or topic. Prepare a new improvement.');
+      }
+      const parsed = parseCards(source, file.path).cards;
+      const pending = additions.filter((addition) => {
+        const found = parsed.filter((c) => c.id === addition.id);
+        if (
+          found.length > 1 ||
+          found.some(
+            (c) =>
+              c.frontMarkdown !== addition.front ||
+              c.backMarkdown !== addition.back ||
+              c.deck !== card.deck ||
+              c.topic !== card.topic,
+          )
+        ) {
+          throw new Error('A split card was edited elsewhere. Check the note before retrying.');
+        }
+        return !found.length;
+      });
+      if (!pending.length) {
+        return source;
+      }
+      const eol = source.includes('\r\n') ? '\r\n' : '\n';
+      const inserted = pending.map((c) => serializeCard(c.id, c.front, c.back, eol)).join(eol);
+      const end = current.sourcePosition.end;
+      const next = source.slice(0, end) + eol + inserted + eol + source.slice(end);
+      const verified = parseCards(next, file.path).cards;
+      if (
+        additions.some(
+          (c) =>
+            verified.filter((v) => v.id === c.id && v.deck === card.deck && v.topic === card.topic)
+              .length !== 1,
+        )
+      ) {
+        throw new Error('Split cards could not be added safely to this note.');
+      }
+      return next;
+    });
+    await this.index.refresh(file);
+    return additions.map((c) => this.index.getSnapshot().cards.find((v) => v.id === c.id)!);
   }
   /** Use the full index, even when the library has a search filter. Each note is patched atomically. */
   async deleteGroup(deck: string, topic?: string) {

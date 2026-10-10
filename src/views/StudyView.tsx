@@ -888,6 +888,11 @@ export function StudyView({
             edit={editCard}
             disabled={busy || recording || confirmExit || !!courseUndo}
             onBusy={onRepairBusy}
+            changed={(next) => {
+              setEdits((old) => ({ ...old, [card.id]: next }));
+              setRevealed(false);
+              setUndo(undefined);
+            }}
             shortcut
           >
             {!cram && (

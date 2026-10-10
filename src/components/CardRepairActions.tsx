@@ -7,7 +7,8 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import { Flag, MoreHorizontal, Pencil } from 'lucide-react';
+import { Flag, MoreHorizontal, Pencil, WandSparkles } from 'lucide-react';
+import { ImproveCard } from './ImproveCard';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { failureDays, REPAIR_FAILURE_DAYS } from '../review/card-repair';
@@ -41,10 +42,18 @@ export function CardRepairActions({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [open, setOpen] = useState(false);
+  const [improving, setImproving] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const action = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  useEffect(() => {
+    if (!improving) {
+      return;
+    }
+    onBusy?.(true);
+    return () => onBusy?.(false);
+  }, [improving, onBusy]);
   useEffect(() => {
     if (!open) {
       return;
@@ -157,10 +166,33 @@ export function CardRepairActions({
                 <Flag size={14} />
                 {flagged ? 'Clear needs fixing' : 'Needs fixing'}
               </button>
+              {services.improvements && (
+                <button
+                  disabled={disabled || busy || card.duplicateId}
+                  onClick={() => {
+                    setOpen(false);
+                    setImproving(true);
+                  }}
+                >
+                  <WandSparkles size={14} />
+                  Improve this card
+                </button>
+              )}
             </div>
           )}
         </div>
       </div>
+      {improving && services.improvements && (
+        <ImproveCard
+          card={card}
+          services={services}
+          changed={changed}
+          close={() => {
+            setImproving(false);
+            trigger.current?.focus({ preventScroll: true });
+          }}
+        />
+      )}
       {error && (
         <p className="qard-error" role="alert">
           {error}

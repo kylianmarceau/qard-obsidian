@@ -6477,6 +6477,57 @@ div.qard-ask-q {
   margin-block: 8px;
 }
 
+.qard-app .qard-improve-card {
+  margin-top: 16px;
+  text-align: start;
+}
+
+.qard-improve-card .qard-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.qard-improvement-drafts {
+  display: grid;
+  gap: 16px;
+  margin-block: 16px;
+}
+
+.qard-improvement-draft {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.qard-improvement-draft h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.qard-improvement-draft label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.qard-improvement-draft textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.qard-improvement-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-block: 12px;
+  font-size: 12px;
+}
+
+.qard-improvement-check input {
+  flex-shrink: 0;
+}
+
 .qard-app .qard-repair-filter[aria-pressed='true'] {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
