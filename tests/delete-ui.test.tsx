@@ -111,3 +111,33 @@ it('keeps the dialog open on errors and allows retry', async () => {
   expect(deleted).toHaveBeenCalledOnce();
   expect(host.querySelector('dialog')).toBeNull();
 });
+
+it('filters topics, expands real cards and keeps opening a card separate from studying', async () => {
+  const select = vi.fn(),
+    study = vi.fn();
+  await act(async () =>
+    root.render(<TopicBrowser deck={deck} select={select} study={study} create={vi.fn()} />),
+  );
+  const search = host.querySelector<HTMLInputElement>('[aria-label="Find a topic"]')!;
+  await act(async () => {
+    search.value = 'TCP';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(host.querySelectorAll('.qard-topic')).toHaveLength(1);
+  await click(host.querySelector('.qard-topic-heading > button'));
+  const toggle = host.querySelector('[aria-expanded="true"]')!;
+  expect(host.querySelector('.qard-question-list')?.id).toBe(toggle.getAttribute('aria-controls'));
+  await click(host.querySelector('.qard-question-row'));
+  expect(select).toHaveBeenCalledExactlyOnceWith(deck.topics[0]!.cards[0]);
+  expect(study).not.toHaveBeenCalled();
+  await click(host.querySelector('[aria-label="Study TCP"]'));
+  expect(study).toHaveBeenCalledExactlyOnceWith('TCP');
+  await act(async () => {
+    search.value = 'missing';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(host.textContent).toContain('No matching topics.');
+  await click(button('Clear search'));
+  expect(host.querySelectorAll('.qard-topic')).toHaveLength(2);
+  expect(host.querySelector('[aria-expanded="true"]')).not.toBeNull();
+});

@@ -34,14 +34,22 @@ function useToday(services: QardServices) {
 }
 
 /** The home-page summary: what is due today, one click to start. */
-export function TodayRow({ services, nav }: { services: QardServices; nav: LearnNav }) {
+export function TodayRow({
+  services,
+  nav,
+  includeCards = true,
+}: {
+  services: QardServices;
+  nav: LearnNav;
+  includeCards?: boolean;
+}) {
   const today = useToday(services);
-  if (!today || (!today.checks.length && !today.lessons.length && !today.cards)) {
+  if (!today || (!today.checks.length && !today.lessons.length && !(includeCards && today.cards))) {
     return null;
   }
   const parts = [
     today.checks.length && plural(today.checks.length, 'check'),
-    today.cards && plural(today.cards, 'card'),
+    includeCards && today.cards && plural(today.cards, 'card'),
     today.lessons.length && plural(today.lessons.length, 'lesson'),
   ].filter(Boolean);
   return (

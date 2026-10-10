@@ -250,3 +250,25 @@ it('keeps due checks separate from deck review actions', async () => {
   expect(nav.studyDue).not.toHaveBeenCalled();
   expect(host.querySelectorAll('.qard-today-deck')).toHaveLength(2);
 });
+
+it('shows the live due count on the study desk and starts only eligible cards across decks', async () => {
+  const start = vi.spyOn(services.reviews, 'startSession');
+  await act(async () => {
+    root.render(<QardApp services={services} />);
+    await tick();
+  });
+  expect(host.querySelector('.qard-desk-due strong')?.textContent).toBe('3');
+  expect(host.querySelector('.qard-today-row')).toBeNull();
+  await act(async () => services.reviews.setPaused('recent', true));
+  expect(host.querySelector('.qard-desk-due strong')?.textContent).toBe('2');
+  await click(
+    [...host.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Start review',
+    )!,
+  );
+  expect(services.reviews.getSnapshot().sessions[0]).toMatchObject({
+    cardIds: ['oldest', 'bio'],
+    style: 'normal',
+  });
+  expect(start).toHaveBeenCalledWith(expect.any(Array), 'normal', undefined, 'due');
+});

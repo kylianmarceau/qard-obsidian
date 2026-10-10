@@ -107,3 +107,25 @@ it('navigates all four workspaces with the keyboard, preserves focus and keeps s
   expect(services.reviews.getSnapshot().exams).toHaveLength(1);
   expect(services.reviews.getSnapshot().states).toEqual({});
 });
+
+it('opens the full deck from a filtered library and returns to the same search', async () => {
+  await act(async () => {
+    (services.index as unknown as CardIndex).update(
+      'networks.md',
+      '---\nqard-deck: Networks\n---\n# TCP\n> [!qard]- Reliable delivery\n> A\n# UDP\n> [!qard]- Datagrams\n> B\n',
+    );
+    const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
+    input.value = 'Reliable';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('1 cards · 1 topic');
+  await act(async () => host.querySelector<HTMLButtonElement>('.qard-deck')!.click());
+  expect(host.querySelector('.qard-deck-heading h1')?.textContent).toBe('Networks');
+  expect(
+    [...host.querySelectorAll('.qard-topic-heading strong')].map((el) => el.textContent),
+  ).toEqual(['TCP', 'UDP']);
+  expect(host.querySelector('.qard-builder')).toBeNull();
+  await click('All decks');
+  expect(host.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('Reliable');
+  expect(host.querySelector('.qard-desk-heading h1')?.textContent).toBe('Your decks');
+});

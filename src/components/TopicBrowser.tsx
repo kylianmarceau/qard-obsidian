@@ -1,8 +1,9 @@
 import { isBuried } from '../review/scheduler';
 import { REPAIR_FAILURE_DAYS } from '../review/card-repair';
 import type { ReviewState } from '../review/scheduler';
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Sparkles, Plus, Play } from 'lucide-react';
+import { useId, useState, type ReactNode } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Plus, Play, Search } from 'lucide-react';
+import { DeckBadge } from './DeckBadge';
 import { DeleteItem } from './DeleteItem';
 import type { Deck, QardCard } from '../cards/card-types';
 import { cardTitle } from '../cards/card-format';
@@ -16,6 +17,8 @@ export function TopicBrowser({
   removeTopic,
   states = {},
   repairDays = new Map<string, number>(),
+  back,
+  resume,
 }: {
   deck: Deck;
   states?: Record<string, ReviewState>;
@@ -26,24 +29,36 @@ export function TopicBrowser({
   generate?: () => void;
   removeDeck?: () => Promise<void>;
   removeTopic?: (topic: string) => Promise<void>;
+  back?: () => void;
+  resume?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState<string[]>([]);
   const [limits, setLimits] = useState<Record<string, number>>({});
+  const [search, setSearch] = useState('');
+  const id = useId();
+  const topics = deck.topics.filter((topic) =>
+    topic.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  );
   return (
-    <>
-      <div className="qard-heading">
-        <div>
-          <h1>{deck.name}</h1>
-          <p>{deck.cards.length} cards</p>
+    <div className="qard-deck-detail">
+      {back && (
+        <button className="qard-text-button qard-deck-back" onClick={back}>
+          <ArrowLeft size={14} />
+          All decks
+        </button>
+      )}
+      <div className="qard-heading qard-deck-heading">
+        <div className="qard-deck-identity">
+          <DeckBadge name={deck.name} />
+          <div>
+            <h1>{deck.name}</h1>
+            <p>
+              {deck.cards.length} cards · {deck.topics.length}{' '}
+              {deck.topics.length === 1 ? 'topic' : 'topics'}
+            </p>
+          </div>
         </div>
         <div className="qard-actions">
-          {removeDeck && (
-            <DeleteItem
-              label={`Delete deck ${deck.name}`}
-              description="All flashcards in this deck, across every note, will be removed. Other note content stays. This cannot be undone from Qard."
-              remove={removeDeck}
-            />
-          )}
           <button onClick={create}>
             <Plus size={16} />
             New card
@@ -58,17 +73,40 @@ export function TopicBrowser({
             <Play size={16} />
             Study
           </button>
+          {removeDeck && (
+            <DeleteItem
+              label={`Delete deck ${deck.name}`}
+              description="All flashcards in this deck, across every note, will be removed. Other note content stays. This cannot be undone from Qard."
+              remove={removeDeck}
+            />
+          )}
         </div>
       </div>
+      {resume}
+      <div className="qard-library-toolbar">
+        <span>Topics</span>
+        <label className="qard-search qard-library-search">
+          <Search size={15} />
+          <input
+            type="search"
+            aria-label="Find a topic"
+            placeholder="Find a topic"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+      </div>
       <div className="qard-topics">
-        {deck.topics.map((topic) => {
+        {topics.map((topic) => {
           const open = expanded.includes(topic.name),
             limit = limits[topic.name] || 60;
+          const contentId = `${id}-${deck.topics.indexOf(topic)}`;
           return (
             <section className="qard-topic" key={topic.name}>
               <div className="qard-topic-heading">
                 <button
                   aria-expanded={open}
+                  aria-controls={open ? contentId : undefined}
                   onClick={() =>
                     setExpanded(
                       open ? expanded.filter((t) => t !== topic.name) : [...expanded, topic.name],
@@ -95,7 +133,7 @@ export function TopicBrowser({
                 )}
               </div>
               {open && (
-                <div className="qard-question-list">
+                <div className="qard-question-list" id={contentId}>
                   {topic.cards.slice(0, limit).map((card) => (
                     <button
                       key={`${card.sourceFile}:${card.sourcePosition.start}`}
@@ -128,6 +166,12 @@ export function TopicBrowser({
           );
         })}
       </div>
-    </>
+      {!topics.length && (
+        <div className="qard-empty">
+          <p>{search ? 'No matching topics.' : 'No topics in this deck.'}</p>
+          {search && <button onClick={() => setSearch('')}>Clear search</button>}
+        </div>
+      )}
+    </div>
   );
 }

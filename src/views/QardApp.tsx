@@ -6,6 +6,7 @@ import { SourceUpdates, SourceUpdatesRow } from '../components/SourceUpdates';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
 import { QardLogo } from '../components/QardLogo';
+import { LibraryTabs } from '../components/library/LibraryHeader';
 import type { QardCard } from '../cards/card-types';
 import type { CardDraft } from '../cards/card-writer';
 import type { Selection, SessionStyle, StudyMode } from '../review/session';
@@ -110,7 +111,7 @@ export function QardApp({ services, request }: { services: QardServices; request
   );
   const activeDeck =
     screen.kind === 'deck' ? screen.deck : screen.kind === 'card' ? screen.card.deck : '';
-  const deck = filtered.find((d) => d.name === activeDeck);
+  const deck = (repairOnly ? filtered : index.decks).find((d) => d.name === activeDeck);
   const generateCards = (draft?: Partial<CardDraft>) =>
     setScreen({ kind: 'generate-cards', draft });
   const library = () => {
@@ -162,6 +163,8 @@ export function QardApp({ services, request }: { services: QardServices; request
     });
   };
   const study = screen.kind === 'study';
+  const deskShell = screen.kind === 'library' || screen.kind === 'deck';
+  const dueCount = todayDueCards(index.cards, reviews.states).length;
   useEffect(() => {
     // StudyView owns focus and its shortcuts during a card session.
     if (study) {
@@ -263,7 +266,9 @@ export function QardApp({ services, request }: { services: QardServices; request
     screen.kind,
   );
   return (
-    <div className={'qard-app ' + (study ? 'qard-is-studying' : '')}>
+    <div
+      className={'qard-app ' + (study ? 'qard-is-studying' : deskShell ? 'qard-desk-shell' : '')}
+    >
       <main className="qard-main">
         {!study && (
           <header className="qard-topbar">
@@ -272,65 +277,65 @@ export function QardApp({ services, request }: { services: QardServices; request
                 <QardLogo size={19} />
                 Qard
               </button>
-              {onLearn ? (
-                <>
-                  <ChevronRight size={14} />
-                  <button onClick={learnNav.learn}>Learn</button>
-                  {learnLabel && (
-                    <>
-                      <ChevronRight size={14} />
-                      <span>{learnLabel}</span>
-                    </>
-                  )}
-                </>
-              ) : onTests ? (
-                <>
-                  <ChevronRight size={14} />
-                  <button onClick={nav.tests}>Tests</button>
-                  {screen.kind === 'new-test' && (
-                    <>
-                      <ChevronRight size={14} />
-                      <span>New</span>
-                    </>
-                  )}
-                  {testFolder && (
-                    <>
-                      <ChevronRight size={14} />
-                      {screen.kind === 'take' ? (
-                        <span>{testTitle || 'Test'}</span>
-                      ) : (
-                        <button
-                          onClick={() =>
-                            testEntry?.test ? nav.results(testFolder) : nav.plan(testFolder)
-                          }
-                        >
-                          {testTitle || 'Test'}
-                        </button>
-                      )}
-                      {TEST_LABEL[screen.kind] && (
-                        <>
-                          <ChevronRight size={14} />
-                          <span>{TEST_LABEL[screen.kind]}</span>
-                        </>
-                      )}
-                    </>
-                  )}
-                </>
-              ) : activeDeck ? (
-                <>
-                  <ChevronRight size={14} />
-                  <button onClick={() => setScreen({ kind: 'deck', deck: activeDeck })}>
-                    {activeDeck}
-                  </button>
-                  {screen.kind === 'card' && (
-                    <>
-                      <ChevronRight size={14} />
-                      <span>{screen.card.topic}</span>
-                    </>
-                  )}
-                </>
-              ) : (
-                screen.kind !== 'library' && (
+              {!deskShell &&
+                (onLearn ? (
+                  <>
+                    <ChevronRight size={14} />
+                    <button onClick={learnNav.learn}>Learn</button>
+                    {learnLabel && (
+                      <>
+                        <ChevronRight size={14} />
+                        <span>{learnLabel}</span>
+                      </>
+                    )}
+                  </>
+                ) : onTests ? (
+                  <>
+                    <ChevronRight size={14} />
+                    <button onClick={nav.tests}>Tests</button>
+                    {screen.kind === 'new-test' && (
+                      <>
+                        <ChevronRight size={14} />
+                        <span>New</span>
+                      </>
+                    )}
+                    {testFolder && (
+                      <>
+                        <ChevronRight size={14} />
+                        {screen.kind === 'take' ? (
+                          <span>{testTitle || 'Test'}</span>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              testEntry?.test ? nav.results(testFolder) : nav.plan(testFolder)
+                            }
+                          >
+                            {testTitle || 'Test'}
+                          </button>
+                        )}
+                        {TEST_LABEL[screen.kind] && (
+                          <>
+                            <ChevronRight size={14} />
+                            <span>{TEST_LABEL[screen.kind]}</span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : activeDeck ? (
+                  <>
+                    <ChevronRight size={14} />
+                    <button onClick={() => setScreen({ kind: 'deck', deck: activeDeck })}>
+                      {activeDeck}
+                    </button>
+                    {screen.kind === 'card' && (
+                      <>
+                        <ChevronRight size={14} />
+                        <span>{screen.card.topic}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
                   <>
                     <ChevronRight size={14} />
                     <span>
@@ -349,9 +354,17 @@ export function QardApp({ services, request }: { services: QardServices; request
                                   : 'New card'}
                     </span>
                   </>
-                )
-              )}
+                ))}
             </nav>
+            {deskShell && (
+              <LibraryTabs
+                active="decks"
+                decks={library}
+                tests={nav.tests}
+                learn={learnNav.learn}
+                plans={plans}
+              />
+            )}
             <div className="qard-topbar-actions">
               <button
                 className="qard-statistics-link"
@@ -392,13 +405,15 @@ export function QardApp({ services, request }: { services: QardServices; request
           className={
             study
               ? 'qard-study-container'
-              : screen.kind === 'review'
-                ? 'qard-page qard-page-review'
-                : screen.kind === 'source-updates'
-                  ? 'qard-page qard-page-wide'
-                  : ['library', 'tests', 'learn', 'exams'].includes(screen.kind)
-                    ? 'qard-page qard-page-library'
-                    : 'qard-page'
+              : deskShell
+                ? 'qard-page qard-page-desk'
+                : screen.kind === 'review'
+                  ? 'qard-page qard-page-review'
+                  : screen.kind === 'source-updates'
+                    ? 'qard-page qard-page-wide'
+                    : ['library', 'tests', 'learn', 'exams'].includes(screen.kind)
+                      ? 'qard-page qard-page-library'
+                      : 'qard-page'
           }
         >
           {!study && sessionMessage && <p role="status">{sessionMessage}</p>}
@@ -430,6 +445,20 @@ export function QardApp({ services, request }: { services: QardServices; request
             )}
           {screen.kind === 'library' && (
             <DeckBrowser
+              hideNavigation
+              dueCount={dueCount}
+              viewToday={learnNav.today}
+              reviewToday={() => {
+                void start(
+                  todayDueCards(
+                    services.index.getSnapshot().cards,
+                    services.reviews.getSnapshot().states,
+                  ),
+                  'normal',
+                  undefined,
+                  'due',
+                ).catch((e) => setSessionMessage((e as Error).message));
+              }}
               remove={(name) => services.writer.deleteGroup(name)}
               decks={filtered}
               repairFilter={{
@@ -457,7 +486,7 @@ export function QardApp({ services, request }: { services: QardServices; request
                         open={() => setScreen({ kind: 'source-updates' })}
                       />
                     )}
-                    <TodayRow services={services} nav={learnNav} />
+                    <TodayRow services={services} nav={learnNav} includeCards={false} />
                     <ResumeTest services={services} nav={nav} />
                     {services.flashcards && (
                       <ResumeFlashcards
@@ -473,8 +502,9 @@ export function QardApp({ services, request }: { services: QardServices; request
           {screen.kind === 'deck' &&
             (deck ? (
               <>
-                <SavedSessions services={services} resume={resume} deck={deck.name} />
                 <TopicBrowser
+                  back={library}
+                  resume={<SavedSessions services={services} resume={resume} deck={deck.name} />}
                   states={reviews.states}
                   repairDays={repairDays}
                   key={deck.name}
