@@ -13,7 +13,7 @@ import { ImportModal } from './views/ImportModal';
 import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
-import { parseCards, topicAtLine } from './cards/parser';
+import { parseCards, locationAtLine } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
 import { createRunner, type UsageEvent } from './agents/create-runner';
@@ -219,12 +219,12 @@ export default class QardPlugin extends Plugin {
           }
           if (!checking) {
             const line = view.editor?.getCursor().line ?? 0;
-            const topic = topicAtLine(view.editor.getValue(), view.file.path, line);
+            const { deck, topic } = locationAtLine(view.editor.getValue(), view.file.path, line);
             const selection =
               scope === 'deck'
-                ? { decks: [...new Set(cards.map((c) => c.deck))], topics: [], cards: [] }
+                ? { decks: [deck], topics: [], cards: [] }
                 : scope === 'topic'
-                  ? { decks: [], topics: [topicKey(cards[0]!.deck, topic)], cards: [] }
+                  ? { decks: [], topics: [topicKey(deck, topic)], cards: [] }
                   : { decks: [], topics: [], cards: cards.map((c) => c.id) };
             void this.openBuilder(selection);
           }
@@ -242,18 +242,13 @@ export default class QardPlugin extends Plugin {
         }
         if (!checking) {
           const file = view.file,
-            source = editor.getValue(),
-            cards = parseCards(source, file.path).cards;
-          const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            source = editor.getValue();
           const line = editor.getCursor('from').line;
-          const topic = topicAtLine(source, file.path, line);
+          const { deck, topic } = locationAtLine(source, file.path, line);
           const modal = new SelectionModal(this, {
             sourceFile: file.path,
             back: selection,
-            deck:
-              typeof fm?.['qard-deck'] === 'string'
-                ? fm['qard-deck']
-                : cards[0]?.deck || file.basename,
+            deck,
             topic,
           });
           this.selectionModals.add(modal);

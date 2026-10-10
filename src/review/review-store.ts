@@ -480,6 +480,50 @@ export class ReviewStore {
         : data.sessions,
     }));
   }
+  /** One durable metadata update for a selection; no ratings or memory resets. */
+  updateCards(cardIds: string[], action: 'pause' | 'resume' | 'repair') {
+    const ids = new Set(cardIds);
+    if (
+      !ids.size ||
+      ids.size > 10000 ||
+      cardIds.some((id) => !stableId(id)) ||
+      !['pause', 'resume', 'repair'].includes(action)
+    ) {
+      return Promise.reject(new Error('Choose valid card IDs and a supported action.'));
+    }
+    return this.change((data) => {
+      const states = Object.assign(Object.create(null) as Record<string, ReviewState>, data.states);
+      for (const id of ids) {
+        const previous = states[id] ?? {
+          cardId: id,
+          interval: 0,
+          ease: 2.5,
+          reviewCount: 0,
+          lapses: 0,
+        };
+        if (action === 'repair') {
+          states[id] = { ...previous, needsFixing: true };
+        } else {
+          const { paused: _paused, ...memory } = previous;
+          states[id] = { ...memory, ...(action === 'pause' ? { paused: true } : {}) };
+        }
+      }
+      const sessions =
+        action === 'pause'
+          ? data.sessions.flatMap((session) => {
+              if (!session.learning?.some((entry) => ids.has(entry.cardId))) {
+                return [session];
+              }
+              const next = {
+                ...session,
+                learning: session.learning.filter((entry) => !ids.has(entry.cardId)),
+              };
+              return hasRemainingSession(next) ? [next] : [];
+            })
+          : data.sessions;
+      return { ...data, states, sessions };
+    });
+  }
   private pauseState(states: Record<string, ReviewState>, cardId: string, paused: boolean) {
     const previous = states[cardId] ?? {
       cardId,

@@ -118,12 +118,15 @@ it('filters topics, expands real cards and keeps opening a card separate from st
   await act(async () =>
     root.render(<TopicBrowser deck={deck} select={select} study={study} create={vi.fn()} />),
   );
-  const search = host.querySelector<HTMLInputElement>('[aria-label="Find a topic"]')!;
+  const search = host.querySelector<HTMLInputElement>('[type="search"]')!;
   await act(async () => {
     search.value = 'TCP';
     search.dispatchEvent(new Event('input', { bubbles: true }));
   });
   expect(host.querySelectorAll('.qard-topic')).toHaveLength(1);
+  expect(host.querySelector('[aria-expanded="true"]')).not.toBeNull();
+  await click(host.querySelector('.qard-topic-heading > button'));
+  expect(host.querySelector('.qard-question-list')).toBeNull();
   await click(host.querySelector('.qard-topic-heading > button'));
   const toggle = host.querySelector('[aria-expanded="true"]')!;
   expect(host.querySelector('.qard-question-list')?.id).toBe(toggle.getAttribute('aria-controls'));
@@ -136,7 +139,7 @@ it('filters topics, expands real cards and keeps opening a card separate from st
     search.value = 'missing';
     search.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  expect(host.textContent).toContain('No matching topics.');
+  expect(host.textContent).toContain('No matching cards.');
   await click(button('Clear search'));
   expect(host.querySelectorAll('.qard-topic')).toHaveLength(2);
   expect(host.querySelector('[aria-expanded="true"]')).not.toBeNull();

@@ -24,7 +24,7 @@ export function buildDecks(cards: QardCard[]): Deck[] {
   return [...decks.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 export function matchesSearch(card: QardCard, query: string): boolean {
-  const haystack = [card.deck, card.topic, card.frontMarkdown, ...card.tags]
+  const haystack = [card.deck, card.topic, card.frontMarkdown, card.backMarkdown, ...card.tags]
     .join('\n')
     .toLocaleLowerCase();
   return query

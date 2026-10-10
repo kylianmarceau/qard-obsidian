@@ -4,13 +4,14 @@ import type { VaultIndexer } from './indexer';
 import {
   deleteCardInSource,
   deleteGroupInSource,
-  ensureIdInSource,
   ensureSiblingGroupsInSource,
   locateCard,
   replaceCardInSource,
   serializeCard,
+  placeCardInSource,
 } from './source-patch';
 import { parseCards } from './parser';
+import { readCardLocation, type CardLocation } from './card-location';
 import { siblingGroup } from './siblings';
 import type { SourceSnapshot } from './source-sync-types';
 export interface CardDraft {
@@ -76,10 +77,31 @@ export class CardWriter {
       } else {
         await this.app.vault.process(file, (source) => {
           let next = ensureSiblingGroupsInSource(source, path);
-          for (const card of group) {
-            const result = ensureIdInSource(next, card, crypto.randomUUID());
-            next = result.source;
-            resolved.set(card.id, result.card);
+          const parsed = parseCards(next, path).cards;
+          const assignments = group.map((card) => {
+            const current = locateCard(next, card, parsed);
+            return {
+              original: card.id,
+              current,
+              id: current.stable ? current.id : crypto.randomUUID(),
+            };
+          });
+          const eol = next.includes('\r\n') ? '\r\n' : '\n';
+          for (const entry of [...assignments].sort(
+            (a, b) => b.current.sourcePosition.calloutStart - a.current.sourcePosition.calloutStart,
+          )) {
+            if (!entry.current.stable) {
+              const at = entry.current.sourcePosition.calloutStart;
+              next = next.slice(0, at) + `<!-- qard-id: ${entry.id} -->${eol}` + next.slice(at);
+            }
+          }
+          const saved = parseCards(next, path).cards;
+          for (const entry of assignments) {
+            const found = saved.filter((card) => card.id === entry.id);
+            if (found.length !== 1) {
+              throw new Error('Could not safely assign a selected card ID.');
+            }
+            resolved.set(entry.original, found[0]!);
           }
           return next;
         });
@@ -87,6 +109,77 @@ export class CardWriter {
       }
     }
     return cards.map((c) => resolved.get(c.id)!);
+  }
+  async validateSelection(cards: QardCard[]) {
+    if (
+      !cards.length ||
+      cards.length > 10000 ||
+      new Set(cards.map((card) => card.id)).size !== cards.length
+    ) {
+      throw new Error('Select between 1 and 10,000 distinct cards.');
+    }
+    const sources = new Map<string, { text: string; cards: QardCard[] }>();
+    for (const card of cards) {
+      this.unique(card);
+      if (!sources.has(card.sourceFile)) {
+        const text = await this.app.vault.read(this.file(card.sourceFile));
+        sources.set(card.sourceFile, { text, cards: parseCards(text, card.sourceFile).cards });
+      }
+      const source = sources.get(card.sourceFile)!;
+      const current = locateCard(source.text, card, source.cards);
+      if (current.deck !== card.deck || current.topic !== card.topic) {
+        throw new Error('A selected card moved. Select it again from the latest library.');
+      }
+    }
+  }
+  /** Each source note is changed atomically, with stable IDs and no cross-file copy/delete step. */
+  async move(cards: QardCard[], destination: CardLocation) {
+    const location = readCardLocation(destination);
+    await this.validateSelection(cards);
+    const ready = await this.ensureStable(cards);
+    const groups = new Map<string, QardCard[]>();
+    for (const card of ready) {
+      groups.set(card.sourceFile, [...(groups.get(card.sourceFile) ?? []), card]);
+    }
+    let completed = 0;
+    try {
+      for (const [path, group] of groups) {
+        const file = this.file(path);
+        await this.app.vault.process(file, (source) => {
+          let next = source;
+          const originals = parseCards(source, path).cards;
+          const ordered = group
+            .map((card) => locateCard(source, card, originals))
+            .sort((a, b) => b.sourcePosition.start - a.sourcePosition.start);
+          for (const current of ordered) {
+            const card = group.find((entry) => entry.id === current.id)!;
+            if (current.deck !== card.deck || current.topic !== card.topic) {
+              throw new Error('A selected card moved while saving. Select it again.');
+            }
+            next = placeCardInSource(next, current, location, originals);
+          }
+          const parsed = parseCards(next, path).cards;
+          if (
+            group.some(
+              (card) =>
+                parsed.filter(
+                  (c) => c.id === card.id && c.deck === location.deck && c.topic === location.topic,
+                ).length !== 1,
+            )
+          ) {
+            throw new Error('The cards could not be moved safely in this note.');
+          }
+          return next;
+        });
+        completed += group.length;
+        await this.index.refresh(file);
+      }
+    } catch (error) {
+      throw new Error(
+        `${completed} of ${ready.length} cards moved. ${(error as Error).message} Refresh the library and select the remaining cards to continue.`,
+      );
+    }
+    return ready.map((card) => this.index.getSnapshot().cards.find((c) => c.id === card.id)!);
   }
   async edit(card: QardCard, front: string, back: string) {
     this.unique(card);
@@ -153,7 +246,9 @@ export class CardWriter {
         return source;
       }
       const eol = source.includes('\r\n') ? '\r\n' : '\n';
-      const inserted = pending.map((c) => serializeCard(c.id, c.front, c.back, eol)).join(eol);
+      const inserted = pending
+        .map((c) => serializeCard(c.id, c.front, c.back, eol, undefined, current.location))
+        .join(eol);
       const end = current.sourcePosition.end;
       const next = source.slice(0, end) + eol + inserted + eol + source.slice(end);
       const verified = parseCards(next, file.path).cards;

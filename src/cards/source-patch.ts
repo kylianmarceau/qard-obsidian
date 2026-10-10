@@ -1,3 +1,4 @@
+import { locationComment, type CardLocation } from './card-location';
 import type { QardCard } from './card-types';
 import { parseCards, sameContent } from './parser';
 import { siblingGroup } from './siblings';
@@ -16,8 +17,11 @@ export function ensureSiblingGroupsInSource(source: string, path: string): strin
   }
   return source;
 }
-export function locateCard(source: string, card: QardCard): QardCard {
-  const parsed = parseCards(source, card.sourceFile).cards;
+export function locateCard(
+  source: string,
+  card: QardCard,
+  parsed = parseCards(source, card.sourceFile).cards,
+): QardCard {
   const matches = card.stable
     ? parsed.filter((c) => c.stable && c.id === card.id)
     : parsed.filter((c) => !c.stable && sameContent(c, card));
@@ -58,6 +62,7 @@ export function serializeCard(
   back: string,
   eol = '\n',
   group?: string,
+  location?: CardLocation,
 ): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error('Invalid card ID.');
@@ -74,6 +79,9 @@ export function serializeCard(
       throw new Error('Invalid sibling group.');
     }
     lines.unshift(`<!-- qard-siblings: ${group} -->`);
+  }
+  if (location) {
+    lines.unshift(locationComment(location));
   }
   const content = rest.length
     ? [...rest, '<!-- qard-answer -->', ...back.split('\n')]
@@ -102,7 +110,7 @@ export function replaceCardInSource(
   source = ensureSiblingGroupsInSource(source, original.sourceFile);
   const current = locateCard(source, original);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  let replacement = serializeCard(id, front, back, eol, current.siblingGroup);
+  let replacement = serializeCard(id, front, back, eol, current.siblingGroup, current.location);
   if (!/[\r\n]$/.test(current.sourceText)) {
     replacement = replacement.slice(0, -eol.length);
   }
@@ -131,4 +139,27 @@ export function deleteGroupInSource(
     source = source.slice(0, card.sourcePosition.start) + source.slice(card.sourcePosition.end);
   }
   return source;
+}
+
+/** Only placement metadata changes; the callout, note prose and attachment paths stay byte-for-byte intact. */
+export function placeCardInSource(
+  source: string,
+  card: QardCard,
+  location: CardLocation,
+  parsed?: QardCard[],
+): string {
+  const current = locateCard(source, card, parsed);
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const prefix = source
+    .slice(current.sourcePosition.start, current.sourcePosition.calloutStart)
+    .split(/\r\n|\n|\r/)
+    .filter((line) => !/^\s*<!-- qard-location: /.test(line))
+    .join(eol);
+  return (
+    source.slice(0, current.sourcePosition.start) +
+    locationComment(location) +
+    eol +
+    prefix +
+    source.slice(current.sourcePosition.calloutStart)
+  );
 }

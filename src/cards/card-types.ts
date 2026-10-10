@@ -1,3 +1,4 @@
+import type { CardLocation } from './card-location';
 export interface QardCard {
   /** Persistent ID, or a temporary read-only index key until an ID is assigned. */
   id: string;
@@ -5,6 +6,7 @@ export interface QardCard {
   duplicateId?: boolean;
   /** Variants of one cloze sentence or image, never a whole source note. */
   siblingGroup?: string;
+  location?: CardLocation;
   deck: string;
   topic: string;
   frontMarkdown: string;

@@ -100,9 +100,26 @@ The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard
 - The closest preceding heading, at any level, becomes the topic. Nested headings replace the topic rather than building a hierarchy. ATX (`# Heading`) and setext headings work; headings inside fenced code are ignored.
 - Before the first heading, the topic is `General`.
 - Optional `qard-topic: Transport Layer` overrides headings for the entire file.
-- Search matches deck, topic, question, YAML tags and inline tags. It does not search answer prose.
+- Search matches deck, topic, question, answer, YAML tags and inline tags. Inside a deck it shows matching cards with their topics expanded.
 
 For example, `networking-1.md` and `networking-2.md` can both declare `qard-deck: Computer Networks`; they appear as one deck. Topics with the same name in that deck merge too. Within a deck, note paths are sorted and cards keep their source order.
+
+### Manage several cards
+
+Open a deck and choose **Select cards**. Select individual cards, check a topic to select all its matching cards (including cards not yet displayed), or choose **Select matching cards** for the whole deck or current search. Changing the search clears the selection. Cards with duplicate IDs cannot be selected until their IDs are fixed.
+
+The action bar appears once cards are selected. **Pause**, **Resume** and **Needs fixing** apply to the whole selection in one saved update, preserving schedules, review history and statistics. **Move…** lets you choose an existing deck/topic or enter new names. After saving, Qard opens the destination deck. Choose **Done selecting** to hide selection controls.
+
+Moves change each card's logical deck and topic while keeping its callout in the original note. Relative attachments, note prose, tags, sibling groups and stable IDs stay intact. Qard writes a small comment before the card's ID that takes precedence over the file's deck/topic and headings:
+
+```markdown
+<!-- qard-location: {"deck":"Exam revision","topic":"Transport"} -->
+<!-- qard-id: existing-card-id -->
+> [!qard]- What does TCP provide?
+> Reliable, ordered delivery.
+```
+
+Keep this comment when editing the Markdown. Qard preserves it through card edits and splits; removing it restores the file's normal deck/topic rules. **Study this deck/topic** and **Create card from selection** use the moved card's placement when the cursor is inside its callout. Each note is saved atomically. If a move across several notes fails partway through, Qard reports how many cards moved; refresh the library and select the remaining cards to continue.
 
 ### Both sides support rich Markdown
 

@@ -506,6 +506,22 @@ export function QardApp({ services, request }: { services: QardServices; request
                   repairDays={repairDays}
                   key={deck.name}
                   deck={deck}
+                  management={{
+                    decks: index.decks,
+                    move: async (cards, destination) => {
+                      await services.writer.move(cards, destination);
+                      setSearch('');
+                      setScreen({ kind: 'deck', deck: destination.deck.trim() });
+                    },
+                    update: async (cards, action) => {
+                      await services.writer.validateSelection(cards);
+                      const ready = await services.writer.ensureStable(cards);
+                      await services.reviews.updateCards(
+                        ready.map((card) => card.id),
+                        action,
+                      );
+                    },
+                  }}
                   removeDeck={async () => {
                     await services.writer.deleteGroup(deck.name);
                     setSearch('');

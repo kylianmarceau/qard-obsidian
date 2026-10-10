@@ -64,7 +64,7 @@ export function DeckBrowser({
               <Search size={17} />
               <input
                 type="search"
-                aria-label="Search decks, topics, questions, or tags"
+                aria-label="Search decks, topics, questions, answers, or tags"
                 placeholder="Find decks or cards"
                 value={search}
                 onChange={(e) => onSearch(e.target.value)}

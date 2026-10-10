@@ -112,7 +112,7 @@ it('opens the full deck from a filtered library and returns to the same search',
   await act(async () => {
     (services.index as unknown as CardIndex).update(
       'networks.md',
-      '---\nqard-deck: Networks\n---\n# TCP\n> [!qard]- Reliable delivery\n> A\n# UDP\n> [!qard]- Datagrams\n> B\n',
+      '---\nqard-deck: Networks\n---\n# TCP\n> [!qard]- What does TCP provide?\n> Reliable delivery\n# UDP\n> [!qard]- Datagrams\n> B\n',
     );
     const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
     input.value = 'Reliable';

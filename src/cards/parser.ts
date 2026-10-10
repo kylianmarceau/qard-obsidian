@@ -1,5 +1,6 @@
 import { parseDocument } from 'yaml';
 import { readCardFormat } from './card-format';
+import { readCardLocation, type CardLocation } from './card-location';
 import type { ParseResult, QardCard } from './card-types';
 
 interface Line {
@@ -34,7 +35,7 @@ function closesFence(line: string, fence: string) {
 export function parseCards(
   source: string,
   path: string,
-  onTopic?: (line: number, topic: string) => void,
+  onTopic?: (line: number, topic: string, deck: string) => void,
 ): ParseResult {
   const lines = sourceLines(source);
   const result: ParseResult = { cards: [], issues: [] };
@@ -72,7 +73,7 @@ export function parseCards(
   const deck =
     name(metadata['qard-deck']) || path.replace(/\.md$/i, '').split('/').pop() || 'Untitled';
   const topicOverride = name(metadata['qard-topic']);
-  onTopic?.(0, topicOverride || 'General');
+  onTopic?.(0, topicOverride || 'General', deck);
   const rawTags = Array.isArray(metadata.tags)
     ? metadata.tags
     : typeof metadata.tags === 'string'
@@ -113,7 +114,7 @@ export function parseCards(
     const heading = line.text.match(/^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/);
     if (heading) {
       topic = heading[1]!.trim();
-      onTopic?.(i, topicOverride || topic);
+      onTopic?.(i, topicOverride || topic, deck);
       continue;
     }
     // Setext headings are ordinary Markdown headings too.
@@ -124,7 +125,7 @@ export function parseCards(
       !/^\s*>/.test(lines[i - 1]!.text)
     ) {
       topic = lines[i - 1]!.text.trim();
-      onTopic?.(i - 1, topicOverride || topic);
+      onTopic?.(i - 1, topicOverride || topic, deck);
       continue;
     }
     const match = line.text.match(header);
@@ -186,13 +187,40 @@ export function parseCards(
     if (idLine >= 0 && lines[idLine]!.text.trim() === '') {
       idLine--;
     }
-    const identity = idLine >= start ? lines[idLine]!.text.match(idComment)?.[1] : undefined;
-    const groupLine = identity ? idLine - 1 : idLine;
-    const siblingGroup =
-      groupLine >= start
-        ? lines[groupLine]!.text.match(/^\s*<!-- qard-siblings: ([A-Za-z0-9_-]+) -->\s*$/)?.[1]
-        : undefined;
-    const first = siblingGroup ? lines[groupLine]! : identity ? lines[idLine]! : line;
+    let identity: string | undefined,
+      siblingGroup: string | undefined,
+      location: CardLocation | undefined;
+    let first = line,
+      invalidLocation = false;
+    for (let n = idLine; n >= start; n--) {
+      const text = lines[n]!.text;
+      const id = text.match(idComment)?.[1];
+      const group = text.match(/^\s*<!-- qard-siblings: ([A-Za-z0-9_-]+) -->\s*$/)?.[1];
+      const placement = text.match(/^\s*<!-- qard-location: (.+) -->\s*$/)?.[1];
+      if (id && !identity) {
+        identity = id;
+      } else if (group && !siblingGroup) {
+        siblingGroup = group;
+      } else if (placement && !location) {
+        try {
+          location = readCardLocation(JSON.parse(placement));
+        } catch {
+          invalidLocation = true;
+        }
+      } else {
+        break;
+      }
+      first = lines[n]!;
+    }
+    if (invalidLocation) {
+      issue(i, 'Invalid card deck/topic override. Fix its qard-location comment.');
+      i = end - 1;
+      continue;
+    }
+    if (location) {
+      onTopic?.(i, location.topic, location.deck);
+      onTopic?.(end, topicOverride || topic, deck);
+    }
     const finish = lines[end - 1]!.end;
     const fingerprint = hash(front + '\0' + back);
     const occurrence = occurrences.get(fingerprint) || 0;
@@ -204,8 +232,9 @@ export function parseCards(
       id: identity || `volatile:${path}:${fingerprint}:${occurrence}`,
       stable: !!identity,
       ...(siblingGroup ? { siblingGroup } : {}),
-      deck,
-      topic: topicOverride || topic,
+      ...(location ? { location } : {}),
+      deck: location?.deck || deck,
+      topic: location?.topic || topicOverride || topic,
       frontMarkdown: front,
       backMarkdown: back,
       sourceFile: path,
@@ -222,12 +251,18 @@ export function sameContent(a: QardCard, b: QardCard) {
 }
 
 /** Same heading rules as indexing, including code fences and file overrides. */
-export function topicAtLine(source: string, path: string, line: number): string {
-  let topic = 'General';
-  parseCards(source, path, (headingLine, name) => {
+export function locationAtLine(source: string, path: string, line: number): CardLocation {
+  let location = {
+    deck: path.replace(/\.md$/i, '').split('/').pop() || 'Untitled',
+    topic: 'General',
+  };
+  parseCards(source, path, (headingLine, topic, deck) => {
     if (headingLine <= line) {
-      topic = name;
+      location = { deck, topic };
     }
   });
-  return topic;
+  return location;
+}
+export function topicAtLine(source: string, path: string, line: number): string {
+  return locationAtLine(source, path, line).topic;
 }

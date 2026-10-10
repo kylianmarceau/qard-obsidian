@@ -1111,7 +1111,7 @@
   padding: 5px 0;
 }
 
-.qard-topic-heading > button:first-child {
+.qard-topic-heading > button:first-of-type {
   flex: 1;
   border: 0;
   text-align: left;
@@ -6830,7 +6830,7 @@ div.qard-ask-q {
   gap: 4px;
 }
 
-.qard-deck-detail .qard-topic-heading > button:first-child {
+.qard-deck-detail .qard-topic-heading > button:first-of-type {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
   min-width: 0;
@@ -6840,7 +6840,7 @@ div.qard-ask-q {
   gap: 12px;
 }
 
-.qard-deck-detail .qard-topic-heading > button:first-child > svg {
+.qard-deck-detail .qard-topic-heading > button:first-of-type > svg {
   width: 14px;
   height: 14px;
   color: var(--qard-muted);
@@ -6949,7 +6949,7 @@ div.qard-ask-q {
     font-size: 16px;
   }
 
-  .qard-deck-detail .qard-topic-heading > button:first-child {
+  .qard-deck-detail .qard-topic-heading > button:first-of-type {
     grid-template-columns: 14px minmax(0, 1fr);
     gap: 4px 9px;
   }
@@ -6972,4 +6972,48 @@ div.qard-ask-q {
   .qard-library-shell button.qard-icon-button {
     min-width: 44px;
   }
+}
+
+/* Selection controls appear only after entering card selection. */
+.qard-selection-options,
+.qard-selectable-question {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qard-selection-options {
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.qard-selectable-question .qard-question-row {
+  min-width: 0;
+  flex: 1;
+}
+
+.qard-bulk-actions {
+  border: 1px solid var(--qard-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.qard-bulk-actions .qard-actions {
+  flex-wrap: wrap;
+}
+
+.qard-bulk-move {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.qard-bulk-move label {
+  display: grid;
+  gap: 6px;
+}
+
+.qard-bulk-move input {
+  width: 100%;
 }
