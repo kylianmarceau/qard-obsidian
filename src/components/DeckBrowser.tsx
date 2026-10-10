@@ -21,7 +21,6 @@ export function DeckBrowser({
   repairFilter,
   hideNavigation = false,
   dueCount = 0,
-  reviewToday,
   viewToday,
 }: {
   repairFilter?: { active: boolean; count: number; toggle: () => void };
@@ -40,7 +39,6 @@ export function DeckBrowser({
   remove?: (deck: string) => Promise<void>;
   hideNavigation?: boolean;
   dueCount?: number;
-  reviewToday?: () => void;
   viewToday?: () => void;
 }) {
   return (
@@ -139,8 +137,8 @@ export function DeckBrowser({
             </div>
             <button
               className="qard-primary"
-              disabled={loading || !dueCount || !reviewToday}
-              onClick={reviewToday}
+              disabled={loading || !dueCount || !viewToday}
+              onClick={viewToday}
             >
               Start review <ArrowRight size={16} />
             </button>

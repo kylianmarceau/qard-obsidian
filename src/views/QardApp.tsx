@@ -456,17 +456,6 @@ export function QardApp({ services, request }: { services: QardServices; request
               hideNavigation
               dueCount={dueCount}
               viewToday={learnNav.today}
-              reviewToday={() => {
-                void start(
-                  todayDueCards(
-                    services.index.getSnapshot().cards,
-                    services.reviews.getSnapshot().states,
-                  ),
-                  'normal',
-                  undefined,
-                  'due',
-                ).catch((e) => setSessionMessage((e as Error).message));
-              }}
               remove={(name) => services.writer.deleteGroup(name)}
               decks={filtered}
               repairFilter={{

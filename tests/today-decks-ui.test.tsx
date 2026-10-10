@@ -251,7 +251,7 @@ it('keeps due checks separate from deck review actions', async () => {
   expect(host.querySelectorAll('.qard-today-deck')).toHaveLength(2);
 });
 
-it('shows the live due count on the study desk and starts only eligible cards across decks', async () => {
+it('shows the live due count and opens Today without starting a combined review', async () => {
   const start = vi.spyOn(services.reviews, 'startSession');
   await act(async () => {
     root.render(<QardApp services={services} />);
@@ -266,9 +266,13 @@ it('shows the live due count on the study desk and starts only eligible cards ac
       (button) => button.textContent?.trim() === 'Start review',
     )!,
   );
-  expect(services.reviews.getSnapshot().sessions[0]).toMatchObject({
-    cardIds: ['oldest', 'bio'],
-    style: 'normal',
-  });
-  expect(start).toHaveBeenCalledWith(expect.any(Array), 'normal', undefined, 'due');
+  expect(host.querySelector('h1')?.textContent).toBe('Today');
+  expect(host.textContent).toContain('2 due cards · 2 decks');
+  expect([...host.querySelectorAll('.qard-today-deck')].map((row) => row.textContent)).toEqual([
+    'Biology1 card due for review Study all',
+    'Networks1 card due for review Study all',
+  ]);
+  expect(host.querySelectorAll('.qard-today-topic')).toHaveLength(2);
+  expect(services.reviews.getSnapshot().sessions).toHaveLength(0);
+  expect(start).not.toHaveBeenCalled();
 });
