@@ -13,6 +13,10 @@ export interface ReviewState {
   needsContentCheck?: boolean;
   /** Excluded from study queues without changing memory or due dates. */
   paused?: boolean;
+  needsFixing?: true;
+  repairSince?: number;
+  /** Temporary sibling deferral; the memory model and due date stay untouched. */
+  buriedUntil?: number;
 }
 export interface ReviewEvent {
   cardId: string;
@@ -33,11 +37,14 @@ export interface Scheduler {
   ): ReviewState;
 }
 export const DAY = 86_400_000;
+export const isBuried = (state: ReviewState | undefined, now = Date.now()): boolean =>
+  typeof state?.buriedUntil === 'number' && state.buriedUntil > now;
 /** Small transparent interval scheduler, not FSRS. Manual selection never calls it. */
 export const scheduler: Scheduler = {
   getCardState: (id, states) => states[id],
   isDue: (state, now) =>
     !state?.paused &&
+    !isBuried(state, now) &&
     (!!state?.needsContentCheck ||
       !state?.reviewCount ||
       state.due === undefined ||

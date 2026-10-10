@@ -1,3 +1,5 @@
+import { siblingIds } from '../../cards/siblings';
+import { isBuried } from '../../review/scheduler';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, Check as CheckIcon } from 'lucide-react';
 import type { QardServices } from '../../views/services';
@@ -50,7 +52,9 @@ export function cardsFor(
   const { states, links } = services.reviews.getSnapshot(),
     all = services.index
       .getSnapshot()
-      .cards.filter((c) => c.stable && !c.duplicateId && !states[c.id]?.paused);
+      .cards.filter(
+        (c) => c.stable && !c.duplicateId && !states[c.id]?.paused && !isBuried(states[c.id], now),
+      );
   const avoid = new Set(context.avoid?.files ?? []);
   const due = all
     .filter(
@@ -321,7 +325,9 @@ function MiniReview({
   const [index, setIndex] = useState(0),
     [revealed, setRevealed] = useState(false),
     [error, setError] = useState('');
-  const card = cards[index];
+  const card = cards
+    .slice(index)
+    .find((c) => !isBuried(services.reviews.getSnapshot().states[c.id]));
   if (!card) {
     return (
       <p className="qard-wait-done">
@@ -332,11 +338,17 @@ function MiniReview({
   async function rate(rating: Rating) {
     setError('');
     try {
-      await services.reviews.review(card!.id, rating);
+      await services.reviews.review(
+        card!.id,
+        rating,
+        Date.now(),
+        undefined,
+        siblingIds(card!, services.index.getSnapshot().cards),
+      );
       if (rating === 1) {
         void services.learn?.cardLapse(card!.id).catch(() => {});
       }
-      setIndex((i) => i + 1);
+      setIndex(cards.findIndex((c) => c.id === card!.id) + 1);
       setRevealed(false);
     } catch (e) {
       setError((e as Error).message);

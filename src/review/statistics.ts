@@ -217,7 +217,13 @@ export function cardStatistics(
       due++;
     }
     if (scheduled && seen && !state?.paused) {
-      const dueDay = isDue ? today : state?.due !== undefined ? isoDay(state.due) : today;
+      const dueDay = isoDay(
+        Math.max(
+          now,
+          state?.needsContentCheck ? now : (state?.due ?? now),
+          state?.buriedUntil ?? 0,
+        ),
+      );
       const i = forecast.findIndex((_, index) => addDays(today, index) === dueDay);
       if (i >= 0) {
         forecast[i] = forecast[i]! + 1;

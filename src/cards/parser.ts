@@ -187,7 +187,12 @@ export function parseCards(
       idLine--;
     }
     const identity = idLine >= start ? lines[idLine]!.text.match(idComment)?.[1] : undefined;
-    const first = identity ? lines[idLine]! : line;
+    const groupLine = identity ? idLine - 1 : idLine;
+    const siblingGroup =
+      groupLine >= start
+        ? lines[groupLine]!.text.match(/^\s*<!-- qard-siblings: ([A-Za-z0-9_-]+) -->\s*$/)?.[1]
+        : undefined;
+    const first = siblingGroup ? lines[groupLine]! : identity ? lines[idLine]! : line;
     const finish = lines[end - 1]!.end;
     const fingerprint = hash(front + '\0' + back);
     const occurrence = occurrences.get(fingerprint) || 0;
@@ -198,6 +203,7 @@ export function parseCards(
     result.cards.push({
       id: identity || `volatile:${path}:${fingerprint}:${occurrence}`,
       stable: !!identity,
+      ...(siblingGroup ? { siblingGroup } : {}),
       deck,
       topic: topicOverride || topic,
       frontMarkdown: front,

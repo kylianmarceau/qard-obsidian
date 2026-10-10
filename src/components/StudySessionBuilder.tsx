@@ -34,9 +34,12 @@ export function StudySessionBuilder({
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const [chosen, setChosen] = useState(
     new Set(
-      selectCards(cards, saved.states, { selection: initial, mode: 'all', order: 'note' }).map(
-        (c) => c.id,
-      ),
+      selectCards(cards, saved.states, {
+        selection: initial,
+        mode: 'all',
+        order: 'note',
+        includeBuried: true,
+      }).map((c) => c.id),
     ),
   );
   const [mode, setMode] = useState<StudyMode>(saved.settings.defaultMode),
@@ -49,9 +52,10 @@ export function StudySessionBuilder({
       selectCards(cards, saved.states, {
         selection: { decks: [], topics: [], cards: [...chosen] },
         mode,
+        includeBuried: style === 'cram' || !saved.settings.scheduling,
         order: 'note',
       }),
-    [cards, saved.states, chosen, mode],
+    [cards, saved.states, saved.settings.scheduling, chosen, mode, style],
   );
   const available = cards.filter((c) => !saved.states[c.id]?.paused);
   const eligible = (group: QardCard[]) => group.filter((c) => !saved.states[c.id]?.paused);

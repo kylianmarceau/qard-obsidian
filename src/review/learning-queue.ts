@@ -1,6 +1,6 @@
 import { State } from 'ts-fsrs';
 import { validFsrs } from './fsrs-scheduler';
-import type { ReviewState } from './scheduler';
+import { isBuried, type ReviewState } from './scheduler';
 import type { SavedSession } from './saved-session';
 
 export interface LearningReview {
@@ -13,6 +13,7 @@ export function learningReview(state: ReviewState | undefined): LearningReview |
   if (
     !state ||
     state.paused ||
+    isBuried(state) ||
     !validFsrs(state.fsrs) ||
     ![State.Learning, State.Relearning].includes(state.fsrs.state) ||
     !Number.isFinite(state.due)

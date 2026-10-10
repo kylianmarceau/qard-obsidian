@@ -19,13 +19,14 @@ it('All cards returns every selected card even when due far in the future', () =
     selectCards(cards, states, { selection, mode: 'all', order: 'note', now: 0 }).map((c) => c.id),
   ).toEqual(['id-1', 'id-0']);
 });
-it('All cards checks pause status without reading scheduling fields', () => {
+it('All cards checks pause and sibling deferral without reading memory or due dates', () => {
   const states = Object.fromEntries(
     cards.map((card) => [
       card.id,
       new Proxy({} as ReturnType<typeof scheduler.reviewCard>, {
         get(_target, key) {
           if (key === 'paused') return false;
+          if (key === 'buriedUntil') return undefined;
           throw new Error('Scheduling cannot gate All');
         },
       }),

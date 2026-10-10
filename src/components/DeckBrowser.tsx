@@ -18,7 +18,9 @@ export function DeckBrowser({
   learn,
   plans,
   remove,
+  repairFilter,
 }: {
+  repairFilter?: { active: boolean; count: number; toggle: () => void };
   decks: Deck[];
   search: string;
   onSearch: (v: string) => void;
@@ -68,6 +70,15 @@ export function DeckBrowser({
           onChange={(e) => onSearch(e.target.value)}
         />
       </label>
+      {repairFilter && (repairFilter.count > 0 || repairFilter.active) && (
+        <button
+          className="qard-repair-filter"
+          aria-pressed={repairFilter.active}
+          onClick={repairFilter.toggle}
+        >
+          Needs fixing · {repairFilter.count}
+        </button>
+      )}
       {loading && (
         <p className="qard-muted" role="status">
           Loading cards…
@@ -99,8 +110,16 @@ export function DeckBrowser({
       </div>
       {!loading && !decks.length && (
         <div className="qard-empty">
-          <p>{search ? 'No matching cards.' : 'No cards yet.'}</p>
-          {search ? (
+          <p>
+            {repairFilter?.active
+              ? 'No cards need fixing.'
+              : search
+                ? 'No matching cards.'
+                : 'No cards yet.'}
+          </p>
+          {repairFilter?.active ? (
+            <button onClick={repairFilter.toggle}>Show all cards</button>
+          ) : search ? (
             <button onClick={() => onSearch('')}>Clear search</button>
           ) : (
             <button onClick={create}>Create a card</button>

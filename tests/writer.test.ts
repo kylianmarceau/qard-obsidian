@@ -3,6 +3,9 @@ import { TFile, type App } from 'obsidian';
 import { CardWriter } from '../src/cards/card-writer';
 import { CardIndex } from '../src/cards/card-index';
 import type { VaultIndexer } from '../src/cards/indexer';
+import { parseCards } from '../src/cards/parser';
+import { serializeCard } from '../src/cards/source-patch';
+import { clozeFront, FORMAT_BACK } from '../src/cards/card-format';
 function setup(source: string, cachedDeck = 'Networks') {
   const file = new (TFile as unknown as new (path: string) => TFile)('a.md');
   let text = source;
@@ -48,4 +51,30 @@ it('does not write to a different deck when cached metadata is stale', async () 
   const { writer, read } = setup(source);
   await expect(writer.create(draft)).rejects.toThrow('changed');
   expect(read()).toBe(source);
+});
+
+it('assigns IDs and persists legacy sibling groups before a variant is edited', async () => {
+  const text = '{{c1::TCP}} provides {{c2::reliability}}.';
+  const source =
+    'Prose.\n\n' +
+    [1, 2]
+      .map((target) =>
+        serializeCard(`c${target}`, clozeFront(text, target), FORMAT_BACK).replace(
+          /<!-- qard-id: .+ -->\n/,
+          '',
+        ),
+      )
+      .join('\n');
+  const { writer, read } = setup(source);
+  const stable = await writer.ensureStable(parseCards(source, 'a.md').cards);
+  expect(stable.every((c) => c.stable && c.siblingGroup)).toBe(true);
+  expect(stable[0]?.siblingGroup).toBe(stable[1]?.siblingGroup);
+  const edited = await writer.edit(
+    stable[0]!,
+    clozeFront('{{c1::TCP}} is a transport protocol.', 1),
+    'Explanation',
+  );
+  expect(edited.id).toBe(stable[0]?.id);
+  expect(edited.siblingGroup).toBe(stable[1]?.siblingGroup);
+  expect(read().startsWith('Prose.\n\n')).toBe(true);
 });

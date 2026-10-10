@@ -1,5 +1,21 @@
 import type { QardCard } from './card-types';
 import { parseCards, sameContent } from './parser';
+import { siblingGroup } from './siblings';
+
+/** Persist legacy group identities before an edit or ID assignment can change their content. */
+export function ensureSiblingGroupsInSource(source: string, path: string): string {
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  for (const card of parseCards(source, path).cards.reverse()) {
+    const group = siblingGroup(card);
+    if (group && !card.siblingGroup) {
+      source =
+        source.slice(0, card.sourcePosition.start) +
+        `<!-- qard-siblings: ${group} -->${eol}` +
+        source.slice(card.sourcePosition.start);
+    }
+  }
+  return source;
+}
 export function locateCard(source: string, card: QardCard): QardCard {
   const parsed = parseCards(source, card.sourceFile).cards;
   const matches = card.stable
@@ -36,7 +52,13 @@ export function ensureIdInSource(
   }
   return { source: updated, card: found };
 }
-export function serializeCard(id: string, front: string, back: string, eol = '\n'): string {
+export function serializeCard(
+  id: string,
+  front: string,
+  back: string,
+  eol = '\n',
+  group?: string,
+): string {
   if (!/^[A-Za-z0-9_-]+$/.test(id)) {
     throw new Error('Invalid card ID.');
   }
@@ -47,6 +69,12 @@ export function serializeCard(id: string, front: string, back: string, eol = '\n
   }
   const [first, ...rest] = front.split('\n');
   const lines = [`<!-- qard-id: ${id} -->`, `> [!qard]- ${first}`];
+  if (group) {
+    if (!/^[A-Za-z0-9_-]+$/.test(group)) {
+      throw new Error('Invalid sibling group.');
+    }
+    lines.unshift(`<!-- qard-siblings: ${group} -->`);
+  }
   const content = rest.length
     ? [...rest, '<!-- qard-answer -->', ...back.split('\n')]
     : back.split('\n');
@@ -71,9 +99,10 @@ export function replaceCardInSource(
   back: string,
   id: string,
 ): string {
+  source = ensureSiblingGroupsInSource(source, original.sourceFile);
   const current = locateCard(source, original);
   const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  let replacement = serializeCard(id, front, back, eol);
+  let replacement = serializeCard(id, front, back, eol, current.siblingGroup);
   if (!/[\r\n]$/.test(current.sourceText)) {
     replacement = replacement.slice(0, -eol.length);
   }
