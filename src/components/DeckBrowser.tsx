@@ -142,11 +142,6 @@ export function DeckBrowser({
             >
               Start review <ArrowRight size={16} />
             </button>
-            {viewToday && (
-              <button className="qard-text-button qard-desk-today-link" onClick={viewToday}>
-                View today’s cards
-              </button>
-            )}
           </section>
           <section className="qard-desk-create">
             <h2>Create & study</h2>

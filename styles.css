@@ -6725,12 +6725,6 @@ div.qard-ask-q {
   border-radius: 5px;
 }
 
-.qard-app button.qard-desk-today-link {
-  width: 100%;
-  margin-top: 6px;
-  font-size: 11px;
-}
-
 .qard-desk-create {
   padding-top: 18px;
   border-top: 1px solid var(--qard-border);
@@ -6882,13 +6876,6 @@ div.qard-ask-q {
   .qard-desk-due strong {
     font-size: 44px;
     letter-spacing: -2px;
-  }
-
-  .qard-app button.qard-desk-today-link {
-    width: auto;
-    grid-column: 1 / -1;
-    justify-self: start;
-    margin: 0;
   }
 
   .qard-desk-create {
