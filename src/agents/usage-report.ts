@@ -135,6 +135,7 @@ const PROVIDERS: Record<string, string> = {
   codex: 'Codex',
   anthropic: 'Anthropic API',
   openrouter: 'OpenRouter',
+  custom: 'Custom AI',
 };
 
 /** Totals from `from` (a YYYY-MM-DD day, inclusive) onwards, by feature, by connection and model, and by day. */

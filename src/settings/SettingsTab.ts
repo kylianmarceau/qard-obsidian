@@ -3,9 +3,13 @@ import type QardPlugin from '../main';
 import type { QardSettings, RoleSetting, TestSettings } from './settings';
 import type { AgentProvider, AgentRole } from '../agents/runner';
 import { API_MODELS } from '../agents/api-runner';
+import { customBaseUrl } from '../agents/custom-connection';
+import { customModels, testCustomConnection } from '../agents/custom-runner';
 import { openRouterModels } from '../agents/openrouter-runner';
 import {
   API_KEY_SECRET,
+  CUSTOM_KEY_SECRET,
+  readSecret,
   OPENROUTER_KEY_SECRET,
   defaultModel,
   detectAgent,
@@ -24,10 +28,15 @@ const PROVIDER_LABELS: Record<AgentProvider, string> = {
   codex: 'Codex',
   anthropic: 'Anthropic API',
   openrouter: 'OpenRouter',
+  custom: 'Custom AI',
 };
 
 export class QardSettingsTab extends PluginSettingTab {
   private models?: Promise<string[]>;
+  private connectionCheck?: AbortController;
+  hide() {
+    this.connectionCheck?.abort();
+  }
   /** Suggestions for a connection's model field. OpenRouter's list is fetched once per settings visit. */
   private async modelChoices(provider: AgentProvider): Promise<ModelChoice[]> {
     if (provider === 'claude-code') {
@@ -36,6 +45,14 @@ export class QardSettingsTab extends PluginSettingTab {
     if (provider === 'codex') {
       const host = nodeHost();
       return host ? codexModels(host) : [];
+    }
+    if (provider === 'custom') {
+      return (
+        await customModels(
+          this.qard.reviews.getSnapshot().settings.agents.custom,
+          readSecret(this.app, CUSTOM_KEY_SECRET),
+        ).catch(() => [])
+      ).map((m) => ({ value: m, label: m }));
     }
     if (provider === 'openrouter') {
       return (await (this.models ??= openRouterModels().catch(() => []))).map((m) => ({
@@ -261,11 +278,21 @@ export class QardSettingsTab extends PluginSettingTab {
       },
     );
   }
-  private secretRow(name: string, id: string, placeholder: string, desc: string): SettingRow {
+  private secretRow(
+    name: string,
+    id: string,
+    placeholder: string,
+    desc: string,
+    optional = false,
+  ): SettingRow {
     const store = secretStore(this.app);
     return {
       name,
-      desc: store ? desc : 'Needs Obsidian 1.11.4 or newer.',
+      desc: store
+        ? desc
+        : optional
+          ? `${desc} Saving a key needs Obsidian 1.11.4 or newer; keyless local servers still work.`
+          : 'Needs Obsidian 1.11.4 or newer.',
       render: (row) => {
         row.addText((x) => {
           x.inputEl.type = 'password';
@@ -278,12 +305,25 @@ export class QardSettingsTab extends PluginSettingTab {
             if (!key || !store) {
               return;
             }
+            if (optional) {
+              this.connectionCheck?.abort();
+            }
             store.setSecret(id, key);
             x.setValue('');
             x.setPlaceholder('Saved. Enter a new key to replace it.');
             new Notice('Key saved.');
           });
         });
+        if (optional && store) {
+          row.addButton((button) =>
+            button.setButtonText('Clear key').onClick(() => {
+              this.connectionCheck?.abort();
+              store.setSecret(id, '');
+              this.redraw();
+              new Notice('Custom API key cleared.');
+            }),
+          );
+        }
       },
     };
   }
@@ -335,6 +375,116 @@ export class QardSettingsTab extends PluginSettingTab {
         'OpenRouter API key',
         "Any model on OpenRouter. Works on mobile. Kept in Obsidian's secure storage.",
       ),
+      {
+        name: 'Custom AI server',
+        desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
+        render: (row) => {
+          row.addText((x) => {
+            x.setValue(a.custom.baseUrl).setPlaceholder('Server address');
+            x.inputEl.addEventListener('change', () => {
+              try {
+                const baseUrl = customBaseUrl(x.getValue());
+                x.setValue(baseUrl);
+                this.connectionCheck?.abort();
+                void this.patch((s) => ({
+                  ...s,
+                  agents: { ...s.agents, custom: { ...s.agents.custom, baseUrl } },
+                }));
+              } catch (error) {
+                new Notice((error as Error).message);
+                x.setValue(this.qard.reviews.getSnapshot().settings.agents.custom.baseUrl);
+              }
+            });
+          });
+        },
+      },
+      {
+        name: 'Custom AI model',
+        desc: 'Exact model name from your server. This is the default for roles using Custom AI; each role can override it.',
+        render: (row) => {
+          row.addText((x) => {
+            x.setValue(a.custom.model).setPlaceholder('Model name');
+            x.inputEl.addEventListener('change', () => {
+              this.connectionCheck?.abort();
+              void this.patch((s) => ({
+                ...s,
+                agents: { ...s.agents, custom: { ...s.agents.custom, model: x.getValue().trim() } },
+              }));
+            });
+            const list = (x.inputEl.parentElement ?? row.controlEl).createEl('datalist', {
+              attr: { id: 'qard-custom-models' },
+            });
+            x.inputEl.setAttribute('list', list.id);
+            row.addButton((button) =>
+              button.setButtonText('Refresh models').onClick(async () => {
+                button.setDisabled(true);
+                try {
+                  const choices = await this.modelChoices('custom');
+                  list.empty();
+                  for (const choice of choices) {
+                    list.createEl('option', { attr: { value: choice.value } });
+                  }
+                  new Notice(
+                    choices.length
+                      ? `${choices.length} models available. Type in the model field to choose one.`
+                      : 'No model list available. Start the server or enter its model name manually.',
+                  );
+                } finally {
+                  button.setDisabled(false);
+                }
+              }),
+            );
+          });
+        },
+      },
+      this.secretRow(
+        'Custom AI API key',
+        CUSTOM_KEY_SECRET,
+        'Optional API key',
+        'Leave empty for a keyless local server. When needed, the key is kept in Obsidian’s secure storage.',
+        true,
+      ),
+      {
+        name: 'Test custom AI connection',
+        desc: 'Check the default model’s JSON replies and note tools using synthetic text. No vault notes are sent. Passing this small check does not guarantee every study task will work.',
+        render: (row) => {
+          row.addButton((button) =>
+            button.setButtonText('Test connection').onClick(async () => {
+              if (this.connectionCheck) {
+                this.connectionCheck.abort();
+                return;
+              }
+              const controller = new AbortController();
+              this.connectionCheck = controller;
+              button.setButtonText('Cancel test');
+              row.setDesc('Checking JSON replies and note tools… no vault notes are sent.');
+              try {
+                await this.qard.reviews.flush();
+                const connection = { ...this.qard.reviews.getSnapshot().settings.agents.custom };
+                const result = await testCustomConnection(
+                  connection,
+                  readSecret(this.app, CUSTOM_KEY_SECRET),
+                  controller.signal,
+                );
+                if (!controller.signal.aborted) {
+                  row.setDesc(result.message);
+                }
+              } catch (error) {
+                row.setDesc(
+                  controller.signal.aborted
+                    ? 'Connection test cancelled.'
+                    : (error as Error).message,
+                );
+              } finally {
+                if (this.connectionCheck === controller) {
+                  this.connectionCheck = undefined;
+                }
+                button.setButtonText('Test connection');
+              }
+            }),
+          );
+        },
+      },
     ];
   }
   /** Each role picks a connection and a model: a fast tutor, a careful writer and marker. */
@@ -356,7 +506,10 @@ export class QardSettingsTab extends PluginSettingTab {
             .setValue(current.provider)
             .onChange((v) => {
               const provider = v as AgentProvider;
-              void save({ provider, model: defaultModel(provider, id) }, true);
+              void save(
+                { provider, model: provider === 'custom' ? '' : defaultModel(provider, id) },
+                true,
+              );
             }),
         );
         if (current.provider === 'anthropic') {
@@ -369,7 +522,8 @@ export class QardSettingsTab extends PluginSettingTab {
         } else {
           row.addText((x) => {
             x.setValue(current.model).setPlaceholder(
-              defaultModel(current.provider, id) || 'Default model',
+              defaultModel(current.provider, id, this.qard.reviews.getSnapshot().settings) ||
+                'Default model',
             );
             x.inputEl.addEventListener(
               'change',

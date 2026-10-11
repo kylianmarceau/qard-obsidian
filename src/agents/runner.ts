@@ -2,7 +2,7 @@ import type { Schema } from '../tests/test-schema';
 import type { Usage } from './usage';
 import { clip, debug, errorText } from '../debug/debug-log';
 
-export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter';
+export type AgentProvider = 'claude-code' | 'codex' | 'anthropic' | 'openrouter' | 'custom';
 /** Tutor replies live and should be fast; the writer and marker favour quality; the illustrator draws figures. */
 export type AgentRole = 'tutor' | 'writer' | 'marker' | 'illustrator';
 /**

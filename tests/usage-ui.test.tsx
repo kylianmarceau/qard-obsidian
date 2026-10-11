@@ -119,6 +119,31 @@ it('labels who is working, and can be turned off', async () => {
     'Writer · OpenRouter · anthropic/claude-opus-5.5',
     'Marker · Codex · default model',
   ]);
+  snapshot = {
+    settings: readSettings({
+      agents: {
+        custom: { model: 'local-model' },
+        roles: { writer: { provider: 'custom', model: '' } },
+      },
+    }),
+  };
+  await act(async () => {
+    listeners.forEach((l) => l());
+  });
+  expect(host.textContent).toContain('Writer · Custom AI · local-model');
+  snapshot = {
+    settings: {
+      ...snapshot.settings,
+      agents: {
+        ...snapshot.settings.agents,
+        custom: { ...snapshot.settings.agents.custom, model: 'new-local-model' },
+      },
+    },
+  };
+  await act(async () => {
+    listeners.forEach((l) => l());
+  });
+  expect(host.textContent).toContain('Writer · Custom AI · new-local-model');
   expect(readSettings({}).showAgent).toBe(true);
   snapshot = { settings: { ...snapshot.settings, showAgent: false } };
   await act(async () => {

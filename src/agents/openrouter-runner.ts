@@ -84,20 +84,35 @@ function failure(status: number, body: unknown): Error {
   return new Error(`OpenRouter error ${status}${message ? `: ${message}` : ''}`);
 }
 
-/** Any OpenRouter model through its OpenAI-style chat API, reading notes through the same three tools. */
-export class OpenRouterRunner implements AgentRunner {
-  readonly name = 'OpenRouter';
+export interface ChatConnection {
+  name: string;
+  baseUrl: string;
+  custom?: boolean;
+}
+
+/** Shared OpenAI-style tool loop. OpenRouter's existing defaults remain unchanged. */
+export class ChatCompletionRunner implements AgentRunner {
+  readonly name: string;
   constructor(
     private vault: VaultReader,
     private apiKey: () => string | null,
     private model: string,
     private exclude: string[],
     private http: Http = obsidianHttp,
-  ) {}
+    private connection: ChatConnection = { name: 'OpenRouter', baseUrl: BASE },
+  ) {
+    this.name = connection.name;
+  }
   async run(task: AgentTask): Promise<unknown> {
+    if (task.signal?.aborted) {
+      throw new Error(CANCELLED);
+    }
     const key = this.apiKey();
-    if (!key) {
+    if (!key && !this.connection.custom) {
       throw new Error('Add an OpenRouter API key in Settings → Qard.');
+    }
+    if (this.connection.custom && !this.model.trim()) {
+      throw new Error('Choose a custom model in Settings → Qard → AI connections or AI roles.');
     }
     const tools = task.vault !== false;
     // Not every model supports structured output, so the schema is also in the prompt and replies are validated anyway.
@@ -105,7 +120,7 @@ export class OpenRouterRunner implements AgentRunner {
       { role: 'system', content: PREAMBLE },
       { role: 'user', content: `${task.prompt}\n\n${SCHEMA_INSTRUCTION(task.schema)}` },
     ];
-    let structured = true,
+    let structured: 'schema' | 'json' | 'prompt' = 'schema',
       usage = emptyUsage();
     const report = () => {
       if (usage.input || usage.output) {
@@ -122,20 +137,23 @@ export class OpenRouterRunner implements AgentRunner {
           messages,
           max_tokens: 16000,
           ...(tools ? { tools: TOOLS } : {}),
-          ...(structured
+          ...(structured === 'schema'
             ? {
                 response_format: {
                   type: 'json_schema',
                   json_schema: { name: 'qard_result', strict: false, schema: task.schema },
                 },
               }
-            : {}),
-          ...(task.effort ? { reasoning: { effort: task.effort } } : {}),
+            : structured === 'json'
+              ? { response_format: { type: 'json_object' } }
+              : {}),
+          ...(!this.connection.custom && task.effort ? { reasoning: { effort: task.effort } } : {}),
           // Ask OpenRouter to include token counts and cost in each response.
-          usage: { include: true },
+          ...(!this.connection.custom ? { usage: { include: true } } : {}),
+          ...(this.connection.custom ? { stream: false } : {}),
         };
         const sent = Date.now();
-        debug.log('openrouter', 'request', {
+        debug.log(this.connection.custom ? 'custom-ai' : 'openrouter', 'request', {
           model: this.model,
           turn,
           messages: messages.length,
@@ -143,64 +161,105 @@ export class OpenRouterRunner implements AgentRunner {
           tools,
         });
         const response = await deadline(
-          this.http(`${BASE}/chat/completions`, {
+          this.http(`${this.connection.baseUrl}/chat/completions`, {
             method: 'POST',
-            headers: headers(key),
+            headers: this.connection.custom
+              ? {
+                  'Content-Type': 'application/json',
+                  ...(key ? { Authorization: `Bearer ${key}` } : {}),
+                }
+              : headers(key!),
             body: JSON.stringify(body),
+          }).catch((error: unknown) => {
+            if (this.connection.custom) {
+              throw new Error(
+                'Could not reach the custom AI server. Start its server and check the address. On mobile, localhost refers to the phone.',
+              );
+            }
+            throw error;
           }),
           task.signal,
           REQUEST_TIMEOUT,
-          'OpenRouter',
+          this.name,
         );
         // Some providers reject response_format next to tools; the prompt still carries the schema.
-        const reply = response.json as Completion | undefined;
-        debug.log('openrouter', 'response', {
+        const reply =
+          response.json && typeof response.json === 'object'
+            ? (response.json as Completion)
+            : undefined;
+        debug.log(this.connection.custom ? 'custom-ai' : 'openrouter', 'response', {
           turn,
           status: response.status,
           ms: Date.now() - sent,
           finish: reply?.choices?.[0]?.finish_reason,
-          toolCalls: reply?.choices?.[0]?.message?.tool_calls?.map((c) => c.function.name),
+          ...(!this.connection.custom
+            ? { toolCalls: reply?.choices?.[0]?.message?.tool_calls?.map((c) => c.function.name) }
+            : {}),
           servedBy: reply?.model,
           tokens: reply?.usage,
-          error: reply?.error?.message,
+          ...(!this.connection.custom ? { error: reply?.error?.message } : {}),
         });
-        if (response.status === 400 && structured) {
+        if (
+          (response.status === 400 || (this.connection.custom && response.status === 422)) &&
+          structured !== 'prompt'
+        ) {
           debug.log(
-            'openrouter',
+            this.connection.custom ? 'custom-ai' : 'openrouter',
             'structured output rejected; retrying with the schema in the prompt only',
             { turn },
           );
-          structured = false;
+          structured = this.connection.custom && structured === 'schema' ? 'json' : 'prompt';
           turn--;
           continue;
         }
         if (response.status !== 200) {
-          throw failure(response.status, response.json);
+          throw this.connection.custom
+            ? customFailure(response.status, tools)
+            : failure(response.status, response.json);
         }
-        const turnUsage = fromOpenRouter(
-          (response.json as Completion).usage,
-          (response.json as Completion).model ?? this.model,
-        );
+        const turnUsage = fromOpenRouter(reply?.usage, reply?.model ?? this.model);
         if (turnUsage) {
           usage = addUsage(usage, turnUsage);
         }
-        const choice = (response.json as Completion).choices?.[0],
+        const choice = reply?.choices?.[0],
           message = choice?.message;
-        if (!message) {
+        if (!message || typeof message !== 'object') {
           throw new Error(
-            (response.json as Completion).error?.message || 'OpenRouter returned no reply.',
+            this.connection.custom
+              ? 'The custom server returned no chat reply. Check the server address and model.'
+              : reply?.error?.message || 'OpenRouter returned no reply.',
           );
         }
-        if (choice.finish_reason === 'length') {
+        if (choice?.finish_reason === 'length') {
           throw new Error('The reply was cut off. Try a shorter request.');
         }
         if (message.tool_calls?.length) {
+          if (
+            !tools ||
+            !Array.isArray(message.tool_calls) ||
+            message.tool_calls.length > 16 ||
+            message.tool_calls.some(
+              (call) =>
+                !call ||
+                typeof call.id !== 'string' ||
+                !call.function ||
+                typeof call.function.name !== 'string' ||
+                typeof call.function.arguments !== 'string',
+            )
+          ) {
+            throw new Error(
+              'The model returned unsupported note-tool calls. Choose a model with tool support.',
+            );
+          }
           messages.push({
             role: 'assistant',
             content: message.content ?? null,
             tool_calls: message.tool_calls,
           });
           for (const call of message.tool_calls) {
+            if (task.signal?.aborted) {
+              throw new Error(CANCELLED);
+            }
             let args: unknown = {};
             try {
               args = JSON.parse(call.function.arguments || '{}');
@@ -215,13 +274,53 @@ export class OpenRouterRunner implements AgentRunner {
           }
           continue;
         }
-        return extractJson(message.content ?? '');
+        if (typeof message.content !== 'string') {
+          throw new Error(
+            'The model returned no text answer. Choose a model that supports JSON replies.',
+          );
+        }
+        return extractJson(message.content);
       }
       throw new Error('The agent took too many steps without finishing.');
     } finally {
       report();
     }
   }
+}
+
+/** OpenRouter uses its fixed endpoint, attribution headers and reported billing. */
+export class OpenRouterRunner extends ChatCompletionRunner {
+  constructor(
+    vault: VaultReader,
+    apiKey: () => string | null,
+    model: string,
+    exclude: string[],
+    http: Http = obsidianHttp,
+  ) {
+    super(vault, apiKey, model, exclude, http);
+  }
+}
+
+function customFailure(status: number, tools: boolean): Error {
+  if (status === 401 || status === 403) {
+    return new Error('The custom server rejected access. Check its API key in Settings → Qard.');
+  }
+  if (status === 404) {
+    return new Error(
+      'The custom server could not find the endpoint or model. Check the API base address and exact model name.',
+    );
+  }
+  if (status === 429) {
+    return new Error('The custom server is busy or rate limited. Wait a moment and try again.');
+  }
+  if (status === 400 || status === 422) {
+    return new Error(
+      tools
+        ? 'The custom server rejected this request. Check the model and choose one with note-tool support; use Test connection in settings.'
+        : 'The custom server rejected this request. Check the model name and its chat/JSON support.',
+    );
+  }
+  return new Error(`Custom AI server error ${status}. Check the server logs and try again.`);
 }
 
 /** Models that can call tools, for the settings model picker. */

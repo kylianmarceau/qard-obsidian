@@ -5,11 +5,13 @@ import type { AgentProvider, AgentRole, AgentRunner } from './runner';
 import type { Usage } from './usage';
 import { purposeOf } from './usage-report';
 import { AnthropicRunner, DEFAULT_API_MODEL, FAST_API_MODEL } from './api-runner';
+import { CustomRunner } from './custom-runner';
 import { OpenRouterRunner } from './openrouter-runner';
 import { ClaudeCodeRunner, CodexRunner, findBinary, type NodeHost } from './cli-runner';
 import { isStudyNote, studyNotes } from '../vault-access';
 
 export const API_KEY_SECRET = 'qard-anthropic-api-key';
+export const CUSTOM_KEY_SECRET = 'qard-custom-api-key';
 export const OPENROUTER_KEY_SECRET = 'qard-openrouter-api-key';
 
 /** Node built-ins exist only on desktop; load them lazily so mobile never touches them. */
@@ -62,7 +64,10 @@ export function readSecret(app: App, id: string) {
 }
 
 /** The tutor defaults to each connection's fast model; the writer and marker to its best. */
-export function defaultModel(provider: AgentProvider, role: AgentRole) {
+export function defaultModel(provider: AgentProvider, role: AgentRole, settings?: QardSettings) {
+  if (provider === 'custom') {
+    return settings?.agents.custom.model ?? '';
+  }
   const fast = role === 'tutor';
   if (provider === 'anthropic') {
     return fast ? FAST_API_MODEL : DEFAULT_API_MODEL;
@@ -154,7 +159,7 @@ export function createRunner(
   record?: (e: UsageEvent) => void,
 ): AgentRunner {
   const { provider } = settings.agents.roles[role],
-    model = settings.agents.roles[role].model.trim() || defaultModel(provider, role);
+    model = settings.agents.roles[role].model.trim() || defaultModel(provider, role, settings);
   return tracked(buildRunner(app, settings, provider, model), role, provider, model, record);
 }
 function buildRunner(
@@ -175,6 +180,14 @@ function buildRunner(
   };
   // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
   const exclude = [settings.tests.folder.replace(/\/+$/, '')];
+  if (provider === 'custom') {
+    return new CustomRunner(
+      reader,
+      () => readSecret(app, CUSTOM_KEY_SECRET),
+      { ...settings.agents.custom, model },
+      exclude,
+    );
+  }
   if (provider === 'anthropic') {
     return new AnthropicRunner(reader, () => readSecret(app, API_KEY_SECRET), model, exclude);
   }
