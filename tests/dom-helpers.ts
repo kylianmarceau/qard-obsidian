@@ -1,3 +1,11 @@
+import { vi } from 'vitest';
+
+// Obsidian's global helpers return detached nodes in the active window's document.
+if (typeof document !== 'undefined') {
+  vi.stubGlobal('createEl', (tag: string) => document.createElement(tag));
+  vi.stubGlobal('createFragment', () => document.createDocumentFragment());
+}
+
 // The Obsidian DOM helper used by Markdown rendering, scoped to the owning document.
 if (typeof HTMLElement !== 'undefined') {
   HTMLElement.prototype.createDiv = function (options?: string | DomElementInfo) {

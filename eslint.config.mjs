@@ -17,6 +17,7 @@ export default defineConfig([
     languageOptions: { parserOptions: { projectService: true } },
     rules: {
       curly: ['error', 'all'],
+      'obsidianmd/prefer-create-el': 'error',
       '@typescript-eslint/consistent-type-imports': [
         'error',
         // Lazy desktop requires use typeof import() without loading Node APIs on mobile.
@@ -31,10 +32,5 @@ export default defineConfig([
         { brands: ['Qard', 'Spaced Repetition', 'FSRS', 'Anki', 'Markdown', 'CSV', 'TSV'] },
       ],
     },
-  },
-  {
-    files: ['src/migration/anki-content.ts'],
-    // These nodes belong to an inert DOMParser document; Obsidian's window helpers are unavailable.
-    rules: { 'obsidianmd/prefer-create-el': 'off' },
   },
 ]);

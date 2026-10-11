@@ -82,11 +82,12 @@ export function ankiMarkdown(html: string, media: Map<string, string>): string {
     }
     const path = media.get(decoded);
     if (path) {
-      const marker = doc.createElement('qard-media');
+      // Obsidian helpers create detached nodes; adopt them into the inert import document.
+      const marker = doc.adoptNode(createEl('qard-media' as keyof HTMLElementTagNameMap));
       marker.textContent = path;
       el.replaceWith(marker);
     } else if (/^https?:\/\//i.test(name)) {
-      const anchor = doc.createElement('a');
+      const anchor = doc.adoptNode(createEl('a'));
       anchor.setAttribute('href', name);
       anchor.textContent = el.getAttribute('alt') || 'Remote media';
       el.replaceWith(anchor);
@@ -125,11 +126,11 @@ export function ankiMarkdown(html: string, media: Map<string, string>): string {
       continue;
     }
     math.lastIndex = 0;
-    const fragment = doc.createDocumentFragment();
+    const fragment = doc.adoptNode(createFragment());
     let at = 0;
     for (const match of text.matchAll(math)) {
       fragment.append(doc.createTextNode(text.slice(at, match.index)));
-      const marker = doc.createElement('anki-math'),
+      const marker = doc.adoptNode(createEl('anki-math' as keyof HTMLElementTagNameMap)),
         delimiter = match[1] === undefined ? '$$' : '$';
       marker.textContent = delimiter + (match[1] ?? match[2]) + delimiter;
       marker.setAttribute('data-content', marker.textContent);
@@ -158,7 +159,7 @@ export function ankiMarkdown(html: string, media: Map<string, string>): string {
     const width = Math.max(...rows.map((row) => row.length));
     const line = (row: string[]) =>
       '| ' + Array.from({ length: width }, (_, i) => row[i] ?? '').join(' | ') + ' |';
-    const marker = doc.createElement('pre');
+    const marker = doc.adoptNode(createEl('pre'));
     marker.setAttribute('data-qard-table', '');
     marker.textContent = [
       line(rows[0]!),
