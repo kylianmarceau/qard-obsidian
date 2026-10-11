@@ -1,5 +1,6 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
-import { Play, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Play, Pause, ChevronRight } from 'lucide-react';
+import { DeckBadge } from './DeckBadge';
 import type { Deck, QardCard } from '../cards/card-types';
 import {
   selectCards,
@@ -70,6 +71,8 @@ export function StudySessionBuilder({
       : paceCards(selected, saved, { extraNew });
   const reviewCount = planned.batch.filter((card) => !!saved.states[card.id]?.reviewCount).length;
   const newCount = planned.batch.length - reviewCount;
+  const selectedDeckCount = new Set(selected.map((card) => card.deck)).size;
+  const selectedTopicCount = new Set(selected.map((card) => topicKey(card.deck, card.topic))).size;
   const available = cards.filter((c) => !saved.states[c.id]?.paused);
   const eligible = (group: QardCard[]) => group.filter((c) => !saved.states[c.id]?.paused);
   const toggle = (group: QardCard[]) => {
@@ -111,15 +114,21 @@ export function StudySessionBuilder({
     }
   }
   return (
-    <>
-      <div className="qard-heading">
-        <h1>Study</h1>
-        <button onClick={back}>Cancel</button>
+    <div className="qard-study-setup">
+      <div className="qard-heading qard-setup-heading">
+        <div>
+          <h1>Study</h1>
+          <p>Choose the decks and topics you want to study.</p>
+        </div>
+        <button className="qard-text-button" onClick={back} disabled={busy}>
+          <ArrowLeft size={15} />
+          Cancel
+        </button>
       </div>
       <div className="qard-builder">
-        <section className="qard-selection">
+        <section className="qard-selection" aria-label="Decks and topics">
           <div className="qard-panel-heading">
-            <h2>Decks</h2>
+            <h2>Decks & topics</h2>
             <button
               className="qard-text-button"
               onClick={() =>
@@ -130,7 +139,7 @@ export function StudySessionBuilder({
                 )
               }
             >
-              {available.every((c) => chosen.has(c.id)) ? 'Clear' : 'Select all'}
+              {available.every((c) => chosen.has(c.id)) ? 'Clear selection' : 'Select all'}
             </button>
           </div>
           {decks.map((deck) => (
@@ -151,80 +160,106 @@ export function StudySessionBuilder({
                     onChange={() => toggle(deck.cards)}
                     label={deck.name}
                   />
-                  <strong>{deck.name}</strong>
-                  <span>
+                  <DeckBadge name={deck.name} />
+                  <span className="qard-selection-copy">
+                    <strong>{deck.name}</strong>
+                    <small>
+                      {deck.cards.length} {deck.cards.length === 1 ? 'card' : 'cards'} ·{' '}
+                      {deck.topics.length} {deck.topics.length === 1 ? 'topic' : 'topics'}
+                    </small>
+                  </span>
+                  <span className="qard-selection-count">
                     {eligible(deck.cards).filter((c) => chosen.has(c.id)).length} /{' '}
-                    {deck.cards.length}
+                    {eligible(deck.cards).length}
                   </span>
                 </label>
               </summary>
-              {deck.topics.map((topic) => (
-                <details key={topicKey(deck.name, topic.name)} className="qard-select-topic">
-                  <summary>
-                    <ChevronRight size={14} />
-                    <label onClick={(e) => e.stopPropagation()}>
-                      <MixedCheckbox
-                        disabled={!eligible(topic.cards).length}
-                        checked={
-                          !!eligible(topic.cards).length &&
-                          eligible(topic.cards).every((c) => chosen.has(c.id))
-                        }
-                        mixed={
-                          eligible(topic.cards).some((c) => chosen.has(c.id)) &&
-                          !eligible(topic.cards).every((c) => chosen.has(c.id))
-                        }
-                        onChange={() => toggle(topic.cards)}
-                        label={`${deck.name}: ${topic.name}`}
-                      />
-                      {topic.name}
-                      <span>{topic.cards.length}</span>
-                    </label>
-                  </summary>
-                  <div className="qard-individuals">
-                    {topic.cards.map((card) => (
-                      <label key={`${card.sourceFile}:${card.sourcePosition.start}`}>
-                        <input
-                          type="checkbox"
-                          disabled={!!saved.states[card.id]?.paused}
-                          checked={chosen.has(card.id) && !saved.states[card.id]?.paused}
-                          onChange={() => toggle([card])}
+              <div className="qard-selection-topics">
+                {deck.topics.map((topic) => (
+                  <details key={topicKey(deck.name, topic.name)} className="qard-select-topic">
+                    <summary>
+                      <ChevronRight size={14} />
+                      <label onClick={(e) => e.stopPropagation()}>
+                        <MixedCheckbox
+                          disabled={!eligible(topic.cards).length}
+                          checked={
+                            !!eligible(topic.cards).length &&
+                            eligible(topic.cards).every((c) => chosen.has(c.id))
+                          }
+                          mixed={
+                            eligible(topic.cards).some((c) => chosen.has(c.id)) &&
+                            !eligible(topic.cards).every((c) => chosen.has(c.id))
+                          }
+                          onChange={() => toggle(topic.cards)}
+                          label={`${deck.name}: ${topic.name}`}
                         />
-                        <span>{cardTitle(card.frontMarkdown)}</span>
-                        {saved.states[card.id]?.paused && (
-                          <span className="qard-paused-label">Paused</span>
-                        )}
+                        <span className="qard-selection-topic-name">{topic.name}</span>
+                        <span className="qard-selection-count">
+                          {topic.cards.length} {topic.cards.length === 1 ? 'card' : 'cards'}
+                        </span>
                       </label>
-                    ))}
-                  </div>
-                </details>
-              ))}
+                    </summary>
+                    <div className="qard-individuals">
+                      {topic.cards.map((card) => (
+                        <label key={`${card.sourceFile}:${card.sourcePosition.start}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!!saved.states[card.id]?.paused}
+                            checked={chosen.has(card.id) && !saved.states[card.id]?.paused}
+                            onChange={() => toggle([card])}
+                          />
+                          <span>{cardTitle(card.frontMarkdown)}</span>
+                          {saved.states[card.id]?.paused && (
+                            <span className="qard-paused-label">Paused</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
             </details>
           ))}
           {!cards.length && <p className="qard-muted">No cards yet.</p>}
         </section>
-        <aside className="qard-session-options">
-          <label>
-            Session
-            <select
+        <aside className="qard-session-options" aria-label="Session settings">
+          <h2>Session</h2>
+          <div className="qard-session-type-field">
+            <span>Session type</span>
+            <div
+              className="qard-segmented qard-session-type"
+              role="group"
               aria-label="Session type"
-              value={style}
-              disabled={busy}
-              onChange={(e) => setStyle(e.target.value as SessionStyle)}
             >
-              <option value="normal">Normal session</option>
-              <option value="cram">Cram mode</option>
-            </select>
-          </label>
-          <p className="qard-muted qard-small">
+              <button
+                type="button"
+                aria-pressed={style === 'normal'}
+                disabled={busy}
+                onClick={() => setStyle('normal')}
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                aria-pressed={style === 'cram'}
+                disabled={busy}
+                onClick={() => setStyle('cram')}
+              >
+                Cram
+              </button>
+            </div>
+          </div>
+          <p className="qard-muted qard-small qard-session-description">
             {style === 'cram'
-              ? 'Space reveals the answer; Space again moves to the next card. No ratings or schedule changes.'
-              : 'Reveal each answer and rate how well you remembered it.'}
+              ? 'Practise freely. No ratings or schedule changes.'
+              : 'Reveal each answer, then rate how well you remembered.'}
           </p>
           <label>
             Cards
             <select
               aria-label="Study mode"
               value={mode}
+              disabled={busy}
               onChange={(e) => setMode(e.target.value as StudyMode)}
             >
               {modes.map((m) => (
@@ -239,30 +274,13 @@ export function StudySessionBuilder({
             <select
               aria-label="Card order"
               value={order}
+              disabled={busy}
               onChange={(e) => setOrder(e.target.value as CardOrder)}
             >
               <option value="note">Note order</option>
               <option value="shuffle">Shuffle</option>
             </select>
           </label>
-          {cards.some((c) => saved.states[c.id]?.paused) && (
-            <p className="qard-muted qard-small">
-              Paused cards stay out of sessions. Open a card preview to resume it.
-            </p>
-          )}
-          <div className="qard-session-start">
-            <span aria-live="polite">
-              {selected.length} {selected.length === 1 ? 'card' : 'cards'} selected
-            </span>
-            <button
-              className="qard-primary"
-              disabled={busy || !planned.batch.length || services.index.getSnapshot().loading}
-              onClick={() => void begin()}
-            >
-              <Play size={16} />
-              {busy ? 'Preparing…' : 'Start'}
-            </button>
-          </div>
           {style === 'normal' &&
             (saved.settings.reviewBatchSize > 0 || saved.settings.newCardsPerDay > 0) && (
               <div className="qard-pacing-summary">
@@ -287,6 +305,7 @@ export function StudySessionBuilder({
                       <input
                         type="checkbox"
                         checked={extraNew}
+                        disabled={busy}
                         onChange={(event) => setExtraNew(event.target.checked)}
                       />
                       Study extra new cards today
@@ -295,6 +314,26 @@ export function StudySessionBuilder({
                 )}
               </div>
             )}
+          <div className="qard-session-start">
+            <div className="qard-session-counts" aria-live="polite">
+              <strong>
+                {selected.length} {selected.length === 1 ? 'card' : 'cards'} selected
+              </strong>
+              <small>
+                {selected.length
+                  ? `${selectedDeckCount} ${selectedDeckCount === 1 ? 'deck' : 'decks'} · ${selectedTopicCount} ${selectedTopicCount === 1 ? 'topic' : 'topics'}`
+                  : 'Choose a deck or topic'}
+              </small>
+            </div>
+            <button
+              className="qard-primary"
+              disabled={busy || !planned.batch.length || services.index.getSnapshot().loading}
+              onClick={() => void begin()}
+            >
+              {busy ? 'Preparing…' : 'Start session'}
+              <Play size={16} />
+            </button>
+          </div>
           {error && (
             <p className="qard-error" role="alert">
               {error}
@@ -302,7 +341,13 @@ export function StudySessionBuilder({
           )}
         </aside>
       </div>
-    </>
+      {cards.some((c) => saved.states[c.id]?.paused) && (
+        <p className="qard-selection-note">
+          <Pause size={13} />
+          Paused cards are excluded. Open a card to resume it.
+        </p>
+      )}
+    </div>
   );
 }
 

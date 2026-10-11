@@ -116,7 +116,7 @@ it('hands the shortcut to study once and restores it after finishing a session',
   await key('f');
   await click('Study');
   await click('Select all');
-  await click('Start');
+  await click('Start session');
   expect(host.querySelector('.qard-study'), host.textContent ?? '').not.toBeNull();
   expect(services.setFocus).toHaveBeenLastCalledWith(false);
   await key('f');

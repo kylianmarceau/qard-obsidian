@@ -85,7 +85,7 @@ it('leaves midway, survives a full store/UI restart, resumes the next card, and 
   await mount();
   await click('Study');
   await click('Select all');
-  await click('Start');
+  await click('Start session');
   expect(host.textContent).toContain('Question a');
   await key(' ');
   await key('4');
@@ -162,7 +162,7 @@ it('starts Due study with learning repeats and resumes a queue after every origi
     mode.value = 'due';
     mode.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  await click('Start');
+  await click('Start session');
   expect(services.reviews.getSnapshot().sessions[0]!.repeatLearning).toBe(true);
   await key(' ');
   await key('1');
