@@ -1,0 +1,4 @@
+import { build, context } from 'esbuild';
+import { mkdir, copyFile } from 'node:fs/promises';
+const options={entryPoints:['src/main.ts'],bundle:true,external:['obsidian'],format:'cjs',platform:'browser',target:'es2020',outfile:'main.js',jsx:'automatic',logLevel:'info',sourcemap:process.argv.includes('--watch')?'inline':false,minify:!process.argv.includes('--watch'),define:{'process.env.NODE_ENV':JSON.stringify(process.argv.includes('--watch')?'development':'production')},banner:{js:'/* Qard — local-first Obsidian study workspace. MIT license. */'}};
+if(process.argv.includes('--watch')){await (await context(options)).watch();}else{await build(options);await mkdir('release/qard',{recursive:true});for(const file of ['main.js','manifest.json','styles.css'])await copyFile(file,`release/qard/${file}`);}
