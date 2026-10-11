@@ -172,8 +172,10 @@ Merged all current staging work into main, including lesson figures, active stud
 
 ## Custom AI connections — 11 October 2026
 
-On `codex/local-custom-ai`, full `npm run check` passed **592 tests across 76 files**, formatting, strict TypeScript, source/CSS lint, the production build and release-file verification. Version metadata remains at 0.5.13. Dependencies and existing default AI roles are unchanged.
+On `feature/local-custom-ai`, full `npm run check` passed **592 tests across 76 files**, formatting, strict TypeScript, source/CSS lint, the production build and release-file verification. Version metadata remains at 0.5.13. Dependencies and existing default AI roles are unchanged.
 
 New coverage checks API address validation and settings migration, keyless requests and secure optional keys, model discovery and role overrides, JSON-schema/JSON/prompt fallbacks, token reporting, note-tool access restrictions, malformed and truncated replies, actionable server errors, cancellation and request deadlines. Settings interaction tests exercise saving and clearing secrets, selecting Custom AI for a role, and cancelling the connection test when settings close. The synthetic connection probe verifies that the model actually calls a note tool and returns a fresh code available only in its result. Existing OpenRouter regressions pass.
 
-These checks use simulated HTTP responses and Obsidian services. Live Ollama/LM Studio models, native Obsidian interaction and mobile hardware were not exercised; the small connection probe does not establish model quality for every Qard task. Work was isolated in a separate worktree based on main, preserving the ongoing memory-palace branch. This feature has not been merged, released or installed into the test vault.
+These checks use simulated HTTP responses and Obsidian services. Live Ollama/LM Studio models, native Obsidian interaction and mobile hardware were not exercised; the small connection probe does not establish model quality for every Qard task. Work was isolated in a separate worktree based on main, preserving the ongoing memory-palace branch. This feature has not been released or installed into the test vault.
+
+Merged `feature/local-custom-ai` into `staging` on 11 October 2026 without conflicts. Full `npm run check` passed again on the merged staging tree: **592 tests across 76 files**, formatting, strict TypeScript, source/CSS lint, production build and release-file verification. Main and the memory-palace branch were not changed.
