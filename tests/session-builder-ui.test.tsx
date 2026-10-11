@@ -50,7 +50,7 @@ it('shows separate review/new counts and lets users explicitly exceed the daily 
         .click(),
     );
     const button = [...host.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Start',
+      (button) => button.textContent === 'Start session',
     )!;
     expect(button.disabled).toBe(true);
     expect(host.textContent).toContain('2 new cards held for another day');
@@ -108,7 +108,7 @@ it('selects all cards across collapsed decks and starts the complete session', a
     );
     await act(async () =>
       buttons()
-        .find((b) => b.textContent === 'Start')!
+        .find((b) => b.textContent === 'Start session')!
         .click(),
     );
     expect(start).toHaveBeenCalledWith(snapshot.cards);
@@ -150,14 +150,14 @@ it('assigns stable IDs for resumable cram without recording ratings', async () =
         />,
       ),
     );
-    const type = host.querySelector('[aria-label="Session type"]') as HTMLSelectElement;
-    await act(async () => {
-      type.value = 'cram';
-      type.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Session type"] button:last-child')!
+        .click(),
+    );
     expect(host.textContent).toContain('No ratings or schedule changes');
     await act(async () =>
-      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Start')!.click(),
+      [...host.querySelectorAll('button')].find((b) => b.textContent === 'Start session')!.click(),
     );
     expect(start).toHaveBeenCalledWith(
       [expect.objectContaining({ id: 'stable-cram', stable: true })],
@@ -165,6 +165,93 @@ it('assigns stable IDs for resumable cram without recording ratings', async () =
     );
     expect(writer.ensureStable).toHaveBeenCalledWith(snapshot.cards);
     expect(services.reviews.getSnapshot().history).toEqual([]);
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});
+
+it('keeps deck, topic and individual selection consistent while filtering out reviewed and paused cards', async () => {
+  const index = new CardIndex();
+  const note = (deck: string, topic: string, ids: string[]) =>
+    `---\nqard-deck: ${deck}\nqard-topic: ${topic}\n---\n` +
+    ids.map((id) => `<!-- qard-id: ${id} -->\n> [!qard]- Question ${id}\n> Answer\n`).join('\n');
+  index.update('transport.md', note('Networks', 'Transport', ['tcp', 'paused']));
+  index.update('application.md', note('Networks', 'Application', ['dns']));
+  index.update('biology.md', note('Biology', 'General', ['cell']));
+  index.setLoading(false);
+  const reviews = new ReviewStore(async () => {});
+  await reviews.setPaused('paused', true);
+  await reviews.review('dns', 3);
+  const start = vi.fn();
+  const services = {
+    index,
+    reviews,
+    writer: { ensureStable: vi.fn(async (cards: QardCard[]) => cards) },
+  } as unknown as QardServices;
+  const host = document.createElement('div'),
+    root = createRoot(host);
+  document.body.append(host);
+  try {
+    await act(async () =>
+      root.render(
+        <StudySessionBuilder
+          cards={index.getSnapshot().cards}
+          decks={index.getSnapshot().decks}
+          initial={{ decks: [], topics: [], cards: [] }}
+          services={services}
+          start={start}
+          back={vi.fn()}
+        />,
+      ),
+    );
+    const networks = host.querySelector<HTMLInputElement>('[aria-label="Networks"]')!;
+    await act(async () => networks.closest('details')!.querySelector('summary')!.click());
+    await act(async () => networks.click());
+    expect(host.querySelector('.qard-session-counts')?.textContent).toBe(
+      '2 cards selected1 deck · 2 topics',
+    );
+    expect(networks.closest('summary')?.querySelector('.qard-selection-count')?.textContent).toBe(
+      '2 / 2',
+    );
+    const transport = host.querySelector<HTMLInputElement>('[aria-label="Networks: Transport"]')!;
+    await act(async () => transport.click());
+    expect(networks.indeterminate).toBe(true);
+    expect(host.querySelector('.qard-session-counts')?.textContent).toBe(
+      '1 card selected1 deck · 1 topic',
+    );
+    await act(async () => transport.closest('details')!.querySelector('summary')!.click());
+    const tcp = [...host.querySelectorAll<HTMLLabelElement>('.qard-individuals label')]
+      .find((label) => label.textContent === 'Question tcp')!
+      .querySelector('input')!;
+    const paused = [...host.querySelectorAll<HTMLLabelElement>('.qard-individuals label')]
+      .find((label) => label.textContent === 'Question pausedPaused')!
+      .querySelector('input')!;
+    expect(paused.disabled).toBe(true);
+    expect(paused.checked).toBe(false);
+    await act(async () => tcp.click());
+    expect(transport.checked).toBe(true);
+    expect(networks.checked).toBe(true);
+    await act(async () => host.querySelector<HTMLInputElement>('[aria-label="Biology"]')!.click());
+    expect(host.querySelector('.qard-session-counts')?.textContent).toBe(
+      '3 cards selected2 decks · 3 topics',
+    );
+    const mode = host.querySelector<HTMLSelectElement>('[aria-label="Study mode"]')!;
+    await act(async () => {
+      mode.value = 'new';
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(host.querySelector('.qard-session-counts')?.textContent).toBe(
+      '2 cards selected2 decks · 2 topics',
+    );
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('.qard-session-start button')!.click(),
+    );
+    const expected = ['cell', 'tcp'].map((id) =>
+      index.getSnapshot().cards.find((card) => card.id === id),
+    );
+    expect(start).toHaveBeenCalledWith(expected, 'normal', 'new');
+    expect(services.writer.ensureStable).toHaveBeenCalledWith(expected);
   } finally {
     await act(async () => root.unmount());
     host.remove();
