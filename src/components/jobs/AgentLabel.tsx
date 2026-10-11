@@ -15,6 +15,7 @@ const CONNECTIONS: Record<string, string> = {
   codex: 'Codex',
   anthropic: 'Anthropic API',
   openrouter: 'OpenRouter',
+  custom: 'Custom AI',
 };
 
 /** A quiet "Tutor · Claude Code · haiku" tag showing who is working on something. Hidden when turned off in settings. */
@@ -23,7 +24,7 @@ export function AgentLabel({ services, role }: { services: QardServices; role: A
   const key = useSyncExternalStore(services.reviews.subscribe ?? noSubscription, () => {
     const s = services.reviews.getSnapshot().settings;
     return s?.showAgent && s.agents
-      ? `${s.agents.roles[role].provider}\u0000${s.agents.roles[role].model}`
+      ? `${s.agents.roles[role].provider}\u0000${s.agents.roles[role].model.trim() || defaultModel(s.agents.roles[role].provider, role, s)}`
       : '';
   });
   if (!key) {

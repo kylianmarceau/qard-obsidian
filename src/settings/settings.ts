@@ -1,3 +1,8 @@
+import {
+  readCustomConnection,
+  DEFAULT_CUSTOM_CONNECTION,
+  type CustomConnection,
+} from '../agents/custom-connection';
 import { retention } from '../review/fsrs-scheduler';
 import type { CardOrder, StudyMode } from '../review/session';
 import type { AgentProvider, AgentRole } from '../agents/runner';
@@ -16,6 +21,7 @@ export interface RoleSetting {
 export interface AgentSettings {
   claudePath: string;
   codexPath: string;
+  custom: CustomConnection;
   roles: Record<AgentRole, RoleSetting>;
 }
 /** figures: where drawn figures are saved, one subfolder per subject (the vault's assets/<domain>/ convention). */
@@ -53,6 +59,7 @@ export const DEFAULT_TEST_SETTINGS: TestSettings = {
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
   claudePath: '',
   codexPath: '',
+  custom: DEFAULT_CUSTOM_CONNECTION,
   roles: {
     tutor: { provider: 'claude-code', model: 'haiku' },
     writer: { provider: 'claude-code', model: '' },
@@ -80,7 +87,7 @@ export const DEFAULT_SETTINGS: QardSettings = {
   learn: DEFAULT_LEARN_SETTINGS,
   showAgent: true,
 };
-const PROVIDERS: AgentProvider[] = ['claude-code', 'codex', 'anthropic', 'openrouter'];
+const PROVIDERS: AgentProvider[] = ['claude-code', 'codex', 'anthropic', 'openrouter', 'custom'];
 const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback);
 function readTestSettings(raw: unknown): TestSettings {
   const t = raw && typeof raw === 'object' ? (raw as Partial<TestSettings>) : {};
@@ -111,6 +118,7 @@ function readAgentSettings(raw: unknown, legacy: unknown): AgentSettings {
     return {
       claudePath: text(a.claudePath, ''),
       codexPath: text(a.codexPath, ''),
+      custom: readCustomConnection(a.custom),
       roles: {
         tutor: readRole(roles.tutor, d.tutor),
         writer: readRole(roles.writer, d.writer),
@@ -137,6 +145,7 @@ function readAgentSettings(raw: unknown, legacy: unknown): AgentSettings {
   return {
     claudePath: provider === 'claude-code' ? path : '',
     codexPath: provider === 'codex' ? path : '',
+    custom: readCustomConnection(undefined),
     roles: {
       tutor,
       writer: { provider, model },

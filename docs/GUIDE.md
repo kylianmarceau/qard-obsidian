@@ -459,8 +459,17 @@ In **Settings → Qard → AI connections**, set up the tools and keys Qard may 
 | **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
 | **Anthropic API** | Calls the Claude API directly. The model reads notes only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
 | **OpenRouter** | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile. |
+| **Custom AI** | A local or hosted OpenAI-compatible chat server, including Ollama and LM Studio. Uses the same read-only note tools. Requires a model that can follow Qard's JSON formats; note-reading tasks also require tool support. |
 
 API keys are kept in Obsidian's secure storage (Obsidian 1.11.4+), not in your vault or plugin data.
+
+To use a local model, start Ollama or LM Studio's server and make a downloaded model available. Enter **Custom AI server** (`http://localhost:11434/v1` for Ollama or `http://localhost:1234/v1` for LM Studio) and its exact name under **Custom AI model**. A server root is normalized to `/v1`; custom API prefixes are supported. **Refresh models** retrieves suggestions when the server supports `/models`; you can always type a model name manually. **Custom AI API key** is optional for keyless servers and can be removed with **Clear key**.
+
+Choose **Test connection** to check JSON replies and a note-tool round trip using synthetic text. It sends no vault notes and does not change role assignments. You can cancel the test; closing settings also stops waiting. A result can report JSON success with limited tool compatibility. Requests that already include all source text may work on such models, while note-reading tasks need tool support. This small check does not guarantee the model's accuracy or its ability to handle a full course or long test. Test each model before relying on it.
+
+Under **AI roles**, select **Custom AI** for Tutor, Writer, Marker or Illustrator. Leave that role's model field empty to use the custom connection's default, or enter another model served by the same address. All custom roles share one server and optional key. Qard tries schema output first, falls back to JSON mode and then prompt-only JSON instructions if the server rejects the format, and validates study outputs through the existing feature validators. It does not silently remove note tools. Provider-specific OpenRouter billing/reasoning options are omitted; token usage is recorded when the server reports it.
+
+With a locally hosted, downloaded model, Qard's requests go to that local server and can work offline. A custom hosted server or a local application using a cloud model still processes the supplied content remotely. On mobile, `localhost` means the phone itself: accessing a desktop server requires a reachable network address and suitable server configuration. HTTP addresses are accepted for local/network servers; use HTTPS for hosted connections. Qard does not install models or start servers. See the [Ollama compatibility documentation](https://docs.ollama.com/api/openai-compatibility) and [LM Studio documentation](https://lmstudio.ai/docs/developer/openai-compat).
 
 Then, under **AI roles**, choose a connection and model for each job:
 

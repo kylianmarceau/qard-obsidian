@@ -169,3 +169,11 @@ The typed-answer control now lives only in Settings → Qard → Study preferenc
 ## Release 0.5.13 — 10 October 2026
 
 Merged all current staging work into main, including lesson figures, active study-time tracking, developer diagnostics, paced study, typed recall, reverse pairs and progress backups. Release metadata agrees across the package, lock file, manifest and compatibility table. Full `npm run check` passed **575 tests across 74 files**, formatting, TypeScript, source/CSS lint, production build and release-file verification. The three install files match the packaged release directory. Native test-vault checks verified the settings controls, reverse-pair creation option, backup restore preview and removal of the study-screen typing toggle; existing notes and plugin data were preserved during installation. Mobile hardware and live AI figure generation were not exercised in this release validation.
+
+## Custom AI connections — 11 October 2026
+
+On `codex/local-custom-ai`, full `npm run check` passed **592 tests across 76 files**, formatting, strict TypeScript, source/CSS lint, the production build and release-file verification. Version metadata remains at 0.5.13. Dependencies and existing default AI roles are unchanged.
+
+New coverage checks API address validation and settings migration, keyless requests and secure optional keys, model discovery and role overrides, JSON-schema/JSON/prompt fallbacks, token reporting, note-tool access restrictions, malformed and truncated replies, actionable server errors, cancellation and request deadlines. Settings interaction tests exercise saving and clearing secrets, selecting Custom AI for a role, and cancelling the connection test when settings close. The synthetic connection probe verifies that the model actually calls a note tool and returns a fresh code available only in its result. Existing OpenRouter regressions pass.
+
+These checks use simulated HTTP responses and Obsidian services. Live Ollama/LM Studio models, native Obsidian interaction and mobile hardware were not exercised; the small connection probe does not establish model quality for every Qard task. Work was isolated in a separate worktree based on main, preserving the ongoing memory-palace branch. This feature has not been merged, released or installed into the test vault.
