@@ -1,0 +1,143 @@
+[
+  {
+    "name": "course transcript with typed, choice, unknown and unfinished steps",
+    "path": "Qard/Lessons/Transport.json",
+    "summary": "  Keep practising.  ",
+    "lesson": {
+      "version": 1,
+      "topic": "Transport",
+      "notes": [],
+      "steps": [
+        {
+          "title": "Protocols",
+          "explain": "TCP carries data.",
+          "connect": "Builds on packets.",
+          "checkFirst": false,
+          "check": {
+            "id": "q",
+            "type": "short",
+            "prompt": "Explain TCP.",
+            "marks": 2,
+            "rubric": [
+              {
+                "point": "Ordered",
+                "marks": 2
+              }
+            ],
+            "model": "Reliable, ordered delivery."
+          },
+          "misconceptions": []
+        },
+        {
+          "title": "Choice",
+          "explain": "TCP carries data.",
+          "connect": "Builds on packets.",
+          "checkFirst": false,
+          "check": {
+            "id": "choice",
+            "type": "mcq",
+            "prompt": "Explain TCP.",
+            "marks": 2,
+            "rubric": [
+              {
+                "point": "Ordered",
+                "marks": 2
+              }
+            ],
+            "model": "Reliable, ordered delivery.",
+            "options": ["TCP", "UDP"],
+            "answer": 1
+          },
+          "misconceptions": []
+        },
+        {
+          "title": "Unknown",
+          "explain": "TCP carries data.",
+          "connect": "Builds on packets.",
+          "checkFirst": false,
+          "check": {
+            "id": "q",
+            "type": "short",
+            "prompt": "Explain TCP.",
+            "marks": 2,
+            "rubric": [
+              {
+                "point": "Ordered",
+                "marks": 2
+              }
+            ],
+            "model": "Reliable, ordered delivery."
+          },
+          "misconceptions": []
+        },
+        null
+      ],
+      "state": [
+        {
+          "answer": {
+            "text": "  Ordered packets.  "
+          },
+          "mark": {
+            "score": 2,
+            "awarded": [true],
+            "annotations": [],
+            "mistake": "none",
+            "feedback": "Correct"
+          },
+          "asks": [
+            {
+              "q": "Why?",
+              "a": "First line.\nSecond line."
+            }
+          ]
+        },
+        {
+          "answer": {
+            "choice": 1
+          },
+          "asks": []
+        },
+        {
+          "answer": {
+            "unknown": true
+          },
+          "asks": []
+        },
+        {
+          "asks": []
+        }
+      ],
+      "current": 0,
+      "mastery": "Networks/Mastery.md",
+      "course": "Networks",
+      "objective": "transport",
+      "map": {
+        "title": "Transport protocols",
+        "plan": "Compare TCP and UDP.",
+        "mermaid": "flowchart TD\nA[f(x)] --> B[Delivery]",
+        "steps": []
+      }
+    },
+    "expected": {
+      "path": "Qard/Lessons/Transport.md",
+      "text": "---\nqard-lesson: true\nqard-objective: transport\n---\n\n# Transport protocols\n\n2026-10-06 · [[Networks/Mastery|Networks]] · `transport`\n\n## Summary\n\nKeep practising.\n\n## Plan\n\nCompare TCP and UDP.\n\n```mermaid\nflowchart TD\nA[\"f(x)\"] --> B[Delivery]\n```\n\n## Steps\n\n### 1. Protocols\n\nTCP carries data.\n\nBuilds on packets.\n\n**Check:** Explain TCP.\n\n**My answer (2/2):** Ordered packets.\n\n**Model answer:** Reliable, ordered delivery.\n\n> **Q:** Why?\n> First line.\n> Second line.\n\n### 2. Choice\n\nTCP carries data.\n\nBuilds on packets.\n\n**Check:** Explain TCP.\n\n**My answer:** UDP\n\n**Model answer:** Reliable, ordered delivery.\n\n### 3. Unknown\n\nTCP carries data.\n\nBuilds on packets.\n\n**Check:** Explain TCP.\n\n**My answer:** _I didn't know._\n\n**Model answer:** Reliable, ordered delivery.\n"
+    }
+  },
+  {
+    "name": "standalone transcript without a lesson map",
+    "path": "Qard/Lessons/Standalone.json",
+    "summary": "Empty lesson.",
+    "lesson": {
+      "version": 1,
+      "topic": "Transport",
+      "notes": [],
+      "steps": [],
+      "state": [],
+      "current": 0
+    },
+    "expected": {
+      "path": "Qard/Lessons/Standalone.md",
+      "text": "---\nqard-lesson: true\n---\n\n# Transport\n\n2026-10-06\n\n## Summary\n\nEmpty lesson.\n\n## Plan\n\n\n\n```mermaid\n\n```\n\n## Steps\n\n\n"
+    }
+  }
+]

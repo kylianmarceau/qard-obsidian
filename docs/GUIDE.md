@@ -1,0 +1,551 @@
+# Qard for Obsidian
+
+**Your learning, in focus.** Qard is the study layer for an Obsidian vault: a full workspace for browsing decks, choosing what to study, and reviewing Markdown flashcards. Your notes remain ordinary Markdown. No account, backend, analytics, or required network service.
+
+Qard uses a compact deck list, a single breadcrumb trail, restrained blue accents, and a focused study screen. The interface shows only the controls needed for the current task. It runs as a native Obsidian `ItemView` using React components with Preact’s compatibility renderer, not an iframe.
+
+**No prefilled decks.** A fresh install shows “No cards yet” unless your vault already contains Qard callouts. Installing or enabling Qard never creates sample notes or decks. The `example-vault/` folder contains development fixtures only and is not included in the plugin release assets.
+
+## Install in a test vault
+
+Requires Obsidian 1.7.2 or newer. Develop and test in a separate vault first.
+
+```sh
+cd qard-obsidian
+npm ci
+npm run check
+npm run test-vault
+```
+
+1. In Obsidian, choose **Open another vault → Open folder as vault** and select `.test-vault`.
+2. Allow community plugins in this test vault, then enable **Qard** under **Settings → Community plugins** if necessary.
+3. Click the Qard ribbon icon or run **Qard: Open study workspace** from the command palette.
+4. A new test vault starts empty. Choose **Create a card** to add your first card.
+
+The test-vault script installs the current build without adding notes. Existing notes and review data are preserved, including any examples created by older versions of the development script. Toggle Qard off/on after updating its build. The script never discovers or writes to your personal vault.
+
+For optional sample decks, run `npm run test-vault -- --examples` and open the separate `.example-test-vault` folder. Only that explicit option copies the development fixtures; rerunning it does not overwrite existing notes.
+
+For a prebuilt installation, download `main.js`, `manifest.json`, and `styles.css` from the GitHub release. For a local build, use the same files from `release/qard/`. Copy them into:
+
+```text
+YOUR-TEST-VAULT/.obsidian/plugins/qard/
+    manifest.json
+    main.js
+    styles.css
+```
+
+Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or the original web app into the vault. You can also install Qard from Obsidian’s Community plugins directory.
+
+## AI flashcards
+
+Choose **Generate with AI** inside a deck or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
+
+Review the questions and answers, edit them or preview their Markdown, and adjust the suggested **Save to deck** and **Topic** if needed. Deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Once adding begins, the batch's destination stays fixed so later selections and save retries go into the same generated note without duplicating cards. Folder sources are snapshotted at Start, so background retries use the same notes even if a folder later gains new files.
+
+Generation continues while you visit other screens, appears in a **Generating flashcards** row on the Decks home page and in the running-jobs menu, and can be cancelled or retried. The latest review draft, edits, selections and added status are saved in `Flashcard drafts.json` in your card folder. The home row changes to **Review flashcards** when the batch is ready and stays until all cards have been added or the draft is replaced. Click it to reopen generation or review. After a plugin reload, return to **Generate with AI** to resume reviewing. An interrupted AI request requires **Try again**. **Generate another batch** replaces the review draft; cards already added remain in the vault. Usage appears under **Writing flashcards** in the token usage report.
+
+## Keeping cards consistent with your notes
+
+Generated flashcards retain the note versions they were based on. Cards made from practice tests, lesson suggestions and their follow-up answers also link to their source notes. General-knowledge cards without a source are not tracked.
+
+When a linked note changes, an affected-card row appears on Decks. Open the row or run **Qard: Review source updates** to compare the changed passages with the current card and its explanation. Note changes are detected locally; **Suggest an update** uses your configured Writer connection only when you request it. Review and edit the proposed question and answer, then choose **Apply update** or **Keep card as is**. Unrelated changes can be acknowledged without editing the card. Suggestions become unavailable if the card or its notes change while you are reviewing them.
+
+Wording edits keep the card's ID, review history and schedule. When the correct answer changes, leave **The correct answer changed** checked: Qard preserves the history, makes the card due now and flags it for a fresh normal review. That flag clears after an actual rating; cram sessions do not clear it. Memory statistics omit flagged cards until they are reviewed. This does not reset the FSRS model or erase previous reviews.
+
+Linked sources follow note and folder renames while Qard is enabled. Deleted sources are shown as missing and cannot be used for AI suggestions until restored. Existing cards retain their identities when their card notes move. A partially saved update can be finished after a reload without adding a duplicate card.
+
+For older generated cards and handwritten cards, open a card's preview and choose **Link a source note**. Tracking starts from that note's current version; Qard cannot reconstruct the source of an older card automatically. You can link more than one source note. Source versions, links and pending suggestions are stored locally in `Qard/Source links.json`; back up that file with your notes. Keep this metadata file at its original path. Generation drafts, new practice tests and new lessons also retain their source versions so a change before adding their suggested cards is still detected. Historical tests and lesson transcripts remain records of their original attempts; updates edit the derived flashcards, including their answers and explanations.
+
+## Development
+
+- `npm run dev` — rebuild the plugin on source changes.
+- `QARD_VAULT=~/path/to/vault npm run dev` (or `npm run dev -- --vault=~/path/to/vault`) — also copy `main.js`, `manifest.json` and `styles.css` into that vault's `.obsidian/plugins/qard/` after every rebuild, including edits to `styles.css`. It never touches `data.json` (settings and review history), refuses folders that aren't vaults, and adds the `.hotreload` marker so the [Hot Reload](https://github.com/pjeby/hot-reload) plugin reloads Qard automatically. `npm run build -- --vault=…` installs a production build once.
+- `npm run lint` — official Obsidian source checks, with zero warnings.
+- `npm run lint:css` — official Obsidian CSS checks against the review’s Electron 30 baseline, with zero warnings.
+- `npm run typecheck` — strict TypeScript checking.
+- `npm test` — parser, indexing, writing, selection, scheduling, and UI lifecycle tests.
+- `npm run build` — create `main.js` and the installable `release/qard/` folder.
+- `npm run check` — typecheck, source and CSS lint, tests, production build, and release-content checks.
+- `npm run test-vault` — install the current build in an isolated vault without adding notes.
+- `npm run test-vault -- --examples` — install in a separate vault with optional example notes.
+
+See [architecture and reuse notes](ARCHITECTURE.md).
+
+## Markdown cards
+
+A simple card uses an Obsidian callout. The callout title is the question; its quoted body is the answer:
+
+```markdown
+---
+qard-deck: Computer Networks
+---
+
+# Transport Layer
+
+<!-- qard-id: example-tcp -->
+> [!qard]- What does TCP provide?
+> TCP provides **reliable, ordered delivery** of data.
+>
+> - Retransmission
+> - Ordered delivery
+```
+
+The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard]` and `[!qard]+`. Prefix every answer line, including blank lines, with `>`. Keep cards outside code fences. In Qard, decks are compact rows, topics start collapsed, and expanding a topic shows question rows rather than expanded answers.
+
+### Decks and topics
+
+- `qard-deck` names a **logical deck**. Every note with the exact same deck name contributes to the same deck, regardless of its folder. Names are case-sensitive.
+- Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name.
+- The closest preceding heading, at any level, becomes the topic. Nested headings replace the topic rather than building a hierarchy. ATX (`# Heading`) and setext headings work; headings inside fenced code are ignored.
+- Before the first heading, the topic is `General`.
+- Optional `qard-topic: Transport Layer` overrides headings for the entire file.
+- Search matches deck, topic, question, answer, YAML tags and inline tags. Inside a deck it shows matching cards with their topics expanded.
+
+For example, `networking-1.md` and `networking-2.md` can both declare `qard-deck: Computer Networks`; they appear as one deck. Topics with the same name in that deck merge too. Within a deck, note paths are sorted and cards keep their source order.
+
+### Manage several cards
+
+Open a deck and choose **Select cards**. Select individual cards, check a topic to select all its matching cards (including cards not yet displayed), or choose **Select matching cards** for the whole deck or current search. Changing the search clears the selection. Cards with duplicate IDs cannot be selected until their IDs are fixed.
+
+The action bar appears once cards are selected. **Pause**, **Resume** and **Needs fixing** apply to the whole selection in one saved update, preserving schedules, review history and statistics. **Move…** lets you choose an existing deck/topic or enter new names. After saving, Qard opens the destination deck. Choose **Done selecting** to hide selection controls.
+
+Moves change each card's logical deck and topic while keeping its callout in the original note. Relative attachments, note prose, tags, sibling groups and stable IDs stay intact. Qard writes a small comment before the card's ID that takes precedence over the file's deck/topic and headings:
+
+```markdown
+<!-- qard-location: {"deck":"Exam revision","topic":"Transport"} -->
+<!-- qard-id: existing-card-id -->
+> [!qard]- What does TCP provide?
+> Reliable, ordered delivery.
+```
+
+Keep this comment when editing the Markdown. Qard preserves it through card edits and splits; removing it restores the file's normal deck/topic rules. **Study this deck/topic** and **Create card from selection** use the moved card's placement when the cursor is inside its callout. Each note is saved atomically. If a move across several notes fails partway through, Qard reports how many cards moved; refresh the library and select the remaining cards to continue.
+
+### Both sides support rich Markdown
+
+Images, formatting, lists, code, wikilinks and math are rendered with Obsidian’s Markdown renderer and the source note path. The primary format stays simple. For a multiline front, add one unobtrusive separator:
+
+````markdown
+> [!qard]- What does this function return?
+>
+> ```js
+> [1, 2, 3].map(n => n * 2)
+> ```
+> <!-- qard-answer -->
+> `[2, 4, 6]`
+````
+
+Qard’s editor writes this marker only when the front has multiple lines. The answer marker is hidden in normal reading view; ordinary Obsidian callouts still treat all quoted content as their body. The marker is reserved outside fenced code in Qard cards.
+
+### Images and LaTeX
+
+```markdown
+> [!qard]- Identify this diagram: ![[network.svg]]
+> ![[Attachments/network.svg|400]]
+>
+> This shows **packet routing**.
+
+> [!qard]- What does $E = mc^2$ mean?
+> Energy and mass are related:
+>
+> $$
+> E = mc^2
+> $$
+```
+
+Local Markdown images such as `![Diagram](../Attachments/network.svg)` also use Obsidian’s renderer. Source-relative links keep their source path. When creating a card from a selection into another deck, Qard creates a sibling note to preserve relative attachments. Cards created from the library go into the configured folder; vault-relative wikilinks are easiest there.
+
+Simple remote Markdown images are shown as links instead of automatically loaded images. Other HTML/embed behavior follows Obsidian and its installed Markdown processors; Qard is not a network sandbox. Use vault attachments for fully offline cards. No card text is uploaded by Qard.
+
+### Stable identities and safe editing
+
+You do not need to type IDs. Handwritten callouts are detected immediately. Before persistent review or when editing, Qard inserts a UUID comment directly above an unidentified card. Cards created in Qard receive IDs immediately.
+
+Keep the adjacent `<!-- qard-id: ... -->` comment with its callout when moving a card. The ID survives edits, reorderings and file renames. Copying a card should omit its ID; Qard flags duplicate IDs and blocks ambiguous review/edit operations. Removing the ID makes the card a new identity. Editing unidentified cards before their first review does not preserve an identity, because none has yet been saved.
+
+The editor, delete action and ID assignment use `Vault.process` and replace only the affected source range. Surrounding prose and line endings are preserved. Concurrent content changes or ambiguous matches stop the edit rather than overwrite unknown text. Create-from-selection copies the selection as Markdown; it does not remove the original text. Delete removes the callout and its ID from the note after an inline confirmation. Review metadata is retained so undoing a deletion can restore its history; use Obsidian/File Recovery or your normal backups for note recovery.
+
+## Linked reverse pairs
+
+For a basic question/answer card, **Also test the reverse** creates a linked pair. Each direction has its own stable identity, review history and schedule. They share a sibling group, so normal study defers the opposite direction until tomorrow by default; cram includes both. Editing either direction updates both in one note write. A missing, manually altered or ambiguous partner stops the edit to protect your notes. Deleting one direction leaves the other as an independent basic card.
+
+The pair uses ordinary callouts with reciprocal `<!-- qard-reverse: PARTNER_ID -->` comments and a shared `qard-siblings` comment. Preserve these comments when editing Markdown. Cloze and image cards use their existing variants instead of reverse pairs.
+
+## Cloze cards and image occlusion
+
+Choose **New card**, then **Cloze** or **Image occlusion** in the existing editor. Basic cards remain the default. Both formats use the same normal/cram sessions, reveal controls, ratings, FSRS scheduling and saved sessions as basic cards. No AI connection is needed.
+
+For a cloze, write or paste a sentence, select a word or phrase, and choose **Hide selection**. The editor inserts a numbered blank such as `{{c1::TCP}}`. Each distinct number creates a separate card; repeat a number to hide several phrases together. Add an optional hint with `{{c1::TCP::protocol}}`. Other numbered answers remain visible as context. **Show preview** lets you inspect each numbered card before saving. Markdown and math work inside blanks; literal cloze examples in inline/fenced code are ignored. Extra notes are optional and appear after reveal.
+
+For image occlusion, choose an existing vault image, use **Add image**, or drop a local image into the editor. New images use Obsidian's configured attachment location. Drag over labels or details to draw rectangular masks; drag a mask to move it and its lower-right handle to resize it. Select a mask to remove it or adjust its width/height. Focused masks also support arrow-key movement and Delete/Backspace. **Undo last mask** removes the most recently added region. **One card per mask** is on by default: the active region reveals while other masks stay covered. Turn it off to recall all hidden regions together. PNG, JPEG, GIF, WebP, SVG and AVIF attachments are supported; added files must be smaller than 20 MB.
+
+Saving creates ordinary Qard callouts in one note with separate stable IDs for each variant. Editing a variant changes that card and keeps its review history; other variants retain their own content and history. The image remains a normal Markdown wikilink, so Obsidian's attachment link updates also work when files move. Missing images show a recovery message and can be replaced through **Edit**. Masks scale with the image at narrower widths.
+
+The editor writes a final front-line comment, `<!-- qard-cloze: 1 -->` or `<!-- qard-occlusion: {...} -->`, before the existing `<!-- qard-answer -->` separator. Keep these comments when moving or editing callouts by hand. A cloze example:
+
+```markdown
+<!-- qard-id: example-cloze -->
+> [!qard]- {{c1::TCP::protocol}} provides reliable delivery.
+> <!-- qard-cloze: 1 -->
+> <!-- qard-answer -->
+> Recall the hidden answer.
+```
+
+Plain basic cards containing literal `{{c1::...}}` text do not change type without the format comment.
+
+## Studying at your pace
+
+Choose **Study**, select any combination of decks/topics/individual cards, choose a mode and order, and start. Expand a deck to choose topics, then expand a topic to choose individual cards.
+
+In **Settings → Qard → Study**, **New cards per day** sets an optional allowance across normal sessions, and **Review batch size** sets how many cards begin a sitting. Both default to **0** (unlimited). With pacing enabled, previously studied cards come first; the builder shows review/new counts, the batch and remaining selection. Learning repeats do not use the new-card allowance. Undoing a first rating returns the allowance. Existing imported review history does not count as a new introduction. The allowance resets at local midnight.
+
+After completing a batch, choose **Continue studying** to start the next part of your selection. Remaining cards retain their original due dates; saved unfinished batches keep their remaining selection after a restart. **Study extra new cards today** in the builder explicitly bypasses the allowance for that session. Cram and exam sessions are unrestricted. With a daily allowance enabled, **Today** also offers new cards by deck.
+
+**Type answers before revealing** in **Settings → Qard → Study preferences** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
+
+| Mode | Includes |
+| --- | --- |
+| **All cards** | Every selected card, regardless of scheduling, due date or review history |
+| Due cards | Unreviewed cards and reviewed cards whose due date has arrived |
+| New cards | Cards with no recorded reviews |
+| Difficult cards | Cards whose last rating was Again or Hard |
+
+**Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never record ratings, alter schedules or count as reviews in Statistics. Cards receive stable IDs when needed to save the session position. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
+
+Order can be deck/note order or shuffle. The session shows progress through the selected cards. Normal sessions with FSRS also keep a learning queue: cards rated Again return when their actual scheduled interval arrives. Hard, Good and Easy finish that card for the current sitting while preserving its FSRS schedule. Ready learning cards appear between questions without interrupting the current answer. When only future learning cards remain, Qard shows the next return time. Keep the session open to continue automatically, choose **Save and leave** to resume later, or **Finish session** to end the queue while preserving all ratings and scheduled due dates. Learning queues survive a restart and resolve the latest card content. Undo restores the queue as well as the rating; skipping or pausing a returning card removes it from this session. Progress counts distinct cards, while the summary also reports repeated reviews. Exam sessions, cram, simple scheduling and scheduling-off study keep their single-pass behavior. The summary offers an explicit **Review difficult cards** action. Normal and cram sessions automatically save their card order and next position. Use **Save and leave**, or close Qard, then choose **Resume** under **Continue studying** on the Decks screen (also shown inside the relevant deck). Sessions survive an Obsidian restart. Completed ratings and the next position save together; a failed save keeps you on the same card. Resuming uses the current Markdown and skips missing, paused, deferred or ambiguous remaining cards with a notice. Discarding a session removes only its saved queue, and completed sessions are removed automatically. Answers start hidden when you resume. Cram sessions assign stable card IDs when needed so their position can survive note edits; they still do not record ratings or change schedules.
+
+| Key | Action |
+| --- | --- |
+| Space | Normal: reveal/hide answer. Cram: reveal/next card |
+| 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal |
+| U | Undo the last rating in this visit, including from the completion screen |
+| S | Skip the current card for this session |
+| E | Edit the current card and return to its queue position |
+| F | Toggle focus mode |
+| Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
+
+**Undo** restores the last rating's schedule, FSRS memory, history, statistics and saved session position. The card returns with its answer hidden. It is available until you rate, skip or pause another card or leave this study view; restarting the plugin clears it. If another view changes the review, its card or its queue, undo becomes unavailable rather than overwriting that work. An undone Again rating also restores its linked course lapse when that objective has not since changed.
+
+**Edit** opens the existing editor from the study screen, or with **E**. Saving returns to the same queue position with the answer hidden. The card keeps its ID, history and sibling group. Changes to the question or answer use the answer-changed check: the card becomes due for a content check, and its memory history is retained. Cancelling an unsaved edit returns to the current answer. If the note saves but the content check cannot save, retry from the editor; the same note edit is not applied twice.
+
+**Needs fixing** is under **More actions** on the study screen and card preview. It marks a card without advancing the session, changing its schedule or pausing it. The marker survives a restart and later reviews. Use the **Needs fixing** filter on Decks to find flagged cards and cards marked **Often forgotten**; their markers also appear in topic lists. **Clear needs fixing** removes the manual marker.
+
+**Often forgotten** appears after scheduled Again ratings on five different local study days since the last repair. Multiple failures in one learning session count as one day, unscheduled ratings do not count, and imported lapse totals do not invent failure days. The prompt suggests splitting the question or adding a short explanation and shows **Mark fixed** beside the reminder. **Edit** and **Pause card** stay in the action toolbar below the review controls. It never pauses a card automatically. Mark fixed clears the manual marker and starts a new failure-counting window, preserving the full review history, due date and memory state. Editing alone does not dismiss the advisory.
+
+**Related cards** share the identity of one cloze sentence or image created in the editor. After a scheduled normal review, its other variants are deferred until the next local midnight, including in other sessions and after a restart. Due dates and memory states do not change; undo restores the deferral and original queue. Cram includes deferred variants and records no ratings. Existing cloze/image variants are recognized only when their content and source match; their group is persisted when IDs are assigned or a card is edited, so it survives later edits and renames. Ordinary cards in the same note are independent. Disable **Separate related cards** in settings to clear temporary deferrals. Scheduling-off study also clears them. The session summary distinguishes deferred cards from skipped cards.
+
+**Skip** moves past a card for this session without recording a rating or changing its due date. Skips survive saving and resuming, and the completion screen offers **Review skipped cards** for cards that remain active.
+
+**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
+
+Completed normal sessions show a borderless **Recall difficulty** curve for the session's Again, Hard, Good and Easy ratings. Counts, percentages and a median marker summarize your actual ratings, including ratings saved before resuming. Skipped cards are excluded. Cram sessions do not record ratings, so they do not show this chart.
+
+Shortcuts are inactive in text fields, editable content, other workspace tabs, modal inputs, media controls, and while recording. Held keys and modified shortcuts do not rate cards. Focus mode fills the app window without requiring Electron’s Fullscreen API, hides Qard navigation, and restores the original workspace when exited or the view/plugin closes. Native OS window decorations may remain visible.
+
+Delete a whole deck with the trash icon on its row or beside the deck title. Delete a topic with the trash icon beside its Study button. Confirming removes all matching flashcard callouts across the vault, including cards hidden by search, while preserving headings, prose, attachments and other cards. This cannot be undone from Qard.
+
+Under **Learn**, trash icons remove courses, lessons and pending course mappings. Opened courses, lessons and checks also have a trash icon in the top bar. Deleting a course moves its mastery file and associated generated lessons/checks to Obsidian's configured trash; source notes, flashcards and practice tests remain. Deleting a running mapping stops it and removes its saved proposal so it cannot restart on reload.
+
+Previews offer edit, delete, study and pause/resume. To move a card between decks/topics, edit the note’s Markdown structure and keep its ID comment.
+
+### Improving a card
+
+Open a card preview or its study screen and choose **More actions → Improve this card**. This is also available on cards found through **Needs fixing**. Choose **Make clearer**, **Shorten answer**, or **Split into smaller cards**. Qard uses the existing Writer AI connection and sends the card and its linked source notes only when you request a suggestion. Usage appears under **Improving flashcards**. No new AI setup is needed.
+
+Read the explanation, expand **Original card** to compare, and edit the proposed questions and answers. **Preview suggestion** renders Markdown before saving. **Apply improvement** preserves the card's identity, review history and schedule, clears Needs fixing and starts a new repair window. If your edits change the correct answer, check **The correct answer changed** to make it due for a fresh review while retaining its history. AI is instructed to preserve the tested facts; contradictory sources are reported in the explanation rather than silently correcting the card.
+
+**Split into smaller cards** proposes two to six basic cards. **Add cards and pause original** inserts them beside the original in the same note, deck and topic. Each new card starts with a fresh identity and review history and inherits linked source notes. The original stays in Markdown and is paused with its complete history preserved; it can be resumed from its preview. The current study session retains its existing queue; study the new cards from the deck when ready. Cloze and image cards support improvements to their extra notes; their blanks and masks stay unchanged and splitting is unavailable. Use **Edit** to adjust those formats.
+
+**Close** keeps the prepared draft; **Discard draft** removes it without changing card content. Cancelling generation ignores late provider replies. Drafts and pending saves live in `Qard/Card improvements.json`. Card or source changes invalidate unapplied suggestions. If a note was saved but a later save failed, use **Finish saving**; stable IDs prevent duplicate split cards, including after a restart. A pending save freezes its approved content until completed.
+
+## Commands
+
+- Qard: Open study workspace
+- Qard: Review source updates
+- Qard: Study selected deck(s)
+- Qard: Study this deck
+- Qard: Study this topic
+- Qard: Study this note
+- Qard: Create card from selection
+- Qard: Import from Spaced Repetition
+- Qard: New practice test
+- Qard: Open practice tests
+- Qard: Open today
+- Qard: Open courses
+- Qard: Teach me this note
+
+The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
+
+## Study-progress backups
+
+**Settings → Qard → Study-progress backups → Manage backups** lists automatic dated copies, with **Back up now** for a manual copy. Qard saves one on startup and at most one every 30 minutes while plugin data is saved, retaining the newest 30. Copies live in the vault configuration folder under `plugins/qard/study-backups` (normally `.obsidian/plugins/qard/study-backups`). They contain review history, schedules, statistics, study time, saved sessions, exam plans and card/mastery links. They exclude preferences, AI connections, usage and card text.
+
+**Preview restore** shows the current and saved review/session/exam counts before confirmation. Restoration replaces later study progress, keeps current preferences and connections, and saves a fresh copy first. Changed progress during preparation, damaged files and failed saves stop the restore. Notes, attachments, source-tracking files, AI drafts, lessons and tests are separate vault files; back up the whole vault to protect those. These local copies do not protect against losing the vault or device.
+
+## Importing and exporting files
+
+Open **Settings → Qard → Import and export**. These tools stay in settings; the study workspace has no extra controls.
+
+**Import flashcards from a file** accepts UTF-8 CSV/TSV (up to 20 MB) and Anki `.apkg` packages (up to 100 MB), with a maximum of 10,000 cards per import. Nothing is saved until you choose **Import cards** after reviewing the preview.
+
+For CSV/TSV, choose the separator, whether the first row contains headings, and the question/answer columns. Deck, topic, tags and sibling group columns are optional; missing decks and topics use your chosen defaults. The headings `Question`/`Front`, `Answer`/`Back`, `Deck`, `Topic`, `Tags` and `Sibling group` are recognized automatically. Separate tags with spaces. Quoted fields support commas, tabs, quotes and real line breaks. Questions and answers are Markdown; exported Qard cloze/image format comments survive a round trip. Each imported card gets a fresh ID and starts as new. Matching question, answer, deck and topic are skipped by default, both within the file and against current vault cards. Invalid rows are listed separately.
+
+Anki import supports older compatibility packages and the current compressed package format. Basic, reversed and standard cloze templates become ordinary Qard cards. Nested deck names and tags are retained; each cloze target keeps its own schedule and shared sibling group. Supported local images, audio, video and PDFs are copied into **Imported media** and linked from the cards. Remote media becomes a link. Rich text, lists, ordinary tables and Anki MathJax delimiters are converted to Markdown. Image-occlusion masks, JavaScript-dependent templates, unsupported filters, merged tables and missing media are reported in the preview and skipped for manual conversion.
+
+**Keep Anki review data** preserves supported due dates, intervals, review counts, actual timestamped ratings and suspended cards. Qard handles subsequent reviews. Anki learning steps, custom scheduling and exact FSRS parameters are not transferred. Qard reconstructs FSRS memory from complete rating histories; incomplete histories use labelled estimates. Turn the option off to start every imported card as new. Anki cards receive the topic **General**.
+
+Choose an import folder. New notes are grouped by deck, topic and tags inside its **Imports** folder. Source notes and existing Qard schedules are preserved. Approved import records remain in the vault; imports with media also keep a copy of the original package for recovery. If saving is interrupted, use **Resume an unfinished import** in settings. Retries reuse the same IDs and do not duplicate notes, attachments or review history. Keep the import record and package until the import is complete; edited import files are reported instead of overwritten.
+
+**Export flashcards** saves all cards or one deck to a new CSV/TSV file in your chosen vault folder. It includes questions, answers, decks, topics, tags and sibling groups. It excludes IDs, review history and attachment files. Local links use vault paths when they can be resolved; copy those attachments separately when moving the export to another vault.
+
+## Importing from Spaced Repetition
+
+Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Import and export**. Qard reads the Spaced Repetition plugin's settings (deck tags, ignored tags, separators, end marker, folder decks and cloze options) when they are installed. Otherwise it uses that plugin's defaults.
+
+1. Qard scans the notes that Spaced Repetition treats as flashcard notes and lists them with card, schedule and skipped counts. Nothing is written yet.
+2. Choose which notes to convert. A note with exactly the same cards as an earlier note (for example an archived copy) is marked and starts unselected.
+3. **Convert notes** rewrites each selected note in place. Cards are converted as follows:
+   - `Question::Answer` and multiline `?` cards become `[!qard]` callouts with IDs.
+   - Reversed `:::` and `??` cards become two cards, one for each direction.
+   - Standard highlight, configured bold/curly and sequential clozes become numbered Qard clozes. Repeated group numbers hide their blanks together; hints are retained. Each target gets its own schedule, and related cards share a sibling group.
+   - Headings, prose and any other text in the note stay as they are, and headings become Qard topics.
+   - A nested deck tag such as `#flashcards/cs315/hmm` becomes `qard-deck: "cs315/hmm"`, unless the note already sets `qard-deck`.
+   - `<!--SR:...-->` due dates, intervals and ease become Qard review states. You can turn **Keep review schedule** off to import every card as new.
+
+Custom cloze patterns, overlapping `a`/`h`/`s` groups, mixed numbered and unnumbered blanks, empty sides and unclosed code fences are listed and left unchanged in the note. A note that changes while the import runs is not written. Running the import again skips cards that are already Qard callouts.
+
+The Spaced Repetition plugin no longer sees converted cards, and its note tags are left in place. Commit or back up your vault before converting. You can disable Spaced Repetition afterwards so both plugins do not read the same notes.
+
+## Practice tests
+
+Practice tests are a second mode next to flashcards. An AI agent writes an exam-style test from your notes, you answer in text, and the agent marks each answer against a mark scheme. Open **Tests** in the Qard library, or run **Qard: New practice test**. When a specific test is open, click the trash icon in the top bar to move its plan, questions and saved answers to Obsidian’s configured trash and return to the test list. Any running jobs for that test are stopped.
+
+Use **+ Folder** in the new-test composer to attach a whole course. Search for its vault folder and select it once; Qard includes every Markdown note in that folder and its subfolders, shows a note count, and removes duplicates if you also attach notes or overlapping folders. Remove the folder chip to detach it. Folder contents are refreshed when you press **Start**, then saved with the request. PDFs and other non-Markdown files are not attached.
+
+1. **Describe the test.** Type what it should cover. Optionally tick **Flashcards** and choose decks, or add specific notes. With no sources, the agent finds the relevant notes itself.
+2. **Check the plan** (optional, on by default). The agent drafts a short plan: a goal, the sources it will use and why, and sections with their question mix and marks. You can remove sources or ask for changes, then choose **Generate test**. Untick **Plan first** to skip straight to the test.
+3. **Take the test.** Answer short, long, calculation (LaTeX shows a preview) and multiple-choice questions. Optionally mark how sure you were, choose **I don't know** rather than guessing, and flag questions. By default each section is marked in the background when you submit it, while you carry on. Choose **Mark answers: At the end** in settings for exam conditions.
+4. **Review.** The results screen shows your score and the three most important things to fix. **Review answers** shows your answer marked up like a script:
+   - underlines for correct, incorrect, vague and insightful parts, and a + marker where a point was missing, each linked to a marker's note;
+   - the mark scheme, showing which points you earned;
+   - **Try again**, to attempt the missed points before you look at the model answer;
+   - **Model answer**, which can be compared side by side with yours;
+   - **Ask**, for a follow-up question;
+   - **Dispute**, to have the answer re-marked, or to set the mark yourself;
+   - **Make card**, to create a flashcard in the deck the question came from.
+5. **Close the gaps.** After marking, the agent suggests cards for the clear gaps and updates a study profile (`_profile.md` in the tests folder). Later tests use the profile to target your weak spots. You can read and edit it.
+
+### Choosing an agent
+
+See [AI connections and roles](#ai-connections-and-roles).
+
+Agents never write files. They return JSON, which Qard checks against the expected format (retrying once if it doesn't match) before saving. Marks are recalculated from the awarded rubric points, so an agent cannot give more than a question is worth. Your notes are sent to the provider you choose. No other network requests are made.
+
+When a test's notes belong to a course with a [mastery file](#learn-mastery-checks-and-lessons), the writer tags each question with the objective it tests, and the marks are recorded in the mastery file.
+
+Each test is a folder under `Qard/Tests/` containing `request.json`, `plan.json`, `test.json` and `attempt.json`. Tests written by any agent outside Qard appear under Tests if they follow [the file format](PRACTICE_TESTS.md).
+
+## Learn: mastery, checks and lessons
+
+Learn is a third mode next to flashcards and tests. It keeps a record of what you know for each course, teaches what you don't, and checks later whether it stuck. Open **Learn** in the Qard library, or run **Qard: Open today**.
+
+### The mastery file
+
+**Map a course** asks the writer to read a course folder and list its objectives: the specific things you need to be able to explain or do, and which objectives each one builds on. It uses your study profile to mark ones you've already struggled with, and adds topics from the course outline that no note covers yet as **not covered yet**. Nothing is saved until you accept the list. Qard then writes `<Course> Mastery.md` in that folder: a normal note with a table, one row per objective (state, due date, needs, notes, evidence). You can edit it freely: change a state or date, add or remove rows, change what an objective needs, or add your own columns. Qard only rewrites the table's rows.
+
+### The course map
+
+Each course page opens on a **topic map**: one node per topic (the **Group** column), with arrows showing which topics build on which. Thicker arrows mean more links. Each topic shows how many of its objectives you've learned (taught or better) as a bar, how many are ready to learn, and a ⚠ count for misconceptions and slipping objectives. Topics the outline lists but no note covers yet are faded. Everything shown is worked out from the objectives each time, so nothing extra is stored and checks, lessons and evidence work per objective as before.
+
+**Click a topic** to open its objectives, each shown by its short **Label** (the full title is in the side panel). Topics it builds on appear as links along the top and topics it unlocks along the bottom; click one to go there, or **Topics** (or Escape) to go back. Objectives are coloured by state, and those that are **ready to learn** (untaught, with everything they build on already taught) are outlined. Lessons suggested on Today favour them.
+
+- **Move around:** drag to pan, scroll to move, pinch or ⌘/Ctrl + scroll to zoom. The toolbar has zoom, **Fit** and **Full screen**. Keys: arrow keys move along the arrows and across a row, Enter opens a topic, `/` searches, `+`, `-` and `0` zoom, and Escape goes back.
+- **Find and filter:** type in **Find** to highlight matching topics or objectives (Enter jumps to the first match, opening its topic), or click states in the legend above the map to show only those.
+- **Select an objective** to see everything it builds on and everything that builds on it, with a side panel listing them (including objectives in other topics), its notes and all its evidence, with **Teach** and **Check**.
+- **Route here** lists every prerequisite you haven't been taught yet, in the order to learn it, across topics. Steps are numbered on the map, topics show how many steps they hold, and **Teach step 1** starts the first lesson.
+
+**List** shows the same objectives as rows. A mastery file without groups shows the objectives directly; **Update objectives** can add groups and labels to it. A loop in the Needs column is ignored by dropping the link that closes it.
+
+### As the course grows
+
+The mastery file records when the course was last mapped (`qard-mapped`). When notes in the course folder are added or edited after that, the course page says so. **Update objectives** asks the writer to read only those notes and propose new objectives, more notes or prerequisites for existing ones (a "not covered yet" objective becomes new once its notes arrive), and objectives that may be outdated. Existing objectives are never renamed or rewritten, so your progress stays attached to them, and nothing is removed unless you tick it. New objectives start as new, so an update doesn't fill Today.
+
+Every mode reads the mastery file before writing anything, and adds evidence after:
+
+| State | Meaning | What happens next |
+|---|---|---|
+| New | No evidence yet | Teach it when you're ready |
+| Gap | Couldn't answer | A lesson is suggested |
+| Misconception | Wrong while sure | A lesson is suggested |
+| Taught | A lesson covered it | A check in 3 days |
+| Shaky | Right but guessing, or partly right | A check in 2–3 days |
+| Right once | One correct check or test | A harder check in a week |
+| Mastered | Right again, at least 2 days later | Cards keep it fresh |
+| Slipping | Mastered, but its cards are lapsing | A check today |
+
+The rules: answering correctly straight after a lesson doesn't count, so a lesson moves an objective to **taught** at most. Mastery needs two correct answers at least two days apart, the second at a harder goal (explain, then apply). A wrong answer you were sure of is a misconception; **I don't know** is a gap. Passing a flashcard never promotes an objective, but two lapses on a card made for a mastered objective mark it as slipping.
+
+### Today
+
+The home page shows one **Today** row with what is due: checks first, then cards, and any objectives that need a lesson. **Start checks** opens the next check. Due cards are grouped by deck, with the due topics and their card counts shown underneath. Choose **Study** beside a topic to review only that topic's due cards, or **Study all** beside the deck to review all its due topics. Both start with the oldest due cards; new, paused, temporarily deferred and duplicate-ID cards stay out of Today. Topics without due cards are hidden. Topics with the same name in different decks remain separate. After the final check, **Next** returns to Today so you can choose a deck or topic.
+
+A **check** is one to three new questions on one objective, marked straight away with the same underlines and notes as a test. The writer writes each check ahead of time, as soon as the previous result is recorded, so a check opens instantly. If the objective's notes change before you start it, it is written again. The question format follows its goal: multiple choice to tell ideas apart, short answers to recall, long answers to explain, calculations or code to apply. Every check is kept in `Qard/Checks/` as evidence, and later checks avoid repeating it.
+
+### Lessons
+
+Choose **Teach** on an objective, or run **Qard: Teach me this note**.
+
+1. **Probe.** A few quick questions on what the lesson depends on, skipping anything the mastery file already shows you know.
+2. **Plan.** The tutor marks the probe and proposes where to start, with a short plan and a map of the steps from what you know to the goal. Ask for changes, or choose **Start lesson**.
+3. **Teach.** The writer prepares each step, starting with the first, while you work. Each step says why it is needed, explains the idea from what you already accept, and ends with a check. When you can work it out yourself, the check comes before the explanation. The tutor marks your answer live and, if you made a mistake the writer expected, shows an explanation aimed at it. You can try again once, and ask questions at any point.
+4. **Close.** The lesson is recorded in the mastery file and saved as a note in `Qard/Lessons/`. The writer suggests cards (linked to the objective) and, when a note was missing something the lesson had to explain, a paragraph to add to it. Nothing is added to your notes unless you accept it. The first check is written for three days later.
+
+### Figures
+
+Lessons follow the vault's rule for visuals: use one only when you would understand significantly faster or more accurately with it. Most steps need none.
+
+- **Flows, processes and small graphs** are written inline as Mermaid. Labels Mermaid can't parse are quoted automatically.
+- **Figures already in your notes** are reused: the writer copies the note's embed and caption.
+- **Anything else** (a distribution with specific parameters, a curve, a geometric picture, a data structure with real values) goes to the **Illustrator** as a brief. It is drawn in the background while you work through earlier steps.
+
+The illustrator replies with either a matplotlib script or an SVG. Qard runs scripts itself with Python 3 on this computer. On macOS, the script runs under `sandbox-exec`, with no network access and writes allowed only to Qard's temporary folder. Qard sets the style and saves the figure, removes anything from the SVG that isn't drawing (scripts, event handlers, links to other files), and saves it to `assets/<subject>/descriptive-name.svg`. That folder can be changed in **Settings → Qard → Lessons and checks**. The lesson and its note show the figure with an italic *Figure:* caption. If a figure fails, the error goes back to the illustrator once.
+
+**Draw this** asks for a figure on any step or answer; **Redraw…** takes a note on what to change. Without Python (or on mobile), the illustrator writes the SVG by hand.
+
+## Background work and while you wait
+
+Writing tests, marking, mapping courses and preparing lessons run in the background. Leaving the screen, closing the Qard tab or moving around Obsidian doesn't stop them. When one finishes, Obsidian shows a notice. Course mappings and updates are saved under `Qard/Proposals/` until you review them, and a lesson reopened after a reload picks up where it stopped. The header shows **● N running** while jobs are in progress; it lists each one with its elapsed time and an estimate, and opens it when clicked. Estimates come from how long that kind of job recently took with your chosen connection and model.
+
+Long waits show **While you wait** instead of a spinner, offering one thing at a time:
+
+- a **check** that's due, when there's time for one;
+- **cards**: due flashcards, or before a lesson a warm-up on what it builds on (its prerequisites' cards, even if not due yet);
+- a **missed point** from a recent test to try again;
+- the **notes** the job is based on.
+
+While a practice test is written or marked, nothing from that test's own notes is offered, so warming up doesn't inflate your score or show answers you're about to review. Ratings and answers count as usual. Once you start something the screen stays put, and when the job is done a bar offers **Continue**.
+
+## Study statistics
+
+Choose **Statistics** in the workspace header or run **Qard: Show study statistics**.
+
+- **Review performance:** reviews, recall rate and days studied for the last 7 days, 30 days or all recorded history. Recall counts Hard, Good and Easy ratings as remembered. Where an earlier period has ratings, the recall change is shown in percentage points.
+- **Study activity:** a yearly calendar and current streak. Choose a year, click a square, or use arrow keys to inspect daily review counts. A streak spans years and stays active if you studied today or yesterday. Days follow the device’s local time.
+- **Your ratings:** one breakdown of Again, Hard, Good and Easy for the selected review period.
+- **Upcoming reviews:** seven days of scheduled cards. Today includes overdue cards; future bars reflect current due dates, without predicting additional reviews after you study. Paused cards are excluded and cards buried until tomorrow appear tomorrow. Scheduling must be enabled.
+- **Your decks:** cards studied, recall across saved ratings for current cards, and cards due now, with a Study action for each deck. This section always describes your current collection; the review-period filter does not change it.
+- **Memory estimates:** expand this section when using FSRS to see predicted recall, median stability and cards below the retention target. Stability is the number of days until predicted recall falls to 90%, independently of the selected target. These are model estimates, separate from rating-based recall. Paused cards and cards awaiting a content check are excluded; approximate estimates from imported schedules or incomplete histories are labelled.
+
+Daily and per-card rating totals are saved locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. Older reviews removed by the previous limit cannot be recovered; the page identifies incomplete history. Imported schedules affect collection counts without inventing reviews. Actual Anki rating events are included when review data is kept. Deleted cards remain in activity totals; duplicate card IDs are excluded from deck counts until fixed. Expand **About this data** for these details on the page.
+## Study time
+
+Qard records how long you actively study, by course and activity: cards, lessons, checks, practice tests, course maps and the library. Time counts only while a Qard tab is in front, Obsidian has focus, and you've typed, clicked or scrolled in the last two minutes. Card reviews count towards the card's deck, or towards the course a deck is named after (a `DS346 A1` deck counts towards DS346).
+
+Open **Study time** from Learn, or run **Qard: Show study time**. It shows a daily chart by activity and a table by course. Today shows how long you've studied today, and each course page shows its time over the last 30 days. Times are kept for a year in Qard's plugin data on this device. Nothing is sent anywhere.
+
+## Token usage
+
+Qard records the tokens used by every call it makes to Claude Code, Codex, the Anthropic API or OpenRouter: input, output and cache tokens, the model that ran, and the cost where the provider reports it. **Qard: Show token usage** (also **Usage** on the Learn tab and **View usage** in Settings → Qard → AI roles) shows totals for today, 7 days, 30 days or all time, tokens per day, and breakdowns by feature (writing tests, marking, writing lessons, tutoring, course mapping and so on) and by connection and model.
+
+Cost appears only where the provider reports it: OpenRouter, and Claude Code, which reports an estimate at API prices (a Claude subscription isn't billed per token). Anthropic API and Codex runs show tokens only. Daily totals are kept for 180 days in `data.json` and can be cleared from the usage screen.
+
+## AI connections and roles
+
+In **Settings → Qard → AI connections**, set up the tools and keys Qard may use:
+
+| Connection | Notes |
+|---|---|
+| **Claude Code** | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`). Editing, shell and web tools are denied. Desktop only. |
+| **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
+| **Anthropic API** | Calls the Claude API directly. The model reads notes only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
+| **OpenRouter** | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile. |
+| **Custom AI** | A local or hosted OpenAI-compatible chat server, including Ollama and LM Studio. Uses the same read-only note tools. Requires a model that can follow Qard's JSON formats; note-reading tasks also require tool support. |
+
+API keys are kept in Obsidian's secure storage (Obsidian 1.11.4+), not in your vault or plugin data.
+
+To use a local model, start Ollama or LM Studio's server and make a downloaded model available. Enter **Custom AI server** (`http://localhost:11434/v1` for Ollama or `http://localhost:1234/v1` for LM Studio) and its exact name under **Custom AI model**. A server root is normalized to `/v1`; custom API prefixes are supported. **Refresh models** retrieves suggestions when the server supports `/models`; you can always type a model name manually. **Custom AI API key** is optional for keyless servers and can be removed with **Clear key**.
+
+Choose **Test connection** to check JSON replies and a note-tool round trip using synthetic text. It sends no vault notes and does not change role assignments. You can cancel the test; closing settings also stops waiting. A result can report JSON success with limited tool compatibility. Requests that already include all source text may work on such models, while note-reading tasks need tool support. This small check does not guarantee the model's accuracy or its ability to handle a full course or long test. Test each model before relying on it.
+
+Under **AI roles**, select **Custom AI** for Tutor, Writer, Marker or Illustrator. Leave that role's model field empty to use the custom connection's default, or enter another model served by the same address. All custom roles share one server and optional key. Qard tries schema output first, falls back to JSON mode and then prompt-only JSON instructions if the server rejects the format, and validates study outputs through the existing feature validators. It does not silently remove note tools. Provider-specific OpenRouter billing/reasoning options are omitted; token usage is recorded when the server reports it.
+
+With a locally hosted, downloaded model, Qard's requests go to that local server and can work offline. A custom hosted server or a local application using a cloud model still processes the supplied content remotely. On mobile, `localhost` means the phone itself: accessing a desktop server requires a reachable network address and suitable server configuration. HTTP addresses are accepted for local/network servers; use HTTPS for hosted connections. Qard does not install models or start servers. See the [Ollama compatibility documentation](https://docs.ollama.com/api/openai-compatibility) and [LM Studio documentation](https://lmstudio.ai/docs/developer/openai-compat).
+
+Then, under **AI roles**, choose a connection and model for each job:
+
+| Role | Does | Default |
+|---|---|---|
+| **Tutor** | Replies live in lessons, marks checks, answers questions. Should be fast. | Claude Code with Haiku |
+| **Writer** | Maps courses, and writes tests, checks and lesson steps. Should be your best model. | Claude Code's default model |
+| **Marker** | Marks practice tests in the background. | Claude Code's default model |
+| **Illustrator** | Draws figures for lessons. Should be a strong model. | The writer's connection and model |
+
+Each Claude Code or Codex call starts a new process, which adds a few seconds. For the most responsive tutor, use an API key or OpenRouter with a fast model.
+
+## Review data and settings
+
+Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+
+Choose **Settings → Qard → Study preferences → Review scheduler**:
+
+- **FSRS (adaptive memory):** uses [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs), with FSRS-6 defaults and a 90% target retention. New vaults start here. You can set a target from 70% to 97%; a higher target means more frequent reviews. Target changes take effect as cards are reviewed. Personal parameter optimization is not included yet.
+- **Simple intervals:** the previous scheduler, kept as the default for existing vaults. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease.
+
+Switching schedulers preserves current due dates and review counts. When enabling FSRS, complete saved histories are replayed into its memory model. Cards with missing history or imported schedules start with approximate memory estimates based on their current interval; the statistics page labels these. Switching back to simple intervals retains due dates and removes FSRS memory state. No past review events are invented.
+
+FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step after a lapse. Reveal the answer to preview the next review interval for each rating. **Again** means you forgot; **Hard** means you remembered with effort; **Good** means you remembered; **Easy** means immediate recall. A forgotten answer should be rated Again. Normal Due sessions bring learning/relearning cards back when their next step is due. Other session modes remain single-pass; start Due cards for further scheduled reviews.
+
+Disabling scheduling still saves ratings and updates FSRS memory estimates without changing due dates or intervals. **All cards never consults the scheduler.** All timestamped rating events are now retained locally for memory reconstruction and future personalization. Earlier versions truncated history at 10,000 events; removed events cannot be recovered.
+
+Settings include default All/Due mode, order, keyboard hints, automatic focus, optional voice answers, new-card folder and scheduling enable/disable.
+
+## Optional voice answers
+
+Enable voice answers in Qard settings, then choose **Record answer** during study. Microphone access is requested only at that point. Stop and play back the recording before revealing the answer. Recordings stay in memory and are discarded on card change, session exit, or view close. There is no upload, saved audio attachment, transcription or answer grading. Browser/OS microphone support varies; unavailable recording does not block normal study.
+
+## Current scope and limitations
+
+- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export is not supported.
+- No persistent recordings or speech recognition.
+- Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
+- No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
+- Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
+- Cross-vault concurrent review-data merging is not implemented.
+- Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
+- Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
+
+Licensed under MIT; see [LICENSE](../LICENSE).
+
+## Release verification
+
+Version tags trigger GitHub Actions to run all checks, build the three install files, create GitHub artifact attestations, and publish the release. Tags must exactly match the manifest version. Release notes live in `docs/releases/<version>.md`. The build aliases React imports to Preact compatibility modules so the existing components work without bundling React DOM’s unused dynamic script loaders. UI tests run with the same renderer.
+
+Qard enumerates Markdown notes once after the workspace is ready to discover flashcards across files; subsequent indexing updates only affected files. This is expected vault access, not network access.
+
+Discovery skips hidden notes and folders. The course folder picker uses Markdown paths rather than all loaded files. API note tools also exclude the configured tests folder. Qard does not read or write the system clipboard: **Select answer** selects the answer’s Markdown in a read-only field so you can use your device’s Copy action. See [community review notes](REVIEW_NOTES.md) for the remaining vault-enumeration recommendation and development dependency audit limitations.
+
+## Support
+
+Finding Qard helpful? You can buy me a coffee to support its continued development. Thank you for helping make Qard better!
+
+Support @kylianmarceau:
+
+<a href="https://buymeacoffee.com/kylianmarceau" target="_blank" rel="noopener noreferrer"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" width="175" height="40"></a>
+
+## AI flashcard topics
+
+AI generation can create several topics within one deck. By default, the writer assigns one topic per source note; describe a different grouping in your request if needed. Review each card’s topic before adding it. **One topic per note** rebuilds the topic names from the source-note links, including for drafts created by older versions. Cards without a source keep their current topic. Entering a shared name in **Topic for all cards** combines the batch under that topic.
+
+Deck and topic assignments are fixed once you attempt to add cards, so a failed save can be retried safely. Already saved cards are not reorganized automatically.
+
+## Exam planning
+
+Open the **Plans** tab in the Qard library, then choose **New exam**. Setup has three steps: exam name and date, whole decks or individual topics, then study days and a daily review target. You can go back without losing your choices. The Exams view shows coverage and today’s study action; open **Plan details** to edit the routine or delete a plan. New cards in the selected decks/topics join the plan automatically. Plans can be edited or deleted without deleting cards, review history or saved sessions.
+
+The planner spreads a first pass over the remaining selected study days, including exam day if it is a selected weekday. Today's session reserves space for that first pass, then fills the remaining daily target with due repeat reviews. The target counts completed reviews today, across normal sessions; repeat ratings use the target too, while cram viewing does not count. Learning cards that become due later the same day can appear again within the remaining target. Rest days do not generate a new session. A missed study day increases the remaining first-pass workload. A warning appears when the remaining days and target cannot cover all cards even before repeat reviews.
+
+Coverage is the number of matching cards rated since the plan was created, including Again ratings; it is not a prediction of mastery or an exam score. Cards flagged after a source answer changes need another review to count toward coverage. FSRS due dates are not rescheduled by the planner. **Create practice test** opens the existing test setup with the exam details and selected source notes.
+
+**Study today's cards** creates an automatically saved normal session. If you leave it midway, the plan offers **Resume exam session** at the saved position, including on a rest day or after the exam date. Multiple exams and ordinary sessions can coexist. Plans and saved queues are stored in Qard's plugin data alongside review history; back up that file as well as your notes.
+
+Switch to **Calendar** within Plans to see exams and planned revision in a Monday-first month view. It opens on the next upcoming exam month. Use the arrows to change months, **Today** to return to the current date, or **Exam month** to return to the next exam. Select a day for its agenda; arrow keys move between dates. Exam labels and revision dots share a colour for each plan. Revision dots follow the saved weekdays from plan creation through the exam date, rather than predicting future FSRS queues. Today’s agenda shows completed reviews and available cards; future days show the daily target. **View plan** returns to that exam’s details.

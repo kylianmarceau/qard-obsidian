@@ -1,0 +1,30 @@
+import type { App, Component } from 'obsidian';
+import type { VaultIndexer } from '../cards/indexer';
+import type { CardWriter } from '../cards/card-writer';
+import type { QardCard } from '../cards/card-types';
+import type { ReviewStore } from '../review/review-store';
+import type { TestService } from '../tests/test-service';
+import type { LearnService } from '../learn/learn-service';
+import type { FlashcardGenerationService } from '../cards/generation-service';
+import type { JobClock } from '../jobs/job-clock';
+import type { SourceSyncService } from '../cards/source-sync-service';
+import type { CardImprovementService } from '../cards/improvement-service';
+import type { StudyClock } from '../time/study-time';
+export interface QardServices {
+  app: App;
+  owner: Component;
+  index: VaultIndexer;
+  writer: CardWriter;
+  reviews: ReviewStore;
+  tests: TestService;
+  learn: LearnService;
+  jobs?: JobClock;
+  flashcards?: FlashcardGenerationService;
+  sourceSync?: SourceSyncService;
+  improvements?: CardImprovementService;
+  time?: StudyClock;
+  host: HTMLElement;
+  setFocus: (enabled: boolean) => void;
+  isActive: () => boolean;
+  openSource: (card: QardCard) => Promise<void>;
+}

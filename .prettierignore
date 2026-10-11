@@ -1,0 +1,9 @@
+node_modules/
+main.js
+main.js.map
+release/
+.preview/
+.test-vault/
+.example-test-vault/
+coverage/
+package-lock.json
