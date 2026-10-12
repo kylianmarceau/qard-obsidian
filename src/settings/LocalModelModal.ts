@@ -54,7 +54,7 @@ export class LocalModelModal extends Modal {
     }
     const controller = new AbortController();
     this.work = controller;
-    this.message = 'Looking for Ollama and LM Studio…';
+    this.message = 'Looking for Ollama, LM Studio and oMLX…';
     this.render();
     try {
       const servers = await discoverLocalModels(controller.signal);
@@ -73,7 +73,7 @@ export class LocalModelModal extends Modal {
         this.server = undefined;
         this.model = '';
         this.message =
-          'No local server found. Open Ollama, or switch on Start server in LM Studio’s Developer tab. Download a chat model, then try again. For a different port, use Advanced settings.';
+          'No local server found. Open Ollama, switch on Start server in LM Studio’s Developer tab, or start the server in oMLX. Download a chat model, then try again. For a different port, use Advanced settings.';
       }
     } catch {
       if (!controller.signal.aborted) {
@@ -166,7 +166,7 @@ export class LocalModelModal extends Modal {
     const el = this.contentEl;
     el.empty();
     el.createEl('p', {
-      text: 'Connect a model from Ollama or LM Studio on this computer. Start your server and download a chat model first.',
+      text: 'Connect a model from Ollama, LM Studio or oMLX on this computer. Start your server and download a chat model first.',
     });
     if (this.message) {
       el.createEl('p', { text: this.message, attr: { role: 'status', 'aria-live': 'polite' } });

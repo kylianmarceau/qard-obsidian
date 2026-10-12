@@ -15,6 +15,7 @@ const servers = [
     needsKey: false,
   },
   { name: 'LM Studio', baseUrl: 'http://localhost:1234/v1', models: ['chat-c'], needsKey: false },
+  { name: 'oMLX', baseUrl: 'http://localhost:8000/v1', models: ['mlx-chat'], needsKey: false },
 ];
 const settle = async () => {
   for (let i = 0; i < 40; i++) await Promise.resolve();
@@ -153,27 +154,31 @@ function fixture(desktop = true) {
   return { modal, el, reviews, secrets, persist, advanced, saved, detect, test, button, change };
 }
 
-it('lets users choose either server and model, tests synthetic replies and saves a working connection for all roles', async () => {
-  const f = fixture();
-  await settle();
-  expect(f.persist).not.toHaveBeenCalled();
-  f.change('Model', 'chat-b');
-  f.change('Local server', servers[1]!.baseUrl);
-  expect(f.el.querySelector<HTMLSelectElement>('select[aria-label="Model"]')!.value).toBe('chat-c');
-  f.button('Test and connect').click();
-  await settle();
-  expect(f.test).toHaveBeenCalledWith(
-    { baseUrl: servers[1]!.baseUrl, model: 'chat-c' },
-    null,
-    expect.any(AbortSignal),
-  );
-  const agents = f.reviews.getSnapshot().settings.agents;
-  expect(agents.custom).toEqual({ baseUrl: servers[1]!.baseUrl, model: 'chat-c' });
-  expect(Object.values(agents.roles)).toEqual(Array(4).fill({ provider: 'custom', model: '' }));
-  expect(f.secrets.get(CUSTOM_KEY_SECRET)).toBe('');
-  expect(f.saved).toHaveBeenCalledOnce();
-  expect(f.modal.modalEl.isConnected).toBe(false);
-});
+it.each(servers)(
+  'connects $name, tests synthetic replies and saves a working connection for all roles',
+  async (server) => {
+    const f = fixture();
+    await settle();
+    expect(f.persist).not.toHaveBeenCalled();
+    f.change('Model', 'chat-b');
+    f.change('Local server', server.baseUrl);
+    const model = server.models[0]!;
+    expect(f.el.querySelector<HTMLSelectElement>('select[aria-label="Model"]')!.value).toBe(model);
+    f.button('Test and connect').click();
+    await settle();
+    expect(f.test).toHaveBeenCalledWith(
+      { baseUrl: server.baseUrl, model },
+      null,
+      expect.any(AbortSignal),
+    );
+    const agents = f.reviews.getSnapshot().settings.agents;
+    expect(agents.custom).toEqual({ baseUrl: server.baseUrl, model });
+    expect(Object.values(agents.roles)).toEqual(Array(4).fill({ provider: 'custom', model: '' }));
+    expect(f.secrets.get(CUSTOM_KEY_SECRET)).toBe('');
+    expect(f.saved).toHaveBeenCalledOnce();
+    expect(f.modal.modalEl.isConnected).toBe(false);
+  },
+);
 
 it('can preserve existing role selections and defaults to the saved server and model', async () => {
   const f = fixture();
@@ -225,6 +230,7 @@ it('explains empty model lists and authentication without claiming the server is
   f.detect.mockResolvedValue([
     { ...servers[0]!, models: [] },
     { ...servers[1]!, models: [], needsKey: true },
+    { ...servers[2]!, models: [], needsKey: true },
   ]);
   f.button('Try again').click();
   await settle();
@@ -232,6 +238,12 @@ it('explains empty model lists and authentication without claiming the server is
   expect(f.button('Test and connect')).toBeUndefined();
   f.change('Local server', servers[1]!.baseUrl);
   expect(f.el.textContent).toContain('needs an API key');
+  f.change('Local server', servers[2]!.baseUrl);
+  expect(f.el.textContent).toContain('oMLX needs an API key');
+  expect(f.button('Test and connect')).toBeUndefined();
+  f.button('Advanced settings').click();
+  expect(f.advanced).toHaveBeenCalledOnce();
+  expect(f.persist).not.toHaveBeenCalled();
   f.modal.close();
 });
 

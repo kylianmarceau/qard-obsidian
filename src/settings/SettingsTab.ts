@@ -551,7 +551,7 @@ export class QardSettingsTab extends PluginSettingTab {
       name: 'Local AI model',
       desc: model
         ? `Saved Custom AI model: ${model}. Connect again to choose a different model.`
-        : 'Use Ollama or LM Studio on this computer. Choose a model without entering a server address.',
+        : 'Use Ollama, LM Studio or oMLX on this computer. Choose a model without entering a server address.',
       render: (row) => {
         row.settingEl?.classList.add('qard-settings-local');
         row.addButton((button) =>
@@ -574,7 +574,7 @@ export class QardSettingsTab extends PluginSettingTab {
     return [
       {
         name: 'Custom AI server',
-        desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
+        desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), oMLX (http://localhost:8000/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
         render: (row) => {
           row.addText((x) => {
             x.setValue(a.custom.baseUrl).setPlaceholder('Server address');

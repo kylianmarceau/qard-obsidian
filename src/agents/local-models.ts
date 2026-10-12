@@ -12,6 +12,7 @@ export interface LocalModelServer {
 const LOCAL_SERVERS = [
   { name: 'Ollama', baseUrl: 'http://localhost:11434/v1' },
   { name: 'LM Studio', baseUrl: 'http://localhost:1234/v1' },
+  { name: 'oMLX', baseUrl: 'http://localhost:8000/v1' },
 ];
 
 /** Only probe known loopback endpoints, without sending any saved keys or vault text. */

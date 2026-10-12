@@ -4,7 +4,7 @@ import { discoverLocalModels } from '../src/agents/local-models';
 import type { Http } from '../src/agents/openrouter-runner';
 import { CANCELLED } from '../src/agents/runner';
 
-it('finds both default servers and deduplicates model choices, using only keyless loopback GETs', async () => {
+it('finds all default servers and deduplicates model choices, using only keyless loopback GETs', async () => {
   const http = vi.fn<Http>().mockResolvedValue({
     status: 200,
     json: { data: [{ id: 'b' }, { id: 'a' }, { id: 'a' }, { id: 3 }] },
@@ -13,10 +13,12 @@ it('finds both default servers and deduplicates model choices, using only keyles
   expect(servers.map((s) => [s.name, s.models])).toEqual([
     ['Ollama', ['a', 'b']],
     ['LM Studio', ['a', 'b']],
+    ['oMLX', ['a', 'b']],
   ]);
   expect(http.mock.calls).toEqual([
     ['http://localhost:11434/v1/models', { method: 'GET', headers: {} }],
     ['http://localhost:1234/v1/models', { method: 'GET', headers: {} }],
+    ['http://localhost:8000/v1/models', { method: 'GET', headers: {} }],
   ]);
 });
 
@@ -24,14 +26,17 @@ it('recognizes empty and authenticated servers and ignores unrelated or stopped 
   const http = vi
     .fn<Http>()
     .mockResolvedValueOnce({ status: 200, json: { data: [] } })
-    .mockResolvedValueOnce({ status: 401, json: {} });
+    .mockResolvedValueOnce({ status: 401, json: {} })
+    .mockResolvedValueOnce({ status: 403, json: {} });
   expect(await discoverLocalModels(new AbortController().signal, http)).toMatchObject([
     { name: 'Ollama', models: [], needsKey: false },
     { name: 'LM Studio', models: [], needsKey: true },
+    { name: 'oMLX', models: [], needsKey: true },
   ]);
   http
     .mockRejectedValueOnce(new Error('connection refused'))
-    .mockResolvedValueOnce({ status: 200, json: { unrelated: true } });
+    .mockResolvedValueOnce({ status: 200, json: { unrelated: true } })
+    .mockResolvedValueOnce({ status: 404, json: {} });
   expect(await discoverLocalModels(new AbortController().signal, http)).toEqual([]);
 });
 
@@ -41,10 +46,14 @@ it('does not let a stalled server delay detection past three seconds', async () 
     const http = vi
       .fn<Http>()
       .mockReturnValueOnce(new Promise(() => {}))
-      .mockResolvedValueOnce({ status: 200, json: { data: [{ id: 'chat' }] } });
+      .mockResolvedValueOnce({ status: 200, json: { data: [{ id: 'chat' }] } })
+      .mockResolvedValueOnce({ status: 200, json: { data: [{ id: 'mlx-chat' }] } });
     const work = discoverLocalModels(new AbortController().signal, http);
     await vi.advanceTimersByTimeAsync(3000);
-    expect(await work).toMatchObject([{ name: 'LM Studio', models: ['chat'] }]);
+    expect(await work).toMatchObject([
+      { name: 'LM Studio', models: ['chat'] },
+      { name: 'oMLX', models: ['mlx-chat'] },
+    ]);
   } finally {
     vi.useRealTimers();
   }
