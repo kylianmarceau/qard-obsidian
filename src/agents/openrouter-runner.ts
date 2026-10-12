@@ -120,7 +120,10 @@ export class ChatCompletionRunner implements AgentRunner {
       { role: 'system', content: PREAMBLE },
       { role: 'user', content: `${task.prompt}\n\n${SCHEMA_INSTRUCTION(task.schema)}` },
     ];
-    let structured: 'schema' | 'json' | 'prompt' = 'schema',
+    // A final-answer grammar can suppress native tool calls on local servers, even with HTTP 200.
+    // Tool requests keep the schema in the prompt; the final reply is still parsed and validated.
+    let structured: 'schema' | 'json' | 'prompt' =
+        this.connection.custom && tools ? 'prompt' : 'schema',
       usage = emptyUsage();
     const report = () => {
       if (usage.input || usage.output) {

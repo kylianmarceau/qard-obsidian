@@ -110,20 +110,41 @@ it('uses an optional key only in the authorization header', async () => {
   expect(http.mock.calls[0]![1].headers.Authorization).toBe('Bearer private-key');
   expect(http.mock.calls[0]![1].body).not.toContain('private-key');
 });
-it('falls back through JSON mode and prompt-only output while retaining tools', async () => {
+it('falls back through JSON mode and prompt-only output for requests without note tools', async () => {
   const http = vi
     .fn<Http>()
     .mockResolvedValueOnce({ status: 400, json: {} })
     .mockResolvedValueOnce({ status: 422, json: {} })
     .mockResolvedValueOnce(ok('{"ok":true}'));
-  expect(await runner(http).run({ ...task, vault: true })).toEqual({ ok: true });
+  expect(await runner(http).run(task)).toEqual({ ok: true });
   const bodies = http.mock.calls.map(([, init]) => JSON.parse(init.body!));
   expect(bodies.map((b) => b.response_format?.type)).toEqual([
     'json_schema',
     'json_object',
     undefined,
   ]);
-  expect(bodies.every((b) => b.tools.length === 3)).toBe(true);
+  expect(bodies.every((b) => b.tools === undefined)).toBe(true);
+});
+it('does not constrain local note-tool calls to the final answer schema, including the synthetic check', async () => {
+  const http = vi.fn<Http>().mockImplementation(async (_url, init) => {
+    const body = JSON.parse(init.body!);
+    if (!body.tools) return ok('{"ok":true}');
+    // Ollama can accept this combination but constrain the answer instead of making a tool call.
+    if (body.response_format) return ok('{"code":"guessed"}');
+    if (body.messages.at(-1).role !== 'tool') return call('Connection test.md');
+    const code = body.messages.at(-1).content.replace('Connection code: ', '');
+    return ok(JSON.stringify({ code }));
+  });
+  expect(await testCustomConnection(connection, null, undefined, http)).toMatchObject({
+    json: true,
+    tools: true,
+  });
+  const bodies = http.mock.calls.map(([, init]) => JSON.parse(init.body!));
+  expect(bodies[0].response_format.type).toBe('json_schema');
+  expect(bodies.filter((b) => b.tools).every((b) => !b.response_format)).toBe(true);
+  expect(bodies[1].tools).toHaveLength(3);
+  expect(bodies[1].messages[1].content).toContain('JSON Schema');
+  expect(vault.read).not.toHaveBeenCalled();
 });
 it('runs read-only tools but never reads excluded or unlisted paths', async () => {
   const http = vi

@@ -95,23 +95,25 @@ export class LocalModelModal extends Modal {
     const connection = { baseUrl: this.server.baseUrl, model: this.model };
     const controller = new AbortController();
     this.work = controller;
-    this.message = 'Checking the model’s JSON replies and note tools… no vault notes are sent.';
+    this.message =
+      'Checking the model’s JSON replies and note tools… loading a large model can take a few minutes. No vault notes are sent.';
     this.render();
+    let saving = false;
     try {
       const result = await deadline(
         testCustomConnection(connection, null, controller.signal),
         controller.signal,
-        60_000,
+        3 * 60_000,
         'The local model',
       );
       if (!this.opened || controller.signal.aborted) {
         return;
       }
       if (!result.json || !result.tools) {
-        this.message =
-          'The model could not pass Qard’s JSON and note-tool checks. Choose another chat model and try again. Advanced settings can save a model with limited compatibility.';
+        this.message = `${result.message} Try another model, or use Advanced settings to save this model with limited compatibility.`;
         return;
       }
+      saving = true;
       // A previous failed write leaves the queue rejected; retry from its last committed snapshot.
       await this.qard.reviews.flush().catch(() => {});
       if (!this.opened || controller.signal.aborted) {
@@ -144,10 +146,11 @@ export class LocalModelModal extends Modal {
       );
       this.close();
       this.saved();
-    } catch {
+    } catch (error) {
       if (this.opened && !controller.signal.aborted) {
-        this.message =
-          'Could not connect or save this model. Check that it is running and supports JSON replies and tools, then try again.';
+        this.message = saving
+          ? 'Could not save the local connection. Your previous settings were kept. Try again.'
+          : `Connection check failed. ${error instanceof Error ? error.message : 'Check that your server and model are running, then try again.'}`;
       }
     } finally {
       controller.abort();

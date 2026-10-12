@@ -238,14 +238,19 @@ it('explains empty model lists and authentication without claiming the server is
 it('does not save a model that fails tools or JSON and restores a previous key if saving fails', async () => {
   const f = fixture();
   await settle();
-  f.test.mockResolvedValueOnce({ json: true, tools: false, message: 'Partial' });
+  f.test.mockResolvedValueOnce({
+    json: true,
+    tools: false,
+    message: 'JSON replies passed, but note tools did not.',
+  });
   f.button('Test and connect').click();
   await settle();
-  expect(f.el.textContent).toContain('could not pass');
+  expect(f.el.textContent).toContain('JSON replies passed, but note tools did not.');
   expect(f.persist).not.toHaveBeenCalled();
   f.test.mockRejectedValueOnce(new Error('bad JSON'));
   f.button('Test and connect').click();
   await settle();
+  expect(f.el.textContent).toContain('Connection check failed. bad JSON');
   expect(f.persist).not.toHaveBeenCalled();
   const previous = f.reviews.getSnapshot().settings;
   f.persist.mockRejectedValueOnce(new Error('disk full'));
@@ -254,7 +259,7 @@ it('does not save a model that fails tools or JSON and restores a previous key i
   expect(f.reviews.getSnapshot().settings).toEqual(previous);
   expect(f.secrets.get(CUSTOM_KEY_SECRET)).toBe('old-hosted-key');
   expect(f.saved).not.toHaveBeenCalled();
-  expect(f.el.textContent).toContain('Could not connect or save');
+  expect(f.el.textContent).toContain('Could not save the local connection');
   f.button('Test and connect').click();
   await settle();
   expect(f.saved).toHaveBeenCalledOnce();
@@ -303,13 +308,16 @@ it('cancels an in-flight check on close and ignores its late success', async () 
   expect(f.saved).not.toHaveBeenCalled();
 });
 
-it('bounds the model check to one minute and returns a usable retry button', async () => {
+it('allows a large model to load and bounds the check to three minutes with a usable retry button', async () => {
   vi.useFakeTimers();
   const f = fixture();
   await settle();
   f.test.mockReturnValueOnce(new Promise(() => {}));
   f.button('Test and connect').click();
   await vi.advanceTimersByTimeAsync(60000);
+  expect(f.test.mock.calls[0]![2]!.aborted).toBe(false);
+  expect(f.button('Test and connect').disabled).toBe(true);
+  await vi.advanceTimersByTimeAsync(120000);
   expect(f.test.mock.calls[0]![2]!.aborted).toBe(true);
   expect(f.button('Test and connect').disabled).toBe(false);
   expect(f.persist).not.toHaveBeenCalled();
