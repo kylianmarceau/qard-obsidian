@@ -29,7 +29,19 @@ export default defineConfig([
       ],
       'obsidianmd/ui/sentence-case': [
         'warn',
-        { brands: ['Qard', 'Spaced Repetition', 'FSRS', 'Anki', 'Markdown', 'CSV', 'TSV'] },
+        {
+          brands: [
+            'Qard',
+            'Spaced Repetition',
+            'FSRS',
+            'Anki',
+            'Markdown',
+            'CSV',
+            'TSV',
+            'Ollama',
+            'LM Studio',
+          ],
+        },
       ],
     },
   },

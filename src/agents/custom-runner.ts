@@ -38,6 +38,11 @@ export async function customModels(
   if (response.status !== 200 || !Array.isArray(data)) {
     return [];
   }
+  return modelIds(data);
+}
+
+/** Shared parsing for manual model refresh and local server discovery. */
+export function modelIds(data: unknown[]): string[] {
   return [
     ...new Set(
       data.flatMap((m: unknown) => {

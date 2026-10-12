@@ -18,6 +18,7 @@ import {
 } from '../agents/create-runner';
 import { CLAUDE_CODE_MODELS, codexModels, type ModelChoice } from '../agents/cli-runner';
 import { safeFolder } from '../cards/card-writer';
+import { LocalModelModal } from './LocalModelModal';
 interface SettingRow {
   name: string;
   desc?: string;
@@ -34,8 +35,11 @@ const PROVIDER_LABELS: Record<AgentProvider, string> = {
 export class QardSettingsTab extends PluginSettingTab {
   private models?: Promise<string[]>;
   private connectionCheck?: AbortController;
+  private localSetup?: LocalModelModal;
+  private advancedAI = false;
   hide() {
     this.connectionCheck?.abort();
+    this.localSetup?.close();
   }
   /** Suggestions for a connection's model field. OpenRouter's list is fetched once per settings visit. */
   private async modelChoices(provider: AgentProvider): Promise<ModelChoice[]> {
@@ -375,6 +379,50 @@ export class QardSettingsTab extends PluginSettingTab {
         'OpenRouter API key',
         "Any model on OpenRouter. Works on mobile. Kept in Obsidian's secure storage.",
       ),
+      {
+        name: 'Local AI model',
+        desc: a.custom.model
+          ? `Saved model: ${a.custom.model}. Connect again to choose a different local model.`
+          : 'Connect Ollama or LM Studio and choose a model without entering a server address.',
+        render: (row) => {
+          row.addButton((button) =>
+            button.setButtonText('Connect local model').onClick(() => {
+              this.connectionCheck?.abort();
+              this.localSetup?.close();
+              this.localSetup = new LocalModelModal(
+                this.qard,
+                () => {
+                  this.advancedAI = true;
+                  this.redraw();
+                },
+                () => this.redraw(),
+              );
+              this.localSetup.open();
+            }),
+          );
+        },
+      },
+      {
+        name: 'Advanced AI settings',
+        desc: 'Manual server address, model name, optional API key and connection test. Use for hosted servers, other ports or a computer on your network.',
+        render: (row) => {
+          row.addButton((button) =>
+            button
+              .setButtonText(this.advancedAI ? 'Hide advanced' : 'Show advanced')
+              .onClick(() => {
+                this.connectionCheck?.abort();
+                this.advancedAI = !this.advancedAI;
+                this.redraw();
+              }),
+          );
+        },
+      },
+      ...(this.advancedAI ? this.customConnectionDefinitions() : []),
+    ];
+  }
+  private customConnectionDefinitions(): SettingRow[] {
+    const a = this.qard.reviews.getSnapshot().settings.agents;
+    return [
       {
         name: 'Custom AI server',
         desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
