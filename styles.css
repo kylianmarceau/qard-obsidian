@@ -656,6 +656,149 @@
   }
 }
 
+/* Settings groups use native Obsidian controls in a compact, theme-aware layout. */
+.qard-settings-card,
+.qard-settings-hero {
+  --setting-items-background: transparent;
+  --setting-items-padding-x: 0;
+  --setting-items-padding-y: 14px;
+  --setting-items-radius: 0;
+  --setting-items-border-width: 0;
+  --setting-item-name-weight: 500;
+
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-primary);
+}
+
+.qard-settings-hero {
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.qard-settings-card .setting-item,
+.qard-settings-hero .setting-item {
+  margin: 0;
+  padding: 14px 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.qard-settings-card .setting-item:last-child,
+.qard-settings-hero .setting-item {
+  border-bottom: 0;
+}
+
+.qard-settings-card .setting-item-heading,
+.qard-settings-hero .setting-item-heading {
+  padding-top: 0;
+  padding-inline: 0;
+}
+
+.qard-settings-card .setting-item-info {
+  min-width: 0;
+}
+
+.qard-settings-card .setting-item-name {
+  font-weight: 500;
+}
+
+.qard-settings-card .setting-item-description,
+.qard-settings-hero .setting-item-description {
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.qard-settings-card .setting-item-control {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qard-settings-card input:not([type='checkbox']),
+.qard-settings-card select {
+  max-width: 100%;
+}
+
+.qard-settings-card input:not([type='checkbox']) {
+  width: 200px;
+}
+
+.qard-settings-local .setting-item-name {
+  color: var(--text-accent);
+}
+
+.qard-settings-advanced[hidden] {
+  display: none;
+}
+
+.qard-settings-intro {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.qard-settings-intro .setting-item-name {
+  font-size: var(--font-ui-large);
+  font-weight: 600;
+}
+
+.qard-settings-intro .setting-item-control {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.qard-settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.qard-settings-nav button {
+  padding: 7px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 20px;
+  background: var(--background-secondary);
+  box-shadow: none;
+  color: var(--text-normal);
+}
+
+.qard-settings-nav button:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--text-muted);
+}
+
+.qard-settings-nav button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+[data-qard-section] {
+  scroll-margin-top: 24px;
+}
+
+@media (width <= 600px) {
+  .qard-settings-card {
+    padding: 14px;
+  }
+
+  .qard-settings-card .setting-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .qard-settings-card .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .qard-coffee-button {
   display: inline-flex;
   align-items: center;

@@ -201,7 +201,7 @@ In **Settings → Qard → Study**, **New cards per day** sets an optional allow
 
 After completing a batch, choose **Continue studying** to start the next part of your selection. Remaining cards retain their original due dates; saved unfinished batches keep their remaining selection after a restart. **Study extra new cards today** in the builder explicitly bypasses the allowance for that session. Cram and exam sessions are unrestricted. With a daily allowance enabled, **Today** also offers new cards by deck.
 
-**Type answers before revealing** in **Settings → Qard → Study preferences** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
+**Type answers before revealing** in **Settings → Qard → Study experience** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
 
 | Mode | Includes |
 | --- | --- |
@@ -464,6 +464,8 @@ In **Settings → Qard → AI connections**, set up the tools and keys Qard may 
 API keys are kept in Obsidian's secure storage (Obsidian 1.11.4+), not in your vault or plugin data.
 
 To use a local model on desktop, start Ollama or LM Studio's server and download a chat model. In **Settings → Qard → AI connections**, choose **Connect local model**. Qard finds running servers on their standard local ports and shows server and model dropdowns. Choose **Test and connect** to check JSON replies and note tools using synthetic text, then save the connection. **Use for all AI roles** is on by default; turn it off to keep your existing role selections. A failed compatibility check leaves your settings unchanged. Detection sends no API keys or vault notes, and connecting a keyless server clears any previous custom API key. If no server is found, follow the setup instructions and choose **Try again**. The model check allows up to three minutes for slower model startup; closing the window cancels it.
+
+The settings page groups Study preferences, Review and memory, Study experience, AI connections, AI roles, Practice tests and Files and folders into compact sections. Use the Study, AI, Tests and Files & data buttons at the top to jump to a section. Changes save automatically; expanding Advanced, choosing a provider and changing the review scheduler keep you at the current position. Import/export tools and study-progress backups follow the folder settings.
 
 Choose **Show advanced** under **Advanced AI settings** for a hosted server, a different port, an authenticated local server or a desktop server reached from a phone. Enter **Custom AI server** and its exact model name under **Custom AI model**. A server root is normalized to `/v1`; custom API prefixes are supported. **Refresh models** retrieves suggestions when the server supports `/models`; you can always type a model name manually. **Custom AI API key** is optional for keyless servers and can be removed with **Clear key**.
 

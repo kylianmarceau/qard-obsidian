@@ -32,6 +32,7 @@ function fixture(showAdvanced = true) {
 }
 function controls() {
   const host = document.createElement('div');
+  host.empty = () => host.replaceChildren();
   const inputs: HTMLInputElement[] = [],
     selects: HTMLSelectElement[] = [],
     buttons: { label: string; run?: () => void | Promise<void>; disabled: boolean }[] = [];
@@ -154,6 +155,7 @@ it('starts with a local connect button and keeps manual configuration behind Adv
     tab
       .getSettingDefinitions()
       .flatMap((g) => g.items)
+      .filter((row) => !row.visible || row.visible())
       .map((row) => row.name);
   expect(names()).toContain('Local AI model');
   expect(names()).not.toContain('Custom AI server');
