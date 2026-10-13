@@ -5804,23 +5804,25 @@ div.qard-ask-q {
   color: var(--qard-blue);
 }
 
-.qard-source-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 12px;
-  border-radius: 10px;
-  background: var(--qard-soft);
+.qard-source-search {
+  position: relative;
+  flex-shrink: 0;
 }
 
-.qard-source-picker > select {
-  width: 100%;
-  min-width: 0;
+/* The button sits at the right edge, so its search opens leftwards. */
+.qard-source-search > .qard-popover {
+  left: auto;
+  right: 0;
 }
 
-.qard-source-picker > p {
-  grid-column: 1 / -1;
+.qard-source-search .qard-popover > p {
+  padding: 6px 8px;
+}
+
+.qard-source-search .qard-popover > .qard-source-caveat {
+  margin-top: 4px;
+  border-top: 1px solid var(--qard-border);
+  font-size: 11px;
 }
 
 @media (width <= 520px) {
@@ -5830,8 +5832,9 @@ div.qard-ask-q {
     gap: 10px;
   }
 
-  .qard-source-picker {
-    grid-template-columns: minmax(0, 1fr);
+  .qard-source-search > .qard-popover {
+    left: 0;
+    right: auto;
   }
 }
 
