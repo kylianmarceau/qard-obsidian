@@ -41,7 +41,9 @@ See how course topics connect and choose what to learn next.
 
 Requires Obsidian 1.7.2 or newer. Qard adds no sample decks; your cards stay in ordinary Markdown notes.
 
-For AI features, open **Settings → Qard → AI connections**, connect Claude Code, Codex, the Anthropic API, OpenRouter or a **Custom AI** server, then choose your models under **AI roles**. Custom connections support local models through Ollama or LM Studio, with an optional key and a connection test. Claude Code and Codex require desktop Obsidian; API connections also work on mobile when their server is reachable.
+For AI features, open **Settings → Qard → AI connections**, connect Claude Code, Codex, the Anthropic API, OpenRouter or a **Custom AI** server, then choose your models under **AI roles**. Custom connections support local models through Ollama, LM Studio or oMLX, with an optional key and a connection test. Claude Code and Codex require desktop Obsidian; API connections also work on mobile when their server is reachable.
+
+For **oMLX**, start its server and download a chat model, then choose **Connect local model** in Qard. Qard checks `http://localhost:8000/v1` by default. If your server uses another port or requires a key, use **Show advanced** to enter its address and **Custom AI API key**, refresh models and test the connection. Qard connects directly to oMLX; it can use the same server as Claude Code and OpenCode. Choose a model that passes Qard's JSON and note-tool checks. See the [oMLX documentation](https://github.com/jundot/omlx#quickstart).
 
 ## Your notes and privacy
 

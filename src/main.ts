@@ -5,7 +5,7 @@ import { SourceSyncService, sourceSyncPath } from './cards/source-sync-service';
 import { CardImprovementService } from './cards/improvement-service';
 import { FlashcardGenerationService } from './cards/generation-service';
 import { CardWriter } from './cards/card-writer';
-import { ReviewStore } from './review/review-store';
+import { ReviewStore, type ProgressFile } from './review/review-store';
 import { ProgressBackups } from './review/progress-backups';
 import { BackupModal } from './settings/BackupModal';
 import { QardSettingsTab } from './settings/SettingsTab';
@@ -64,12 +64,34 @@ export default class QardPlugin extends Plugin {
       },
       remove: (name) => adapter.remove(`${folder}/${name}`),
     });
-    this.reviews = new ReviewStore(async (data) => {
-      await this.saveData(data);
-      await this.backups.capture(data).catch(() => this.warnBackup());
-    });
+    // Sync can replace data.json at any time; its size and modification time reveal a copy from another device.
+    const dataFile = `${this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`}/data.json`;
+    let seen: string | undefined;
+    const fingerprint = async () => {
+      const stat = await adapter.stat(dataFile).catch(() => null);
+      return stat ? `${stat.mtime}:${stat.size}` : 'missing';
+    };
+    const progressFile: ProgressFile = {
+      read: () => this.loadData(),
+      changed: async () => (await fingerprint()) !== seen,
+      acknowledge: async () => {
+        seen = await fingerprint();
+      },
+    };
+    // Local storage stays on this device, so each device keeps its own study-time and usage totals.
+    const device = deviceId();
+    this.reviews = new ReviewStore(
+      async (data) => {
+        await this.saveData(data);
+        seen = await fingerprint();
+        await this.backups.capture(data).catch(() => this.warnBackup());
+      },
+      progressFile,
+      device,
+    );
     try {
       this.reviews.load(await this.loadData());
+      await progressFile.acknowledge();
     } catch {
       new Notice('Could not load review data. Reload the plugin before reviewing.');
       throw new Error('Unable to load Qard review metadata');
@@ -80,6 +102,17 @@ export default class QardPlugin extends Plugin {
     this.registerCommands();
     this.addSettingTab(new QardSettingsTab(this));
     this.app.workspace.onLayoutReady(() => this.startBackgroundWork());
+  }
+  /** Obsidian calls this when sync replaces data.json; merge it instead of overwriting it on the next save. */
+  async onExternalSettingsChange() {
+    if (this.disposed || !this.reviews) {
+      return;
+    }
+    await this.reviews.syncExternal().catch(() => {
+      new Notice(
+        'Qard could not merge study progress from another device. Your progress here is kept; it will merge on the next save.',
+      );
+    });
   }
   private warnBackup() {
     if (!this.backupWarning) {
@@ -469,5 +502,21 @@ export default class QardPlugin extends Plugin {
     this.tests?.dispose();
     this.learn?.dispose();
     this.reviews?.dispose();
+  }
+}
+
+/** A stable random ID for this device; browser storage is never synced with the vault. */
+function deviceId(): string {
+  const key = 'qard-device-id';
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (stored) {
+      return stored;
+    }
+    const id = crypto.randomUUID();
+    window.localStorage.setItem(key, id);
+    return id;
+  } catch {
+    return crypto.randomUUID();
   }
 }

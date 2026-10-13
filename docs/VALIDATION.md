@@ -179,3 +179,13 @@ New coverage checks API address validation and settings migration, keyless reque
 These checks use simulated HTTP responses and Obsidian services. Live Ollama/LM Studio models, native Obsidian interaction and mobile hardware were not exercised; the small connection probe does not establish model quality for every Qard task. Work was isolated in a separate worktree based on main, preserving the ongoing memory-palace branch. This feature has not been released or installed into the test vault.
 
 Merged `feature/local-custom-ai` into `staging` on 11 October 2026 without conflicts. Full `npm run check` passed again on the merged staging tree: **592 tests across 76 files**, formatting, strict TypeScript, source/CSS lint, production build and release-file verification. Main and the memory-palace branch were not changed.
+
+## oMLX local model support — 12 October 2026
+
+Added oMLX discovery at `http://localhost:8000/v1` and updated local setup instructions. Discovery tests cover its model list, authentication, stopped services and independent three-second deadlines. Setup tests exercise connecting each supported server, clearing a previous custom key for keyless connections and directing authenticated oMLX servers to Advanced settings without saving an untested connection.
+
+Full `npm run check` passed **615 tests across 79 files**, formatting, TypeScript, source/CSS lint, production build and release-file verification. Version metadata remains at 0.5.18; the updated local build is in `release/qard`.
+
+Live verification against the installed oMLX 0.7.1.dev1 server confirmed a keyless `/v1/models` request returns HTTP 401. Using the configured key in memory, Qard's `customModels` listed four installed models and `testCustomConnection` passed both JSON replies and the synthetic note-tool round trip with `Qwen3.5-4B-MLX-4bit`. The harness used Qard's production runner with an injected HTTP transport; it sent no vault notes and printed no API key. Other models, full study tasks and native Obsidian interaction were not exercised. No Obsidian plugin installation was made.
+
+Release preparation updates the package, lock file, manifest and compatibility table to 0.5.19 and adds its release notes. Full `npm run check` passed again with **615 tests across 79 files** and matching 0.5.19 install assets. The existing tag-triggered GitHub Actions workflow handles publication and artifact attestations.

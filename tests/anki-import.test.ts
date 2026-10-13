@@ -71,12 +71,15 @@ for (const modern of [false, true]) {
   });
 }
 it('converts math and rich text without executing template code or loading remote resources', () => {
+  const visibleHtml = document.body.innerHTML;
   expect(
     ankiMarkdown(
       'Inline \\(x_1\\) and display \\[E=mc^2\\].<script>window.bad=true</script><img src="https://example.com/image.png">',
       new Map(),
     ),
   ).toBe('Inline $x_1$ and display $$E=mc^2$$.[Remote media](https://example.com/image.png)');
+  expect(Reflect.get(window, 'bad')).toBeUndefined();
+  expect(document.body.innerHTML).toBe(visibleHtml);
   expect(
     renderTemplate(
       '{{#Extra}}{{Front}}{{/Extra}}{{^Extra}}{{Back}}{{/Extra}}',

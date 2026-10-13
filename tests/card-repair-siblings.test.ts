@@ -14,6 +14,7 @@ import { selectCards } from '../src/review/session';
 import { failureDays, needsRepair } from '../src/review/card-repair';
 import { readSessions } from '../src/review/saved-session';
 import { examProgress } from '../src/exams/exam-plan';
+import { unstampAll } from './review-state-helpers';
 
 const now = new Date(2026, 9, 10, 12).getTime();
 const tomorrow = new Date(2026, 9, 11).getTime();
@@ -101,7 +102,11 @@ it.each(['fsrs', 'simple'] as const)(
     expect(store.getSnapshot()).toBe(before);
     const token = await store.review('a', 4, now, { id: session.id, position: 0 }, ['b']);
     const data = store.getSnapshot();
-    expect(data.states.b).toEqual({ ...beforeSibling, buriedUntil: tomorrow });
+    expect(data.states.b).toEqual({
+      ...beforeSibling,
+      buriedUntil: tomorrow,
+      flagsAt: expect.any(Number),
+    });
     expect(data.sessions[0]).toMatchObject({
       position: 2,
       deferredIds: ['b'],
@@ -112,7 +117,7 @@ it.each(['fsrs', 'simple'] as const)(
     expect(isBuried(data.states.b, tomorrow)).toBe(false);
     await expect(store.review('b', 3, now)).rejects.toThrow('deferred');
     await store.undoReview(token);
-    expect(store.getSnapshot().states).toEqual(before.states);
+    expect(unstampAll(store.getSnapshot().states)).toEqual(unstampAll(before.states));
     expect(store.getSnapshot().sessions).toEqual(before.sessions);
   },
 );
@@ -194,6 +199,7 @@ it('counts failure days, excludes unscheduled/future failures, and mark fixed st
     ...repaired.states.a,
     needsFixing: undefined,
     repairSince: now,
+    flagsAt: expect.any(Number),
   });
   expect(
     failureDays(store.getSnapshot().history, store.getSnapshot().states).get('a'),

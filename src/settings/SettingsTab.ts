@@ -1,4 +1,5 @@
-import { PluginSettingTab, Setting, Notice, setIcon } from 'obsidian';
+import { PluginSettingTab, Setting, Notice, setIcon, requireApiVersion } from 'obsidian';
+import type { TextComponent, ButtonComponent } from 'obsidian';
 import type QardPlugin from '../main';
 import type { QardSettings, RoleSetting, TestSettings } from './settings';
 import type { AgentProvider, AgentRole } from '../agents/runner';
@@ -18,9 +19,11 @@ import {
 } from '../agents/create-runner';
 import { CLAUDE_CODE_MODELS, codexModels, type ModelChoice } from '../agents/cli-runner';
 import { safeFolder } from '../cards/card-writer';
+import { LocalModelModal } from './LocalModelModal';
 interface SettingRow {
   name: string;
   desc?: string;
+  visible?: () => boolean;
   render: (setting: Setting) => void;
 }
 const PROVIDER_LABELS: Record<AgentProvider, string> = {
@@ -34,8 +37,17 @@ const PROVIDER_LABELS: Record<AgentProvider, string> = {
 export class QardSettingsTab extends PluginSettingTab {
   private models?: Promise<string[]>;
   private connectionCheck?: AbortController;
+  private localSetup?: LocalModelModal;
+  private advancedAI = false;
+  private advancedRows = new Set<HTMLElement>();
+  private retentionInput?: TextComponent;
+  private advancedButton?: ButtonComponent;
   hide() {
     this.connectionCheck?.abort();
+    this.localSetup?.close();
+    this.advancedRows.clear();
+    this.retentionInput = undefined;
+    this.advancedButton = undefined;
   }
   /** Suggestions for a connection's model field. OpenRouter's list is fetched once per settings visit. */
   private async modelChoices(provider: AgentProvider): Promise<ModelChoice[]> {
@@ -68,29 +80,143 @@ export class QardSettingsTab extends PluginSettingTab {
   // Obsidian 1.13+ discovers these definitions for rendering and settings search.
   // Earlier supported versions call display(), which uses the same rows.
   getSettingDefinitions() {
-    const group = (heading: string, items: SettingRow[]) => ({
+    const group = (heading: string, items: SettingRow[], id: string, hero = false) => ({
       type: 'group' as const,
       heading,
-      items,
-    });
-    return [
-      group('Study preferences', this.studyDefinitions()),
-      group('AI connections', this.connectionDefinitions()),
-      group('AI roles', this.roleDefinitions()),
-      group('Practice tests', this.testDefinitions()),
-      group('Lessons and checks', this.learnDefinitions()),
-      group('Import and export', this.importDefinitions()),
-      group('Study-progress backups', [
-        {
-          name: 'Manage study-progress backups',
-          desc: 'Automatic local copies of reviews, schedules, saved sessions and exam plans. Preview before restoring.',
-          render: (row) => {
-            row.addButton((button) =>
-              button.setButtonText('Manage backups').onClick(() => this.qard.openBackups()),
+      cls: hero ? 'qard-settings-hero' : 'qard-settings-card',
+      items: items.map((definition, index) => ({
+        ...definition,
+        render: (row: Setting) => {
+          if (row.settingEl) {
+            row.settingEl.dataset.qardSetting = definition.name;
+          }
+          if (row.settingEl && index === 0) {
+            const section = row.settingEl.closest<HTMLElement>(
+              '.qard-settings-card, .qard-settings-hero',
             );
-          },
+            (section ?? row.settingEl).dataset.qardSection = id;
+          }
+          definition.render(row);
+          if (row.settingEl) {
+            for (const input of row.controlEl.querySelectorAll('input, select')) {
+              if (!input.hasAttribute('aria-label')) {
+                input.setAttribute('aria-label', definition.name);
+              }
+            }
+          }
         },
-      ]),
+      })),
+    });
+    const study = this.studyDefinitions();
+    const tests = this.testDefinitions();
+    const named = (items: SettingRow[], names: string[]) =>
+      names.map((name) => items.find((item) => item.name === name)!);
+    return [
+      group(
+        'Qard settings',
+        [
+          {
+            name: 'Your study workspace',
+            desc: 'Study preferences, AI connections and storage. Changes save automatically.',
+            render: (row) => {
+              row.settingEl?.classList.add('qard-settings-intro');
+              const nav = row.controlEl.createEl('nav', {
+                cls: 'qard-settings-nav',
+                attr: { 'aria-label': 'Settings sections' },
+              });
+              for (const [label, id] of [
+                ['Study', 'study'],
+                ['AI', 'ai'],
+                ['Tests', 'tests'],
+                ['Files & data', 'files'],
+              ]) {
+                const button = nav.createEl('button', { text: label, attr: { type: 'button' } });
+                button.addEventListener('click', () => {
+                  this.containerEl
+                    .querySelector<HTMLElement>(`[data-qard-section="${id}"]`)
+                    ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                });
+              }
+            },
+          },
+        ],
+        'intro',
+        true,
+      ),
+      group(
+        'Study preferences',
+        named(study, [
+          'Default study mode',
+          'Default order',
+          'New cards per day',
+          'Review batch size',
+        ]),
+        'study',
+      ),
+      group(
+        'Review and memory',
+        named(study, [
+          'Enable spaced repetition',
+          'Review scheduler',
+          'Target retention',
+          'Separate related cards',
+        ]),
+        'memory',
+      ),
+      group(
+        'Study experience',
+        named(study, [
+          'Show keyboard hints',
+          'Enter focus mode when studying',
+          'Type answers before revealing',
+          'Local voice answers',
+        ]),
+        'experience',
+      ),
+      group('AI connections', this.connectionDefinitions(), 'ai'),
+      group(
+        'AI roles',
+        named(this.roleDefinitions(), [
+          'Tutor',
+          'Writer',
+          'Marker',
+          'Illustrator',
+          'Show which agent is working',
+          'Token usage',
+        ]),
+        'roles',
+      ),
+      group(
+        'Practice tests',
+        tests.filter((item) => item.name !== 'Tests folder'),
+        'tests',
+      ),
+      group(
+        'Files and folders',
+        [
+          ...named(study, ['New-card folder']),
+          ...named(tests, ['Tests folder']),
+          ...this.learnDefinitions(),
+        ],
+        'files',
+      ),
+      group('Import and export', this.importDefinitions(), 'transfer'),
+      group(
+        'Study-progress backups',
+        [
+          {
+            name: 'Manage study-progress backups',
+            desc: 'Automatic local copies of reviews, schedules, saved sessions and exam plans. Preview before restoring.',
+            render: (row) => {
+              row.addButton((button) =>
+                button.setButtonText('Manage backups').onClick(() => this.qard.openBackups()),
+              );
+            },
+          },
+        ],
+        'backups',
+      ),
+      group('Support', named(study, ['Support Qard']), 'support'),
     ];
   }
   private studyDefinitions(): SettingRow[] {
@@ -102,7 +228,9 @@ export class QardSettingsTab extends PluginSettingTab {
           [key]: value,
         });
         if (key === 'scheduler') {
-          this.redraw();
+          this.retentionInput?.setDisabled(
+            this.qard.reviews.getSnapshot().settings.scheduler !== 'fsrs',
+          );
         }
       } catch {
         new Notice('Could not save that preference. Please reopen settings and try again.');
@@ -113,21 +241,25 @@ export class QardSettingsTab extends PluginSettingTab {
         name: key === 'newCardsPerDay' ? 'New cards per day' : 'Review batch size',
         desc:
           key === 'newCardsPerDay'
-            ? 'Optional daily allowance across normal sessions. Learning repeats do not count. 0 means unlimited; cram and exam sessions are unrestricted.'
-            : 'Optional number of cards per sitting, with Continue afterwards. Remaining cards stay due. 0 means the full selection.',
+            ? 'Daily limit for normal study. 0 means unlimited. Learning repeats, cram and exam sessions are unrestricted.'
+            : 'Cards per sitting. 0 uses the full selection. Continue starts the next batch; remaining cards stay due.',
         render: (row: Setting) => {
-          row.addText((text) =>
+          row.addText((text) => {
+            text.inputEl.type = 'number';
+            text.inputEl.min = '0';
+            text.inputEl.max = '10000';
+            text.inputEl.step = '1';
             text.setValue(String(settings[key])).onChange((value) => {
               if (/^\d+$/.test(value) && Number(value) <= 10000) {
                 void save(key, Number(value));
               }
-            }),
-          );
+            });
+          });
         },
       })),
       {
         name: 'Default study mode',
-        desc: 'All cards includes selected cards except paused cards and related cards deferred for today. Cram includes deferred cards.',
+        desc: 'Choose which cards to study by default. All cards excludes paused and deferred cards; cram includes deferred cards.',
         render: (row) => {
           row.addDropdown((d) =>
             d
@@ -144,7 +276,7 @@ export class QardSettingsTab extends PluginSettingTab {
       },
       {
         name: 'Review scheduler',
-        desc: 'FSRS adapts intervals to your memory. Switching preserves current due dates; the selected scheduler is used on your next review.',
+        desc: 'FSRS adapts to your memory. Switching takes effect on your next review and keeps current due dates.',
         render: (row) => {
           row.addDropdown((d) =>
             d
@@ -156,9 +288,10 @@ export class QardSettingsTab extends PluginSettingTab {
       },
       {
         name: 'Target retention',
-        desc: 'FSRS target for recall at the next review. Higher targets mean more frequent reviews. Existing due dates change as cards are reviewed.',
+        desc: 'Recall target in percent (70–97). Higher targets mean more frequent reviews. Due dates update as you review.',
         render: (row) => {
           row.addText((t) => {
+            this.retentionInput = t;
             t.inputEl.type = 'number';
             t.inputEl.min = '70';
             t.inputEl.max = '97';
@@ -266,13 +399,9 @@ export class QardSettingsTab extends PluginSettingTab {
       },
     ];
   }
-  private patch(patch: (s: QardSettings) => QardSettings, redraw = false) {
+  private patch(patch: (s: QardSettings) => QardSettings) {
     return this.qard.reviews.saveSettings(patch(this.qard.reviews.getSnapshot().settings)).then(
-      () => {
-        if (redraw) {
-          this.redraw();
-        }
-      },
+      () => {},
       () => {
         new Notice('Could not save that preference. Please reopen settings and try again.');
       },
@@ -294,7 +423,9 @@ export class QardSettingsTab extends PluginSettingTab {
           ? `${desc} Saving a key needs Obsidian 1.11.4 or newer; keyless local servers still work.`
           : 'Needs Obsidian 1.11.4 or newer.',
       render: (row) => {
+        let input: TextComponent | undefined;
         row.addText((x) => {
+          input = x;
           x.inputEl.type = 'password';
           x.setPlaceholder(
             store?.getSecret(id) ? 'Saved. Enter a new key to replace it.' : placeholder,
@@ -319,7 +450,8 @@ export class QardSettingsTab extends PluginSettingTab {
             button.setButtonText('Clear key').onClick(() => {
               this.connectionCheck?.abort();
               store.setSecret(id, '');
-              this.redraw();
+              input?.setValue('');
+              input?.setPlaceholder(placeholder);
               new Notice('Custom API key cleared.');
             }),
           );
@@ -338,29 +470,32 @@ export class QardSettingsTab extends PluginSettingTab {
       name: label,
       desc: 'Checking…',
       render: (row) => {
+        const check = () =>
+          detectAgent(this.qard.reviews.getSnapshot().settings, provider).then((found) => {
+            row.setDesc(
+              found
+                ? `Found at ${found}. Uses your existing login and can only read your vault.`
+                : 'Not found. Install it, or enter its path. Needs the desktop app.',
+            );
+          });
         row.addText((x) => {
           x.setValue(a[key]).setPlaceholder('Found automatically');
           x.inputEl.addEventListener(
             'change',
             () =>
-              void this.patch(
-                (s) => ({ ...s, agents: { ...s.agents, [key]: x.getValue().trim() } }),
-                true,
-              ),
+              void this.patch((s) => ({
+                ...s,
+                agents: { ...s.agents, [key]: x.getValue().trim() },
+              })).then(check),
           );
         });
         // Obsidian's Setting has a then() method, so returning it from a promise callback makes the promise adopt it
         // forever and freezes the app. Keep this callback returning nothing.
-        void detectAgent(this.qard.reviews.getSnapshot().settings, provider).then((found) => {
-          row.setDesc(
-            found
-              ? `Found at ${found}. Uses your existing login and can only read your vault.`
-              : 'Not found. Install it, or enter its path. Needs the desktop app.',
-          );
-        });
+        void check();
       },
     });
     return [
+      this.localConnectionDefinition(a.custom.model),
       cli('claude-code', 'Claude Code', 'claudePath'),
       cli('codex', 'Codex', 'codexPath'),
       this.secretRow(
@@ -376,8 +511,75 @@ export class QardSettingsTab extends PluginSettingTab {
         "Any model on OpenRouter. Works on mobile. Kept in Obsidian's secure storage.",
       ),
       {
+        name: 'Advanced AI settings',
+        desc: 'Manual connection for another server, a different port or a computer on your network.',
+        render: (row) => {
+          row.addButton((button) => {
+            this.advancedButton = button;
+            button.setButtonText(this.advancedAI ? 'Hide advanced' : 'Show advanced');
+            button.buttonEl?.setAttribute('aria-expanded', String(this.advancedAI));
+            button.onClick(() => {
+              this.connectionCheck?.abort();
+              this.showAdvanced(!this.advancedAI);
+            });
+          });
+        },
+      },
+      ...this.customConnectionDefinitions().map((definition) => ({
+        ...definition,
+        visible: () => this.advancedAI,
+        render: (row: Setting) => {
+          if (row.settingEl) {
+            this.advancedRows.add(row.settingEl);
+            row.settingEl.hidden = !this.advancedAI;
+            row.settingEl.classList.add('qard-settings-advanced');
+          }
+          definition.render(row);
+        },
+      })),
+    ];
+  }
+  private showAdvanced(show: boolean) {
+    this.advancedAI = show;
+    this.advancedButton?.setButtonText(show ? 'Hide advanced' : 'Show advanced');
+    this.advancedButton?.buttonEl?.setAttribute('aria-expanded', String(show));
+    for (const row of this.advancedRows) {
+      row.hidden = !show;
+    }
+    // Obsidian 1.13+ updates visibility predicates without rebuilding the page.
+    if (requireApiVersion('1.13.0')) {
+      this.refreshDomState();
+    }
+  }
+  private localConnectionDefinition(model: string): SettingRow {
+    return {
+      name: 'Local AI model',
+      desc: model
+        ? `Saved Custom AI model: ${model}. Connect again to choose a different model.`
+        : 'Use Ollama, LM Studio or oMLX on this computer. Choose a model without entering a server address.',
+      render: (row) => {
+        row.settingEl?.classList.add('qard-settings-local');
+        row.addButton((button) =>
+          button.setButtonText('Connect local model').onClick(() => {
+            this.connectionCheck?.abort();
+            this.localSetup?.close();
+            this.localSetup = new LocalModelModal(
+              this.qard,
+              () => this.showAdvanced(true),
+              () => this.redraw(),
+            );
+            this.localSetup.open();
+          }),
+        );
+      },
+    };
+  }
+  private customConnectionDefinitions(): SettingRow[] {
+    const a = this.qard.reviews.getSnapshot().settings.agents;
+    return [
+      {
         name: 'Custom AI server',
-        desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
+        desc: 'OpenAI-compatible address ending in /v1. Default ports: Ollama 11434, LM Studio 1234, oMLX 8000. AI requests and requested notes go here. On a phone, localhost means the phone itself.',
         render: (row) => {
           row.addText((x) => {
             x.setValue(a.custom.baseUrl).setPlaceholder('Server address');
@@ -489,20 +691,29 @@ export class QardSettingsTab extends PluginSettingTab {
   }
   /** Each role picks a connection and a model: a fast tutor, a careful writer and marker. */
   private roleDefinitions(): SettingRow[] {
-    const roles = this.qard.reviews.getSnapshot().settings.agents.roles;
-    const role = (id: AgentRole, name: string, desc: string): SettingRow => ({
-      name,
-      desc,
-      render: (row) => {
-        const current = roles[id],
-          save = (next: RoleSetting, redraw = false) =>
-            this.patch(
-              (s) => ({ ...s, agents: { ...s.agents, roles: { ...s.agents.roles, [id]: next } } }),
-              redraw,
-            );
-        row.addDropdown((d) =>
-          d
-            .addOptions(PROVIDER_LABELS)
+    const role = (id: AgentRole, name: string, desc: string): SettingRow => {
+      const render = (row: Setting) => {
+        row.settingEl?.classList.add('qard-settings-role');
+        const current = this.qard.reviews.getSnapshot().settings.agents.roles[id],
+          save = (next: RoleSetting, refresh = false) =>
+            this.patch((s) => ({
+              ...s,
+              agents: { ...s.agents, roles: { ...s.agents.roles, [id]: next } },
+            })).then(() => {
+              if (refresh) {
+                const focused = row.controlEl.contains(row.controlEl.ownerDocument.activeElement);
+                row.controlEl.empty();
+                render(row);
+                if (focused) {
+                  row.controlEl
+                    .querySelector<HTMLElement>('select')
+                    ?.focus({ preventScroll: true });
+                }
+              }
+            });
+        row.addDropdown((d) => {
+          d.selectEl?.setAttribute('aria-label', `${name} connection`);
+          d.addOptions(PROVIDER_LABELS)
             .setValue(current.provider)
             .onChange((v) => {
               const provider = v as AgentProvider;
@@ -510,17 +721,18 @@ export class QardSettingsTab extends PluginSettingTab {
                 { provider, model: provider === 'custom' ? '' : defaultModel(provider, id) },
                 true,
               );
-            }),
-        );
+            });
+        });
         if (current.provider === 'anthropic') {
-          row.addDropdown((d) =>
-            d
-              .addOptions(API_MODELS)
+          row.addDropdown((d) => {
+            d.selectEl?.setAttribute('aria-label', `${name} model`);
+            d.addOptions(API_MODELS)
               .setValue(API_MODELS[current.model] ? current.model : defaultModel('anthropic', id))
-              .onChange((v) => void save({ ...current, model: v })),
-          );
+              .onChange((v) => void save({ ...current, model: v }));
+          });
         } else {
           row.addText((x) => {
+            x.inputEl.setAttribute('aria-label', `${name} model`);
             x.setValue(current.model).setPlaceholder(
               defaultModel(current.provider, id, this.qard.reviews.getSnapshot().settings) ||
                 'Default model',
@@ -541,8 +753,9 @@ export class QardSettingsTab extends PluginSettingTab {
             });
           });
         }
-      },
-    });
+      };
+      return { name, desc, render };
+    };
     return [
       {
         name: 'Show which agent is working',
@@ -567,11 +780,7 @@ export class QardSettingsTab extends PluginSettingTab {
           );
         },
       },
-      role(
-        'tutor',
-        'Tutor',
-        'Replies live in lessons and marks checks. Choose a fast model. API keys respond fastest.',
-      ),
+      role('tutor', 'Tutor', 'Replies during lessons and marks checks. Choose a fast model.'),
       role(
         'writer',
         'Writer',
@@ -581,7 +790,7 @@ export class QardSettingsTab extends PluginSettingTab {
       role(
         'illustrator',
         'Illustrator',
-        'Draws figures for lessons: plots computed with Python on this computer, or diagrams. Choose a strong model.',
+        'Draws lesson diagrams and computes plots with Python on this computer. Choose a strong model.',
       ),
     ];
   }
@@ -713,7 +922,7 @@ export class QardSettingsTab extends PluginSettingTab {
   display() {
     this.redraw();
   }
-  // Conditional rows depend on the provider, so the whole tab is redrawn when it changes.
+  // Transfer tools are available only from settings.
   private importDefinitions(): SettingRow[] {
     return [
       {
@@ -753,16 +962,38 @@ export class QardSettingsTab extends PluginSettingTab {
     ];
   }
   private redraw() {
+    const scroll: { el: HTMLElement; top: number }[] = [];
+    for (let el: HTMLElement | null = this.containerEl; el; el = el.parentElement) {
+      scroll.push({ el, top: el.scrollTop });
+    }
+    const active = this.containerEl.ownerDocument.activeElement;
+    const activeRow = active?.closest<HTMLElement>('[data-qard-setting]');
+    const name = activeRow?.dataset.qardSetting;
+    const index = activeRow
+      ? Array.from(activeRow.querySelectorAll('input, select, button')).indexOf(active!)
+      : -1;
+    this.advancedRows.clear();
     this.containerEl.empty();
     for (const group of this.getSettingDefinitions()) {
-      new Setting(this.containerEl).setName(group.heading).setHeading();
+      const section = this.containerEl.createDiv({ cls: group.cls });
+      new Setting(section).setName(group.heading).setHeading();
       for (const definition of group.items) {
-        const row = new Setting(this.containerEl).setName(definition.name);
+        const row = new Setting(section).setName(definition.name);
         if (definition.desc) {
           row.setDesc(definition.desc);
         }
         definition.render(row);
       }
+    }
+    if (name && index >= 0) {
+      const row = Array.from(
+        this.containerEl.querySelectorAll<HTMLElement>('[data-qard-setting]'),
+      ).find((el) => el.dataset.qardSetting === name);
+      const input = row?.querySelectorAll<HTMLElement>('input, select, button').item(index);
+      input?.focus({ preventScroll: true });
+    }
+    for (const { el, top } of scroll) {
+      el.scrollTop = top;
     }
   }
 }

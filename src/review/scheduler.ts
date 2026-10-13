@@ -17,6 +17,8 @@ export interface ReviewState {
   repairSince?: number;
   /** Temporary sibling deferral; the memory model and due date stay untouched. */
   buriedUntil?: number;
+  /** When paused, repair or deferral markers last changed, so a stale synced copy cannot undo them. */
+  flagsAt?: number;
 }
 export interface ReviewEvent {
   /** Explicitly false for imported history; absent in older local history. */

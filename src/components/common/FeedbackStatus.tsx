@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
+import { LoadingIndicator } from './LoadingIndicator';
 
 /** children: an optional quiet tag after the text, e.g. who is working on it. */
 export function Waiting({ text, children }: { text: string; children?: ReactNode }) {
   return (
     <p className="qard-waiting" role="status">
-      <span className="qard-dot" aria-hidden="true" />
+      <LoadingIndicator />
       <span className="qard-waiting-text">{text}</span>
       {children}
     </p>

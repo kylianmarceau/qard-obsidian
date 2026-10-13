@@ -7,6 +7,7 @@ import { serializeCard, replaceCardInSource, deleteCardInSource } from '../src/c
 import { ReviewStore } from '../src/review/review-store';
 import { clozeFront, FORMAT_BACK } from '../src/cards/card-format';
 import { matchesSearch } from '../src/decks/deck-index';
+import { unstampAll } from './review-state-helpers';
 
 async function setup(sources: Record<string, string>) {
   const f = transferFixture();
@@ -173,15 +174,23 @@ it('persists pause, resume and repair together without changing memory, historie
   expect(persist).toHaveBeenCalledOnce();
   const paused = store.getSnapshot();
   for (const id of ['a', 'b']) {
-    expect(paused.states[id]).toEqual({ ...before.states[id], paused: true });
+    expect(paused.states[id]).toEqual({
+      ...before.states[id],
+      paused: true,
+      flagsAt: expect.any(Number),
+    });
   }
   expect(paused.history).toBe(before.history);
   expect(paused.statistics).toBe(before.statistics);
   await store.updateCards(['a', 'b'], 'resume');
-  expect(store.getSnapshot().states).toEqual(before.states);
+  expect(unstampAll(store.getSnapshot().states)).toEqual(unstampAll(before.states));
   await store.updateCards(['a', 'b'], 'repair');
   for (const id of ['a', 'b']) {
-    expect(store.getSnapshot().states[id]).toEqual({ ...before.states[id], needsFixing: true });
+    expect(store.getSnapshot().states[id]).toEqual({
+      ...before.states[id],
+      needsFixing: true,
+      flagsAt: expect.any(Number),
+    });
   }
 });
 it('keeps the entire selection unchanged on metadata persistence failure and rejects invalid IDs', async () => {

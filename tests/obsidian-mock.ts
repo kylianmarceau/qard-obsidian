@@ -35,8 +35,13 @@ export class TFile {
 export const normalizePath = (path: string) =>
   path.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
 // Settings-tab stand-ins. Like Obsidian 1.13, Setting has a then() that returns itself, which makes it a thenable.
+const settingElement = {
+  createEl: () => settingElement,
+  createSpan: () => ({}),
+  addEventListener() {},
+};
 export class Setting {
-  controlEl = { createEl: () => ({ createSpan: () => ({}) }) };
+  controlEl = { createEl: () => settingElement };
   constructor(public containerEl?: unknown) {}
   setName() {
     return this;
@@ -66,6 +71,7 @@ export class Setting {
 }
 export class PluginSettingTab {
   containerEl = { empty() {} };
+  refreshDomState() {}
   constructor(
     public app: unknown,
     public plugin: unknown,
@@ -94,5 +100,6 @@ export class Notice {
 }
 export const setIcon = () => {};
 export const Platform = { isDesktopApp: false, isWin: false };
+export const requireApiVersion = () => false;
 export class FileSystemAdapter {}
 export const requestUrl = async () => ({ status: 200, json: {} });

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { QardSettingsTab } from '../src/settings/SettingsTab';
 import { ReviewStore } from '../src/review/review-store';
 import { CUSTOM_KEY_SECRET } from '../src/agents/create-runner';
 import * as custom from '../src/agents/custom-runner';
+import { LocalModelModal } from '../src/settings/LocalModelModal';
 
-function fixture() {
+afterEach(() => vi.restoreAllMocks());
+
+function fixture(showAdvanced = true) {
   const secrets = new Map<string, string>();
   const reviews = new ReviewStore(async () => {});
   const plugin = {
@@ -21,10 +24,15 @@ function fixture() {
   // Redrawing belongs to Obsidian; callbacks below exercise real controls and persisted settings.
   tab.containerEl = document.createElement('div');
   tab.containerEl.empty = () => tab.containerEl.replaceChildren();
+  vi.spyOn(tab as unknown as { redraw: () => void }, 'redraw').mockImplementation(() => {});
+  if (showAdvanced) {
+    render(tab, 'Advanced AI settings').buttons[0]!.run!();
+  }
   return { secrets, reviews, tab };
 }
 function controls() {
   const host = document.createElement('div');
+  host.empty = () => host.replaceChildren();
   const inputs: HTMLInputElement[] = [],
     selects: HTMLSelectElement[] = [],
     buttons: { label: string; run?: () => void | Promise<void>; disabled: boolean }[] = [];
@@ -141,6 +149,32 @@ function render(tab: QardSettingsTab, name: string) {
     .render(c.row as never);
   return c;
 }
+it('starts with a local connect button and keeps manual configuration behind Advanced settings', async () => {
+  const { tab } = fixture(false);
+  const names = () =>
+    tab
+      .getSettingDefinitions()
+      .flatMap((g) => g.items)
+      .filter((row) => !row.visible || row.visible())
+      .map((row) => row.name);
+  expect(names()).toContain('Local AI model');
+  expect(names()).not.toContain('Custom AI server');
+  expect(render(tab, 'Local AI model').buttons[0]!.label).toBe('Connect local model');
+  await render(tab, 'Advanced AI settings').buttons[0]!.run!();
+  expect(names()).toContain('Custom AI server');
+  expect(names()).toContain('Custom AI API key');
+  await render(tab, 'Advanced AI settings').buttons[0]!.run!();
+  expect(names()).not.toContain('Custom AI server');
+});
+it('opens local setup from settings and closes it when settings are hidden', async () => {
+  const { tab } = fixture(false);
+  const open = vi.spyOn(LocalModelModal.prototype, 'open').mockImplementation(() => {});
+  const close = vi.spyOn(LocalModelModal.prototype, 'close').mockImplementation(() => {});
+  await render(tab, 'Local AI model').buttons[0]!.run!();
+  expect(open).toHaveBeenCalledOnce();
+  tab.hide();
+  expect(close).toHaveBeenCalledOnce();
+});
 it('persists custom server/model edits, rejects credential URLs and stores the optional key only in secret storage', async () => {
   const { tab, reviews, secrets } = fixture();
   const url = render(tab, 'Custom AI server');
@@ -160,9 +194,12 @@ it('persists custom server/model edits, rejects credential URLs and stores the o
   expect(key.inputs[0]!.value).toBe('');
   expect(secrets.get(CUSTOM_KEY_SECRET)).toBe('private-key');
   expect(JSON.stringify(reviews.getSnapshot())).not.toContain('private-key');
-  // Clear without needing to render the rest of the settings page in this control fixture.
+  // Clearing also discards any unsaved draft, so a later change event cannot save it again.
+  key.inputs[0]!.value = 'unsaved-key';
   vi.spyOn(tab as unknown as { redraw: () => void }, 'redraw').mockImplementation(() => {});
   await key.buttons[0]!.run!();
+  expect(key.inputs[0]!.value).toBe('');
+  key.inputs[0]!.dispatchEvent(new Event('change'));
   expect(secrets.get(CUSTOM_KEY_SECRET)).toBe('');
 });
 it('tests saved settings without vault access and cancels when the settings page closes', async () => {

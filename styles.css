@@ -656,6 +656,178 @@
   }
 }
 
+/* Settings groups use native Obsidian controls in a compact, theme-aware layout. */
+.qard-settings-card,
+.qard-settings-hero {
+  --setting-items-background: transparent;
+  --setting-items-padding-x: 0;
+  --setting-items-padding-y: 14px;
+  --setting-items-radius: 0;
+  --setting-items-border-width: 0;
+  --setting-item-name-weight: 500;
+
+  container: qard-settings / inline-size;
+  margin: 0 0 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+}
+
+.qard-settings-hero {
+  padding: 0 0 18px;
+  border: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.qard-settings-card .setting-item,
+.qard-settings-hero .setting-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+  align-items: center;
+  gap: 12px 24px;
+  margin: 0;
+  padding: 14px 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.qard-settings-card .setting-item:last-child,
+.qard-settings-hero .setting-item {
+  border-bottom: 0;
+}
+
+.qard-settings-card .setting-item-heading,
+.qard-settings-hero .setting-item-heading {
+  display: block;
+  padding-top: 0;
+  padding-inline: 0;
+}
+
+.qard-settings-card .setting-item-info {
+  min-width: 0;
+  margin-inline-end: 0;
+}
+
+.qard-settings-card .setting-item-name {
+  font-weight: 500;
+}
+
+.qard-settings-card .setting-item-description,
+.qard-settings-hero .setting-item-description {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.qard-settings-card .setting-item-control {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qard-settings-card input:not([type='checkbox']),
+.qard-settings-card select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.qard-settings-card input[type='number'] {
+  width: 88px;
+}
+
+.qard-settings-card .qard-settings-role .setting-item-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.qard-settings-card .setting-item-control button,
+.qard-settings-card .qard-coffee-button {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--input-height);
+  white-space: normal;
+  text-align: center;
+}
+
+.qard-settings-advanced[hidden] {
+  display: none;
+}
+
+.qard-settings-hero .qard-settings-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.qard-settings-intro .setting-item-name {
+  display: none;
+}
+
+.qard-settings-intro .setting-item-control {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.qard-settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.qard-settings-nav button {
+  padding: 6px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-normal);
+}
+
+.qard-settings-nav button:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--text-muted);
+}
+
+.qard-settings-nav button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+[data-qard-section] {
+  scroll-margin-top: 24px;
+}
+
+@container qard-settings (max-width: 520px) {
+  .qard-settings-card .setting-item:not(.setting-item-heading) {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .qard-settings-card .setting-item-control {
+    justify-content: flex-start;
+  }
+
+  .qard-settings-card .setting-item-control button {
+    justify-self: start;
+  }
+}
+
+@media (width <= 600px) {
+  .qard-settings-card {
+    padding: 14px;
+  }
+}
+
 .qard-coffee-button {
   display: inline-flex;
   align-items: center;
@@ -2480,13 +2652,88 @@ body.qard-focus-active .status-bar {
   overflow-wrap: anywhere;
 }
 
-.qard-waiting > .qard-dot {
+.qard-waiting > .qard-loading {
   align-self: flex-start;
-  margin-top: 7px;
+  margin-top: 1px;
 }
 
 .qard-waiting .qard-agent {
   margin-left: 0;
+}
+
+.qard-loading {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--qard-blue);
+}
+
+.qard-loading > span {
+  --qard-card-angle: -12deg;
+
+  position: absolute;
+  inset: 3px 4px;
+  border: 1.5px solid currentcolor;
+  border-radius: 3px;
+  background: var(--qard-bg);
+  transform-origin: 50% 50%;
+  transform: rotate(var(--qard-card-angle));
+  animation: qard-card-shuffle 1.8s ease-in-out infinite;
+}
+
+.qard-loading > span:nth-child(2) {
+  --qard-card-angle: 0deg;
+
+  animation-delay: -0.6s;
+}
+
+.qard-loading > span:nth-child(3) {
+  --qard-card-angle: 12deg;
+
+  animation-delay: -1.2s;
+}
+
+.qard-loading > span::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 2px;
+  right: 2px;
+  border-top: 1px solid currentcolor;
+  opacity: 0.6;
+}
+
+@keyframes qard-card-shuffle {
+  0% {
+    transform: perspective(60px) translate(0, 0) rotateZ(var(--qard-card-angle)) rotateY(0deg);
+    z-index: 0;
+  }
+
+  22% {
+    transform: perspective(60px) translate(4px, -4px) rotateZ(calc(var(--qard-card-angle) + 38deg))
+      rotateY(90deg) scale(1.12);
+    z-index: 1;
+  }
+
+  44% {
+    transform: perspective(60px) translate(-3px, -3px) rotateZ(calc(var(--qard-card-angle) - 25deg))
+      rotateY(180deg) scale(1.12);
+    z-index: 1;
+  }
+
+  65% {
+    transform: perspective(60px) translate(-4px, 1px) rotateZ(calc(var(--qard-card-angle) - 18deg))
+      rotateY(270deg);
+    z-index: 1;
+  }
+
+  82%,
+  100% {
+    transform: perspective(60px) translate(0, 0) rotateZ(var(--qard-card-angle)) rotateY(360deg);
+    z-index: 0;
+  }
 }
 
 .qard-dot {
@@ -2495,18 +2742,11 @@ body.qard-focus-active .status-bar {
   border-radius: 50%;
   background: var(--qard-blue);
   flex-shrink: 0;
-  animation: qard-pulse 1.2s ease-in-out infinite;
 }
 
 .qard-dot.is-done {
   background: var(--qard-ok);
   animation: none;
-}
-
-@keyframes qard-pulse {
-  50% {
-    opacity: 0.3;
-  }
 }
 
 .qard-app .qard-error {
@@ -4668,6 +4908,11 @@ body.qard-focus-active .status-bar {
   margin: 0 auto;
 }
 
+.qard-wait-shell > .qard-actions {
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
 .qard-wait {
   max-width: 720px;
   margin: 0 auto;
@@ -4704,8 +4949,8 @@ body.qard-focus-active .status-bar {
 }
 
 .qard-wait-heading .qard-agent {
-  margin: 0 0 0 18px;
-  max-width: calc(100% - 18px);
+  margin: 0;
+  max-width: 100%;
 }
 
 .qard-wait-estimate {
@@ -4742,6 +4987,12 @@ body.qard-focus-active .status-bar {
 
 .qard-wait-head .qard-waiting {
   margin: 0;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.qard-wait-head .qard-waiting-text {
+  flex-basis: auto;
 }
 
 .qard-wait-ready {
