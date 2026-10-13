@@ -20,7 +20,7 @@ it('prepares a draft without editing content; wording edits preserve memory, sch
   const after = f.reviews.getSnapshot();
   expect(f.card().frontMarkdown).toBe(improvement.cards[0]!.front);
   expect(after.history).toBe(before.history);
-  const { needsFixing: _needsFixing, ...memory } = before.states.original!;
+  const { needsFixing: _needsFixing, flagsAt: _flagsAt, ...memory } = before.states.original!;
   expect(after.states.original).toMatchObject(memory);
   expect(after.states.original?.needsFixing).toBeUndefined();
   expect(after.states.original?.fsrs).toBe(before.states.original?.fsrs);

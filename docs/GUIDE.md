@@ -236,7 +236,7 @@ Order can be deck/note order or shuffle. The session shows progress through the 
 
 **Skip** moves past a card for this session without recording a rating or changing its due date. Skips survive saving and resuming, and the completion screen offers **Review skipped cards** for cards that remain active.
 
-**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
+**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. The preview also shows when the card is next due and how many times it has been reviewed. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
 
 Completed normal sessions show a borderless **Recall difficulty** curve for the session's Again, Hard, Good and Easy ratings. Counts, percentages and a median marker summarize your actual ratings, including ratings saved before resuming. Skipped cards are excluded. Cram sessions do not record ratings, so they do not show this chart.
 
@@ -490,7 +490,9 @@ Each Claude Code or Codex call starts a new process, which adds a few seconds. F
 
 ## Review data and settings
 
-Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history.
+
+**Studying on several devices.** When Obsidian Sync, iCloud or another sync service replaces `data.json` with a copy from another device, Qard merges it instead of overwriting it. Ratings from every device are kept; a card rated on two devices before they synced is rescheduled by replaying its combined ratings in time order. Undone ratings, finished sessions and deleted exams stay removed. Pause, repair and deferral changes keep the most recent edit, settings keep the most recent change, and study time and token usage are counted per device and added together. Qard writes back only when this device has progress the other copy lacks, so devices do not keep rewriting each other's files. Review saves finish before a session advances; failed saves are shown and can be retried.
 
 Choose **Settings → Qard → Study preferences → Review scheduler**:
 
@@ -499,7 +501,7 @@ Choose **Settings → Qard → Study preferences → Review scheduler**:
 
 Switching schedulers preserves current due dates and review counts. When enabling FSRS, complete saved histories are replayed into its memory model. Cards with missing history or imported schedules start with approximate memory estimates based on their current interval; the statistics page labels these. Switching back to simple intervals retains due dates and removes FSRS memory state. No past review events are invented.
 
-FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step after a lapse. Reveal the answer to preview the next review interval for each rating. **Again** means you forgot; **Hard** means you remembered with effort; **Good** means you remembered; **Easy** means immediate recall. A forgotten answer should be rated Again. Normal Due sessions bring learning/relearning cards back when their next step is due. Other session modes remain single-pass; start Due cards for further scheduled reviews.
+FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step after a lapse. Intervals of 2.5 days or more get a small random spread (about ±15% for a few days, narrowing to ±5% beyond 20 days), so cards added and rated together fall due on nearby days instead of all on the same day. The spread is fixed per card and review, so the interval shown before rating is the one saved. Reveal the answer to preview the next review interval for each rating. **Again** means you forgot; **Hard** means you remembered with effort; **Good** means you remembered; **Easy** means immediate recall. A forgotten answer should be rated Again. Normal Due sessions bring learning/relearning cards back when their next step is due. Other session modes remain single-pass; start Due cards for further scheduled reviews.
 
 Disabling scheduling still saves ratings and updates FSRS memory estimates without changing due dates or intervals. **All cards never consults the scheduler.** All timestamped rating events are now retained locally for memory reconstruction and future personalization. Earlier versions truncated history at 10,000 events; removed events cannot be recovered.
 
@@ -516,7 +518,6 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
-- Cross-vault concurrent review-data merging is not implemented.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
 

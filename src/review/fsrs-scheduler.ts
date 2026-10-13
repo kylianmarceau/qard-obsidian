@@ -1,4 +1,4 @@
-import { createEmptyCard, fsrs, S_MAX, S_MIN, State, type Card } from 'ts-fsrs';
+import { createEmptyCard, fsrs, S_MAX, S_MIN, State, StrategyMode, type Card } from 'ts-fsrs';
 import type { QardCard } from '../cards/card-types';
 import { DAY, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 
@@ -15,13 +15,21 @@ export const retention = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0.7 && value <= 0.97
     ? value
     : 0.9;
-const engine = (target = 0.9) =>
-  fsrs({
+/**
+ * Scheduling a review fuzzes intervals of 2.5 days or more (±15% at 3–7 days, tapering to ±5% beyond 20),
+ * so cards added and rated together spread over nearby days instead of falling due on the same day forever.
+ * The seed is the card and its review count, not the clock: the interval shown before rating is the one
+ * saved after it, and replaying the same ratings (undo, merging synced progress) gives the same dates.
+ */
+const engine = (target = 0.9, fuzz?: { cardId: string; reps: number }) => {
+  const model = fsrs({
     request_retention: retention(target),
-    enable_fuzz: false,
+    enable_fuzz: !!fuzz,
     learning_steps: ['1m', '10m'],
     relearning_steps: ['10m'],
   });
+  return fuzz ? model.useStrategy(StrategyMode.SEED, () => `${fuzz.cardId}:${fuzz.reps}`) : model;
+};
 const validDate = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(new Date(value).getTime());
 const counter = (value: number) => Number.isSafeInteger(value) && value >= 0;
@@ -89,7 +97,10 @@ export function initializeFsrs(
   if (events.length === state.reviewCount && events[events.length - 1]?.at === state.lastReviewed) {
     memory = createEmptyCard(events[0]!.at);
     for (const e of events) {
-      memory = engine(e.desiredRetention ?? target).next(memory, e.at, e.rating).card;
+      memory = engine(e.desiredRetention ?? target, {
+        cardId: state.cardId,
+        reps: memory.reps,
+      }).next(memory, e.at, e.rating).card;
     }
     source = 'reviews';
   } else {
@@ -155,7 +166,7 @@ export function reviewWithFsrs(
   if (card.last_review && card.last_review.getTime() > now) {
     card.last_review = new Date(now);
   }
-  const next = engine(target).next(card, now, rating).card;
+  const next = engine(target, { cardId, reps: card.reps }).next(card, now, rating).card;
   return {
     cardId,
     lastReviewed: now,

@@ -125,7 +125,11 @@ it('pausing a waiting card from another view clears its pending repeat and prese
   const before = store.getSnapshot();
   await store.setPaused('a', true);
   expect(store.getSnapshot().sessions).toEqual([]);
-  expect(store.getSnapshot().states.a).toEqual({ ...before.states.a, paused: true });
+  expect(store.getSnapshot().states.a).toEqual({
+    ...before.states.a,
+    paused: true,
+    flagsAt: expect.any(Number),
+  });
   expect(store.getSnapshot().history).toBe(before.history);
 });
 

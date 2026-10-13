@@ -16,6 +16,14 @@ import { addStudy, type StudyLog } from '../time/study-time';
 import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
 import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
+import {
+  MAX_TOMBSTONES,
+  mergeProgress,
+  type DeviceTotals,
+  recordChanges,
+  sameValue,
+  savedProgress,
+} from './merge-progress';
 import { DEFAULT_SETTINGS, readSettings, type QardSettings } from '../settings/settings';
 import { scheduler, isBuried, type Rating, type ReviewEvent, type ReviewState } from './scheduler';
 import { addToLog, type UsageLog } from '../agents/usage-report';
@@ -60,6 +68,21 @@ export interface PluginData {
   statistics: StudyStatistics;
   sessions: SavedSession[];
   exams: ExamPlan[];
+  /** Undone ratings, finished sessions and deleted exams, so a synced copy does not bring them back. */
+  removed: string[];
+  /** When settings last changed on any device. */
+  settingsAt?: number;
+  /** Study time and token usage by the device that counted them; `study` and `usage` are their sums. */
+  totals: Record<string, DeviceTotals>;
+  /** When study time or usage was last reset on any device; older counts are not merged back. */
+  resets?: { study?: number; usage?: number };
+}
+/** The saved plugin data file, which another device may replace through sync. */
+export interface ProgressFile {
+  read(): Promise<unknown>;
+  /** True when the file changed since this store last loaded, saved or acknowledged it. */
+  changed(): Promise<boolean>;
+  acknowledge(): Promise<void>;
 }
 export class ReviewStore {
   private data: PluginData = {
@@ -74,12 +97,27 @@ export class ReviewStore {
     statistics: emptyStatistics(),
     sessions: [],
     exams: [],
+    removed: [],
+    totals: {},
   };
+  /** The progress last loaded from or saved to the file: the reference point for merging another copy. */
+  private base: PluginData = this.data;
   private queue: Promise<unknown> = Promise.resolve();
   private listeners = new Set<() => void>();
   /** One guarded checkpoint for the current visit, never a second copy of the review log. */
   private undo?: ReviewCheckpoint;
-  constructor(private persist: (data: PluginData) => Promise<void>) {}
+  constructor(
+    private persist: (data: PluginData) => Promise<void>,
+    private file?: ProgressFile,
+    /** Identifies this device's own study-time and usage totals. */
+    private device: string = crypto.randomUUID(),
+  ) {}
+  /** Validated plugin data, as a fresh load would see it. */
+  static parse(raw: unknown): PluginData {
+    const store = new ReviewStore(async () => {});
+    store.load(raw);
+    return store.getSnapshot();
+  }
   load(raw: unknown) {
     this.undo = undefined;
     if (!raw || typeof raw !== 'object') {
@@ -99,10 +137,11 @@ export class ReviewStore {
         Number.isFinite(state.ease) &&
         state.ease > 0
       ) {
-        const { paused, needsFixing, repairSince, buriedUntil, ...memory } = state;
+        const { paused, needsFixing, repairSince, buriedUntil, flagsAt, ...memory } = state;
         states[id] = {
           ...memory,
           cardId: id,
+          ...(typeof flagsAt === 'number' && Number.isFinite(flagsAt) ? { flagsAt } : {}),
           ...(paused === true ? { paused: true } : {}),
           ...(needsFixing === true ? { needsFixing: true as const } : {}),
           ...(typeof repairSince === 'number' && Number.isFinite(new Date(repairSince).getTime())
@@ -196,7 +235,18 @@ export class ReviewStore {
         return hasRemainingSession(next) ? [next] : [];
       }),
       exams: readExams(value.exams),
+      removed: Array.isArray(value.removed)
+        ? value.removed
+            .filter((k): k is string => typeof k === 'string' && k.length <= 300)
+            .slice(-MAX_TOMBSTONES)
+        : [],
+      ...(typeof value.settingsAt === 'number' && Number.isFinite(value.settingsAt)
+        ? { settingsAt: value.settingsAt }
+        : {}),
+      totals: readTotals(value.totals, study, usage),
+      ...readResets(value.resets),
     };
+    this.base = this.data;
   }
   getSnapshot = () => this.data;
   subscribe = (listener: () => void) => {
@@ -212,13 +262,57 @@ export class ReviewStore {
     const operation = this.queue
       .catch(() => {})
       .then(async () => {
-        const before = this.data;
-        const next = transform(before);
+        // Another device may have saved since; build on both copies so neither overwrites the other.
+        const before = await this.reconcile();
+        const next = recordChanges(before, transform(before), Date.now(), this.device);
         await this.persist(next); // A failed write must never advance the session's state.
         this.data = next;
+        this.base = next;
         const result = committed?.(before, next);
         this.listeners.forEach((listener) => listener());
         return result as T;
+      });
+    this.queue = operation;
+    return operation;
+  }
+  /** Current progress, merged with the saved file when another device changed it. */
+  private async reconcile(): Promise<PluginData> {
+    if (!this.file || !(await this.file.changed())) {
+      return this.data;
+    }
+    const raw = await this.file.read();
+    return savedProgress(raw)
+      ? ReviewStore.parse(mergeProgress(this.base, this.data, ReviewStore.parse(raw)))
+      : this.data;
+  }
+  /**
+   * Called when sync replaces the saved file. Merges it and writes back only when this device has
+   * progress the other copy lacks, so two devices never keep rewriting each other's files.
+   */
+  syncExternal(): Promise<boolean> {
+    const operation = this.queue
+      .catch(() => {})
+      .then(async () => {
+        const raw = this.file ? await this.file.read() : undefined;
+        if (!savedProgress(raw)) {
+          return false;
+        }
+        const remote = ReviewStore.parse(raw);
+        const merged = ReviewStore.parse(mergeProgress(this.base, this.data, remote));
+        if (sameValue(merged, remote)) {
+          await this.file!.acknowledge();
+        } else {
+          await this.persist(merged);
+        }
+        if (sameValue(merged, this.data)) {
+          // Nothing new arrived (often our own save echoed back); keep identities so undo stays available.
+          this.base = this.data;
+          return false;
+        }
+        this.data = merged;
+        this.base = merged;
+        this.listeners.forEach((listener) => listener());
+        return true;
       });
     this.queue = operation;
     return operation;
@@ -348,6 +442,7 @@ export class ReviewStore {
             ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
             : scheduler.reviewCard(cardId, previous, rating, now);
         const metadata = {
+          ...(previous?.flagsAt !== undefined ? { flagsAt: previous.flagsAt } : {}),
           ...(previous?.needsFixing ? { needsFixing: true as const } : {}),
           ...(previous?.repairSince !== undefined ? { repairSince: previous.repairSince } : {}),
         };
@@ -456,7 +551,11 @@ export class ReviewStore {
   undoReview(candidate: ReviewUndo) {
     return this.change(
       (data) => {
-        if (!this.canUndoReview(candidate)) {
+        // The checkpoint describes this device's last save; progress merged from another device invalidates it.
+        if (data !== this.data || !this.canUndoReview(candidate)) {
+          if (data !== this.data) {
+            void this.syncExternal().catch(() => {});
+          }
           throw new Error('This review changed or a later card was reviewed. It cannot be undone.');
         }
         const checkpoint = this.undo!;
@@ -938,4 +1037,41 @@ export class ReviewStore {
   dispose() {
     this.listeners.clear();
   }
+}
+
+/** Counts are trees of non-negative numbers; anything else is dropped. */
+function counts(value: unknown, depth: number): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      if (depth > 1) {
+        out[key] = counts(item, depth - 1);
+      } else if (typeof item === 'number' && Number.isFinite(item) && item >= 0) {
+        out[key] = item;
+      }
+    }
+  }
+  return out;
+}
+function readResets(raw: unknown): Pick<PluginData, 'resets'> {
+  const resets = counts(raw, 1);
+  const { study, usage } = resets as { study?: number; usage?: number };
+  return study || usage
+    ? { resets: { ...(study ? { study } : {}), ...(usage ? { usage } : {}) } }
+    : {};
+}
+/** Totals saved before devices were tracked become one shared entry, so no device counts them twice. */
+function readTotals(raw: unknown, study: StudyLog, usage: UsageLog): Record<string, DeviceTotals> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, entry]: [string, unknown]) => {
+        const value = (entry && typeof entry === 'object' ? entry : {}) as Partial<DeviceTotals>;
+        return [
+          id,
+          { study: counts(value.study, 2) as StudyLog, usage: counts(value.usage, 3) as UsageLog },
+        ];
+      }),
+    );
+  }
+  return Object.keys(study).length || Object.keys(usage).length ? { legacy: { study, usage } } : {};
 }

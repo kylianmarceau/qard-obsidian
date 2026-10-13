@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { createEmptyCard, fsrs, State } from 'ts-fsrs';
+import { createEmptyCard, fsrs, State, StrategyMode } from 'ts-fsrs';
 import {
   intervalLabel,
   memoryStatistics,
@@ -23,6 +23,14 @@ const model = fsrs({
   learning_steps: ['1m', '10m'],
   relearning_steps: ['10m'],
 });
+/** The scheduler fuzzes by card and review count, so the shown interval is the one saved. */
+const fuzzed = (cardId: string, reps: number) =>
+  fsrs({
+    request_retention: 0.9,
+    enable_fuzz: true,
+    learning_steps: ['1m', '10m'],
+    relearning_steps: ['10m'],
+  }).useStrategy(StrategyMode.SEED, () => `${cardId}:${reps}`);
 const store = () => new ReviewStore(async () => {});
 const switchTo = (s: ReviewStore, value: 'fsrs' | 'simple') =>
   s.saveSettings({ ...s.getSnapshot().settings, scheduler: value });
@@ -32,7 +40,7 @@ it('uses the maintained FSRS engine for each initial rating, learning, graduatio
     const s = store();
     await s.review('card', rating, start);
     const actual = s.getSnapshot().states.card!,
-      expected = model.next(createEmptyCard(start), start, rating).card;
+      expected = fuzzed('card', 0).next(createEmptyCard(start), start, rating).card;
     expect(actual.due).toBe(expected.due.getTime());
     expect(actual.fsrs?.stability).toBe(expected.stability);
     expect(actual.fsrs?.difficulty).toBe(expected.difficulty);
