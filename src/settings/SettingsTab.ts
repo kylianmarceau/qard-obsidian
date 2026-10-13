@@ -159,6 +159,7 @@ export class QardSettingsTab extends PluginSettingTab {
           'Enable spaced repetition',
           'Review scheduler',
           'Target retention',
+          'Personalise FSRS',
           'Separate related cards',
         ]),
         'memory',
@@ -313,6 +314,15 @@ export class QardSettingsTab extends PluginSettingTab {
               void save('desiredRetention', value / 100);
             });
           });
+        },
+      },
+      {
+        name: 'Personalise FSRS',
+        desc: 'Fit the FSRS scheduler to your own review history, on this device. Needs 400 ratings.',
+        render: (row) => {
+          row.addButton((button) =>
+            button.setButtonText('Personalise…').onClick(() => this.qard.openOptimizer()),
+          );
         },
       },
       {

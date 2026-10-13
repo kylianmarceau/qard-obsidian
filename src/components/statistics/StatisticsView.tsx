@@ -66,8 +66,15 @@ export function StatisticsView({
     [index.cards, data.states, stats, now, data.settings.scheduling],
   );
   const memory = useMemo(
-    () => memoryStatistics(index.cards, data.states, now, data.settings.desiredRetention),
-    [index.cards, data.states, now, data.settings.desiredRetention],
+    () =>
+      memoryStatistics(
+        index.cards,
+        data.states,
+        now,
+        data.settings.desiredRetention,
+        data.settings.fsrsParameters,
+      ),
+    [index.cards, data.states, now, data.settings.desiredRetention, data.settings.fsrsParameters],
   );
   const firstDay = Object.keys(stats.daily)
     .filter((day) => day <= today && countRatings(stats.daily[day]!))
