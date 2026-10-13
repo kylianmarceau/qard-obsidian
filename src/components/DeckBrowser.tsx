@@ -1,15 +1,6 @@
 import { DeleteItem } from './DeleteItem';
 import type { ReactNode } from 'react';
-import {
-  ArrowRight,
-  ChevronRight,
-  ClipboardCheck,
-  Plus,
-  Search,
-  Play,
-  Layers,
-  Check,
-} from 'lucide-react';
+import { ArrowRight, ChevronRight, ClipboardCheck, Plus, Search, Play } from 'lucide-react';
 import type { Deck } from '../cards/card-types';
 import { DeckBadge } from './DeckBadge';
 import { LibraryTabs } from './library/LibraryHeader';
@@ -56,46 +47,16 @@ export function DeckBrowser({
         <LibraryTabs active="decks" decks={() => {}} tests={tests} learn={learn} plans={plans} />
       )}
       <div className="qard-study-desk">
-        <header className="qard-heading qard-desk-heading">
-          <div>
-            <h1>Your decks</h1>
-            <p>
-              {decks.length} {decks.length === 1 ? 'deck' : 'decks'} ·{' '}
-              {decks.reduce((count, deck) => count + deck.cards.length, 0).toLocaleString()} cards
-            </p>
-          </div>
-          <button className="qard-desk-new" onClick={create}>
-            <Plus size={16} /> New card
-          </button>
-        </header>
-        <section className="qard-desk-review-main" aria-label="Today’s review">
-          <span className="qard-desk-review-icon" aria-hidden="true">
-            {!loading && !dueCount ? <Check size={21} /> : <Layers size={21} />}
-          </span>
-          <div className="qard-desk-review-copy">
-            <h2>{!loading && !dueCount ? 'All caught up' : 'Today’s review'}</h2>
-            <p className="qard-desk-due" role="status">
-              {loading ? (
-                'Checking your review queue…'
-              ) : dueCount ? (
-                <>
-                  <strong>{dueCount.toLocaleString()}</strong> {dueCount === 1 ? 'card' : 'cards'}{' '}
-                  ready to revisit.
-                </>
-              ) : (
-                'Nothing due today. Study at your own pace.'
-              )}
-            </p>
-          </div>
-          <button
-            className={dueCount ? 'qard-primary' : 'qard-desk-review-action'}
-            disabled={loading || (dueCount > 0 && !viewToday)}
-            onClick={dueCount ? viewToday : study}
-          >
-            {dueCount || loading ? 'Start review' : 'Study'} <ArrowRight size={16} />
-          </button>
-        </section>
         <section className="qard-desk-library" aria-label="Deck library">
+          <div className="qard-heading qard-desk-heading">
+            <div>
+              <h1>Your decks</h1>
+              <p>
+                {decks.length} {decks.length === 1 ? 'deck' : 'decks'} ·{' '}
+                {decks.reduce((count, deck) => count + deck.cards.length, 0).toLocaleString()} cards
+              </p>
+            </div>
+          </div>
           {resume}
           <div className="qard-library-toolbar">
             <span>{search || repairFilter?.active ? 'Matching decks' : 'All decks'}</span>
@@ -132,8 +93,7 @@ export function DeckBrowser({
                   <span className="qard-deck-name">
                     <strong>{deck.name}</strong>
                     <small>
-                      {deck.cards.length.toLocaleString()}{' '}
-                      {deck.cards.length === 1 ? 'card' : 'cards'} · {deck.topics.length}{' '}
+                      {deck.cards.length} cards · {deck.topics.length}{' '}
                       {deck.topics.length === 1 ? 'topic' : 'topics'}
                     </small>
                   </span>
@@ -168,30 +128,39 @@ export function DeckBrowser({
             </div>
           )}
         </section>
-        <section className="qard-desk-create" aria-label="More ways to study">
-          <button onClick={study}>
-            <span className="qard-desk-tool-icon">
-              <Play size={18} />
-            </span>
-            <span>
-              <strong>Study</strong>
-              <small>Choose your cards and pace</small>
-            </span>
-            <ArrowRight size={16} />
-          </button>
-          {newTest && (
-            <button onClick={newTest}>
-              <span className="qard-desk-tool-icon">
-                <ClipboardCheck size={18} />
-              </span>
-              <span>
-                <strong>Practice test</strong>
-                <small>Put your knowledge to the test</small>
-              </span>
-              <ArrowRight size={16} />
+        <aside className="qard-desk-review" aria-label="Study controls">
+          <section className="qard-desk-review-main">
+            <h2>Today’s review</h2>
+            <div className="qard-desk-due" aria-live="polite">
+              <strong>{loading ? '…' : dueCount.toLocaleString()}</strong>
+              <span>{dueCount === 1 ? 'card due' : 'cards due'}</span>
+            </div>
+            <button
+              className="qard-primary"
+              disabled={loading || !dueCount || !viewToday}
+              onClick={viewToday}
+            >
+              Start review <ArrowRight size={16} />
             </button>
-          )}
-        </section>
+          </section>
+          <section className="qard-desk-create">
+            <h2>Create & study</h2>
+            <button onClick={create}>
+              <Plus size={16} />
+              New card
+            </button>
+            {newTest && (
+              <button onClick={newTest}>
+                <ClipboardCheck size={16} />
+                Practice test
+              </button>
+            )}
+            <button onClick={study}>
+              <Play size={16} />
+              Study
+            </button>
+          </section>
+        </aside>
       </div>
     </>
   );

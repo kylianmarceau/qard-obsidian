@@ -118,7 +118,7 @@ it('opens the full deck from a filtered library and returns to the same search',
     input.value = 'Reliable';
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
-  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('1 card · 1 topic');
+  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('1 cards · 1 topic');
   await act(async () => host.querySelector<HTMLButtonElement>('.qard-deck')!.click());
   expect(host.querySelector('.qard-deck-heading h1')?.textContent).toBe('Networks');
   expect(

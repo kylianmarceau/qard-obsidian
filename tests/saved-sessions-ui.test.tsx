@@ -61,7 +61,7 @@ async function mount() {
 async function click(text: string, contains = false) {
   await act(async () => {
     const button = [...host.querySelectorAll('button')].find((b) =>
-      contains ? b.textContent?.includes(text) : b.textContent?.trim() === text,
+      contains ? b.textContent?.includes(text) : b.textContent === text,
     );
     expect(button, host.textContent ?? '').toBeDefined();
     button!.click();
