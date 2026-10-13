@@ -194,9 +194,12 @@ it('persists custom server/model edits, rejects credential URLs and stores the o
   expect(key.inputs[0]!.value).toBe('');
   expect(secrets.get(CUSTOM_KEY_SECRET)).toBe('private-key');
   expect(JSON.stringify(reviews.getSnapshot())).not.toContain('private-key');
-  // Clear without needing to render the rest of the settings page in this control fixture.
+  // Clearing also discards any unsaved draft, so a later change event cannot save it again.
+  key.inputs[0]!.value = 'unsaved-key';
   vi.spyOn(tab as unknown as { redraw: () => void }, 'redraw').mockImplementation(() => {});
   await key.buttons[0]!.run!();
+  expect(key.inputs[0]!.value).toBe('');
+  key.inputs[0]!.dispatchEvent(new Event('change'));
   expect(secrets.get(CUSTOM_KEY_SECRET)).toBe('');
 });
 it('tests saved settings without vault access and cancels when the settings page closes', async () => {

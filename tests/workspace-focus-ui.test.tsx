@@ -61,7 +61,7 @@ async function key(key: string, target = host, options: KeyboardEventInit = {}) 
 }
 async function click(label: string) {
   await act(async () => {
-    [...host.querySelectorAll('button')].find((b) => b.textContent === label)!.click();
+    [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)!.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
     await services.reviews.flush();
   });

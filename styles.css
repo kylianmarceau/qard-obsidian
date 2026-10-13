@@ -666,10 +666,11 @@
   --setting-items-border-width: 0;
   --setting-item-name-weight: 500;
 
-  margin: 0 0 20px;
-  padding: 18px 20px;
+  container: qard-settings / inline-size;
+  margin: 0 0 24px;
+  padding: 16px 20px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--background-primary);
 }
 
@@ -683,6 +684,10 @@
 
 .qard-settings-card .setting-item,
 .qard-settings-hero .setting-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 240px);
+  align-items: center;
+  gap: 12px 24px;
   margin: 0;
   padding: 14px 0;
   border-radius: 0;
@@ -697,12 +702,14 @@
 
 .qard-settings-card .setting-item-heading,
 .qard-settings-hero .setting-item-heading {
+  display: block;
   padding-top: 0;
   padding-inline: 0;
 }
 
 .qard-settings-card .setting-item-info {
   min-width: 0;
+  margin-inline-end: 0;
 }
 
 .qard-settings-card .setting-item-name {
@@ -711,41 +718,58 @@
 
 .qard-settings-card .setting-item-description,
 .qard-settings-hero .setting-item-description {
+  overflow-wrap: anywhere;
   line-height: 1.5;
   color: var(--text-muted);
 }
 
 .qard-settings-card .setting-item-control {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
 }
 
 .qard-settings-card input:not([type='checkbox']),
 .qard-settings-card select {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
 }
 
-.qard-settings-card input:not([type='checkbox']) {
-  width: 200px;
+.qard-settings-card input[type='number'] {
+  width: 88px;
 }
 
-.qard-settings-local .setting-item-name {
-  color: var(--text-accent);
+.qard-settings-card .qard-settings-role .setting-item-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.qard-settings-card .setting-item-control button,
+.qard-settings-card .qard-coffee-button {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--input-height);
+  white-space: normal;
+  text-align: center;
 }
 
 .qard-settings-advanced[hidden] {
   display: none;
 }
 
-.qard-settings-intro {
+.qard-settings-hero .qard-settings-intro {
+  display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 16px;
 }
 
 .qard-settings-intro .setting-item-name {
-  font-size: var(--font-ui-large);
-  font-weight: 600;
+  display: none;
 }
 
 .qard-settings-intro .setting-item-control {
@@ -760,10 +784,10 @@
 }
 
 .qard-settings-nav button {
-  padding: 7px 14px;
+  padding: 6px 12px;
   border: 1px solid var(--background-modifier-border);
-  border-radius: 20px;
-  background: var(--background-secondary);
+  border-radius: 6px;
+  background: transparent;
   box-shadow: none;
   color: var(--text-normal);
 }
@@ -782,20 +806,25 @@
   scroll-margin-top: 24px;
 }
 
-@media (width <= 600px) {
-  .qard-settings-card {
-    padding: 14px;
-  }
-
-  .qard-settings-card .setting-item {
+@container qard-settings (max-width: 520px) {
+  .qard-settings-card .setting-item:not(.setting-item-heading) {
+    grid-template-columns: minmax(0, 1fr);
     align-items: flex-start;
-    flex-direction: column;
     gap: 10px;
   }
 
   .qard-settings-card .setting-item-control {
-    width: 100%;
     justify-content: flex-start;
+  }
+
+  .qard-settings-card .setting-item-control button {
+    justify-self: start;
+  }
+}
+
+@media (width <= 600px) {
+  .qard-settings-card {
+    padding: 14px;
   }
 }
 
@@ -6979,39 +7008,98 @@ div.qard-ask-q {
 }
 
 .qard-page-desk > .qard-tabs {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
+.qard-desk-shell .qard-tabs {
+  gap: 28px;
+}
+
+.qard-app.qard-desk-shell .qard-tabs button {
+  font-size: 14px;
+  letter-spacing: 0;
+  padding-bottom: 12px;
+}
+
+/* One reading column: review, library, then optional study tools. */
 .qard-study-desk {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 222px;
-  gap: 30px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.qard-desk-library {
+.qard-study-desk > * {
+  width: 100%;
   min-width: 0;
 }
 
-.qard-app .qard-desk-heading,
-.qard-app .qard-deck-heading {
-  margin: 0 0 18px;
+.qard-app .qard-desk-heading {
+  margin: 0;
   gap: 16px;
-  flex-wrap: wrap;
 }
 
-.qard-app .qard-desk-heading h1,
-.qard-app .qard-deck-heading h1 {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.4px;
+.qard-app .qard-desk-heading h1 {
+  font-size: 28px;
+  font-weight: 550;
+  letter-spacing: -0.8px;
 }
 
-.qard-app .qard-desk-heading p,
-.qard-app .qard-deck-heading p {
-  font-size: 12px;
+.qard-app .qard-desk-heading p {
+  font-size: 13px;
   margin-top: 6px;
+}
+
+.qard-app button.qard-desk-new {
+  flex-shrink: 0;
+  padding: 9px 13px;
+}
+
+.qard-desk-review-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: var(--qard-tint);
+  border: 1px solid color-mix(in srgb, var(--qard-blue) 16%, var(--qard-border));
+  border-radius: 12px;
+}
+
+.qard-desk-review-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--qard-blue) 20%, var(--qard-border));
+  border-radius: 10px;
+  color: var(--qard-blue);
+  background: var(--qard-bg);
+}
+
+.qard-desk-review-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.qard-app .qard-desk-review-copy h2 {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.qard-app .qard-desk-due {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--qard-muted);
+}
+
+.qard-desk-due strong {
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.qard-app .qard-desk-review-main > button {
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 9px 14px;
 }
 
 .qard-library-toolbar {
@@ -7019,129 +7107,153 @@ div.qard-ask-q {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding-bottom: 9px;
-  border-bottom: 1px solid var(--qard-border);
+  margin-bottom: 14px;
   font-size: 12px;
+  color: var(--qard-muted);
 }
 
 .qard-app .qard-library-search {
+  width: 240px;
   min-width: 0;
   gap: 8px;
-  padding: 0;
+  padding: 2px 10px;
   margin: 0;
-  border: 0;
-  border-radius: 0;
+  border-radius: 7px;
   background: transparent;
 }
 
 .qard-app .qard-library-search input[type='search'] {
-  width: 158px;
   min-width: 0;
   font-size: 12px;
 }
 
 .qard-study-desk .qard-deck-list {
   gap: 0;
+  border: 1px solid var(--qard-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.qard-study-desk .qard-deck-list:empty {
+  display: none;
 }
 
 .qard-study-desk .qard-deck-row {
   border: 0;
-  border-bottom: 1px solid var(--qard-border);
   border-radius: 0;
-  padding-right: 0;
+  padding-right: 14px;
+  gap: 4px;
+}
+
+.qard-study-desk .qard-deck-row + .qard-deck-row {
+  border-top: 1px solid var(--qard-border);
 }
 
 .qard-app .qard-study-desk .qard-deck-row > button.qard-deck {
-  padding: 17px 0;
-  gap: 14px;
+  padding: 20px;
+  gap: 16px;
   border-radius: 0;
 }
 
-.qard-study-desk .qard-deck-badge,
+.qard-study-desk .qard-deck-badge {
+  width: 44px;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, var(--qard-course) 20%, transparent);
+  border-radius: 7px;
+}
+
+.qard-study-desk .qard-deck-badge svg {
+  width: 22px;
+  height: 22px;
+}
+
+.qard-study-desk .qard-deck-name {
+  gap: 4px;
+}
+
+.qard-study-desk .qard-delete-item > button {
+  opacity: 0.45;
+}
+
+.qard-study-desk .qard-deck-row:hover .qard-delete-item > button,
+.qard-study-desk .qard-delete-item > button:focus-visible {
+  opacity: 1;
+}
+
+.qard-desk-create {
+  display: flex;
+  gap: 16px;
+}
+
+.qard-app .qard-desk-create > button {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  padding: 16px;
+  gap: 12px;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.qard-desk-tool-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  height: 34px;
+  background: var(--qard-soft);
+  border-radius: 7px;
+  color: var(--qard-muted);
+}
+
+.qard-desk-create > button > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.qard-desk-create strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.qard-desk-create small {
+  color: var(--qard-muted);
+  font-size: 12px;
+}
+
+.qard-desk-create > button > svg {
+  margin-left: auto;
+  color: var(--qard-muted);
+}
+
+.qard-app .qard-deck-heading {
+  margin: 0 0 18px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.qard-app .qard-deck-heading h1 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.4px;
+}
+
+.qard-app .qard-deck-heading p {
+  font-size: 12px;
+  margin-top: 6px;
+}
+
 .qard-deck-identity .qard-deck-badge {
   width: 36px;
   height: 36px;
   border-radius: 6px;
 }
 
-.qard-study-desk .qard-deck-badge svg,
 .qard-deck-identity .qard-deck-badge svg {
   width: 20px;
   height: 20px;
-}
-
-.qard-study-desk .qard-deck-name {
-  gap: 3px;
-}
-
-.qard-desk-review {
-  min-width: 0;
-  border-left: 1px solid var(--qard-border);
-  padding-left: 24px;
-}
-
-.qard-desk-review h2 {
-  color: var(--qard-muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.qard-desk-review-main {
-  padding: 1px 0 20px;
-}
-
-.qard-desk-due {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin: 16px 0 18px;
-}
-
-.qard-desk-due strong {
-  font-size: 60px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -3px;
-  overflow-wrap: anywhere;
-}
-
-.qard-desk-due span {
-  font-size: 13px;
-  color: var(--qard-muted);
-}
-
-.qard-app .qard-desk-review-main > .qard-primary {
-  width: 100%;
-  justify-content: space-between;
-  padding: 9px 12px;
-  font-size: 12px;
-  border-radius: 5px;
-}
-
-.qard-desk-create {
-  padding-top: 18px;
-  border-top: 1px solid var(--qard-border);
-}
-
-.qard-app .qard-desk-create button {
-  display: flex;
-  width: 100%;
-  justify-content: flex-start;
-  border: 0;
-  border-radius: 4px;
-  padding: 8px 0;
-  font-size: 12px;
-}
-
-.qard-desk-create h2 {
-  margin-bottom: 6px;
-}
-
-.qard-desk-create svg {
-  color: var(--qard-muted);
 }
 
 .qard-app button.qard-deck-back {
@@ -7215,15 +7327,6 @@ div.qard-ask-q {
   .qard-library-shell .qard-page-library {
     padding: 22px;
   }
-
-  .qard-study-desk {
-    grid-template-columns: minmax(0, 1fr) 200px;
-    gap: 24px;
-  }
-
-  .qard-desk-review {
-    padding-left: 20px;
-  }
 }
 
 @container (max-width: 600px) {
@@ -7235,63 +7338,58 @@ div.qard-ask-q {
     padding: 20px 18px;
   }
 
+  .qard-page-desk > .qard-tabs {
+    margin-bottom: 24px;
+  }
+
+  .qard-app .qard-desk-heading h1 {
+    font-size: 24px;
+  }
+
   .qard-study-desk {
-    display: flex;
-    flex-direction: column;
     gap: 20px;
   }
 
-  .qard-desk-library,
-  .qard-desk-review {
+  .qard-desk-review-main {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .qard-app .qard-desk-review-main > button {
+    margin-left: 54px;
+  }
+
+  .qard-library-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .qard-app .qard-library-search {
     width: 100%;
   }
 
-  .qard-desk-review {
-    order: -1;
-    padding: 0 0 12px;
-    border: 0;
-    border-bottom: 1px solid var(--qard-border);
+  .qard-app .qard-library-search input[type='search'] {
+    font-size: 16px;
   }
 
-  .qard-desk-review-main {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px 14px;
-    padding: 0 0 12px;
+  .qard-app .qard-study-desk .qard-deck-row > button.qard-deck {
+    padding: 16px 12px;
+    gap: 12px;
   }
 
-  .qard-desk-review-main h2 {
-    grid-column: 1 / -1;
+  .qard-study-desk .qard-deck-row {
+    padding-right: 6px;
   }
 
-  .qard-desk-due {
-    margin: 0;
-  }
-
-  .qard-desk-due strong {
-    font-size: 44px;
-    letter-spacing: -2px;
+  .qard-study-desk .qard-deck-name strong {
+    font-size: 14px;
   }
 
   .qard-desk-create {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-    padding: 8px 0 0;
-  }
-
-  .qard-desk-create h2 {
-    display: none;
-  }
-
-  .qard-app .qard-desk-create button {
-    width: auto;
-  }
-
-  .qard-app .qard-library-search input[type='search'] {
-    width: 140px;
-    font-size: 16px;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .qard-deck-detail .qard-topic-heading > button:first-of-type {

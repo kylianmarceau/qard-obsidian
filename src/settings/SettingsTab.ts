@@ -117,7 +117,7 @@ export class QardSettingsTab extends PluginSettingTab {
         [
           {
             name: 'Your study workspace',
-            desc: 'Set your study routine, connect AI and choose where your work is saved. Changes save automatically.',
+            desc: 'Study preferences, AI connections and storage. Changes save automatically.',
             render: (row) => {
               row.settingEl?.classList.add('qard-settings-intro');
               const nav = row.controlEl.createEl('nav', {
@@ -241,21 +241,25 @@ export class QardSettingsTab extends PluginSettingTab {
         name: key === 'newCardsPerDay' ? 'New cards per day' : 'Review batch size',
         desc:
           key === 'newCardsPerDay'
-            ? 'New cards per day in normal study. 0 means unlimited. Learning repeats, cram and exam sessions are unrestricted.'
-            : 'Cards per sitting in normal study. 0 uses the full selection. Continue opens the next batch; remaining cards stay due.',
+            ? 'Daily limit for normal study. 0 means unlimited. Learning repeats, cram and exam sessions are unrestricted.'
+            : 'Cards per sitting. 0 uses the full selection. Continue starts the next batch; remaining cards stay due.',
         render: (row: Setting) => {
-          row.addText((text) =>
+          row.addText((text) => {
+            text.inputEl.type = 'number';
+            text.inputEl.min = '0';
+            text.inputEl.max = '10000';
+            text.inputEl.step = '1';
             text.setValue(String(settings[key])).onChange((value) => {
               if (/^\d+$/.test(value) && Number(value) <= 10000) {
                 void save(key, Number(value));
               }
-            }),
-          );
+            });
+          });
         },
       })),
       {
         name: 'Default study mode',
-        desc: 'All cards includes selected cards except paused cards and related cards deferred for today. Cram includes deferred cards.',
+        desc: 'Choose which cards to study by default. All cards excludes paused and deferred cards; cram includes deferred cards.',
         render: (row) => {
           row.addDropdown((d) =>
             d
@@ -272,7 +276,7 @@ export class QardSettingsTab extends PluginSettingTab {
       },
       {
         name: 'Review scheduler',
-        desc: 'FSRS adapts intervals to your memory. Switching preserves current due dates; the selected scheduler is used on your next review.',
+        desc: 'FSRS adapts to your memory. Switching takes effect on your next review and keeps current due dates.',
         render: (row) => {
           row.addDropdown((d) =>
             d
@@ -284,7 +288,7 @@ export class QardSettingsTab extends PluginSettingTab {
       },
       {
         name: 'Target retention',
-        desc: 'FSRS target for recall at the next review. Higher targets mean more frequent reviews. Existing due dates change as cards are reviewed.',
+        desc: 'Recall target in percent (70–97). Higher targets mean more frequent reviews. Due dates update as you review.',
         render: (row) => {
           row.addText((t) => {
             this.retentionInput = t;
@@ -446,6 +450,7 @@ export class QardSettingsTab extends PluginSettingTab {
             button.setButtonText('Clear key').onClick(() => {
               this.connectionCheck?.abort();
               store.setSecret(id, '');
+              input?.setValue('');
               input?.setPlaceholder(placeholder);
               new Notice('Custom API key cleared.');
             }),
@@ -574,7 +579,7 @@ export class QardSettingsTab extends PluginSettingTab {
     return [
       {
         name: 'Custom AI server',
-        desc: 'Use Ollama (http://localhost:11434/v1), LM Studio (http://localhost:1234/v1), oMLX (http://localhost:8000/v1), or another compatible server. AI requests and requested notes go to this address. On a phone, localhost is the phone itself.',
+        desc: 'OpenAI-compatible address ending in /v1. Default ports: Ollama 11434, LM Studio 1234, oMLX 8000. AI requests and requested notes go here. On a phone, localhost means the phone itself.',
         render: (row) => {
           row.addText((x) => {
             x.setValue(a.custom.baseUrl).setPlaceholder('Server address');
@@ -688,6 +693,7 @@ export class QardSettingsTab extends PluginSettingTab {
   private roleDefinitions(): SettingRow[] {
     const role = (id: AgentRole, name: string, desc: string): SettingRow => {
       const render = (row: Setting) => {
+        row.settingEl?.classList.add('qard-settings-role');
         const current = this.qard.reviews.getSnapshot().settings.agents.roles[id],
           save = (next: RoleSetting, refresh = false) =>
             this.patch((s) => ({
@@ -784,7 +790,7 @@ export class QardSettingsTab extends PluginSettingTab {
       role(
         'illustrator',
         'Illustrator',
-        'Draws figures for lessons: plots computed with Python on this computer, or diagrams. Choose a strong model.',
+        'Draws lesson diagrams and computes plots with Python on this computer. Choose a strong model.',
       ),
     ];
   }
