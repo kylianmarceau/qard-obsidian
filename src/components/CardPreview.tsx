@@ -1,5 +1,6 @@
 import { CardRepairActions } from './CardRepairActions';
 import { isBuried } from '../review/scheduler';
+import { dueLabel } from '../review/due-label';
 import { CardSourceLinks } from './CardSourceLinks';
 import { useState, useSyncExternalStore } from 'react';
 import { Trash2, Play, Pause } from 'lucide-react';
@@ -22,6 +23,7 @@ export function CardPreview({
 }) {
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const paused = !!saved.states[card.id]?.paused;
+  const schedule = dueLabel(saved.states[card.id], Date.now(), saved.settings.scheduling);
   const [editing, setEditing] = useState(false),
     [confirm, setConfirm] = useState(false),
     [busy, setBusy] = useState(false),
@@ -100,6 +102,7 @@ export function CardPreview({
           Study
         </button>
       </div>
+      {schedule && <p className="qard-muted">{schedule}</p>}
       {isBuried(saved.states[card.id]) && (
         <p className="qard-muted" role="status">
           Related card deferred until tomorrow · available in cram.
