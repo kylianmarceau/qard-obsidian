@@ -96,7 +96,8 @@ The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard
 ### Decks and topics
 
 - `qard-deck` names a **logical deck**. Every note with the exact same deck name contributes to the same deck, regardless of its folder. Names are case-sensitive.
-- Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name.
+- Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name. Choose **Settings → Qard → Files and folders → Deck names → Folder path (nested decks)** to name such notes after their folder instead: `Courses/Networks/tcp.md` joins the deck `Courses::Networks`. Notes at the vault root keep their own name, and `qard-deck` and moved cards always take precedence. Changing this setting regroups cards into different decks; review history stays with each card.
+- `::` nests decks. `Biology::Cells` appears under **Biology** in the library, which is also how nested Anki decks arrive on import. A parent does not need cards of its own. Expand or collapse a parent with its arrow, and choose **Study all** to open the study builder with the parent and every deck beneath it selected. Searching or filtering shows the flat list with full names.
 - The closest preceding heading, at any level, becomes the topic. Nested headings replace the topic rather than building a hierarchy. ATX (`# Heading`) and setext headings work; headings inside fenced code are ignored.
 - Before the first heading, the topic is `General`.
 - Optional `qard-topic: Transport Layer` overrides headings for the entire file.
@@ -198,6 +199,8 @@ Plain basic cards containing literal `{{c1::...}}` text do not change type witho
 Choose **Study**, select any combination of decks/topics/individual cards, choose a mode and order, and start. Expand a deck to choose topics, then expand a topic to choose individual cards.
 
 In **Settings → Qard → Study**, **New cards per day** sets an optional allowance across normal sessions, and **Review batch size** sets how many cards begin a sitting. Both default to **0** (unlimited). With pacing enabled, previously studied cards come first; the builder shows review/new counts, the batch and remaining selection. Learning repeats do not use the new-card allowance. Undoing a first rating returns the allowance. Existing imported review history does not count as a new introduction. The allowance resets at local midnight.
+
+**Deck options.** Open a deck and choose the options button beside **Study**, or use the same button on a parent row in the library. **Target retention** applies to that deck and the decks nested under it; a nested deck with its own target uses that instead, and a deck with none uses the nearest parent's or your global target. **New cards per day** is a limit shared by the deck and its subdecks together. Limits stack: a card is introduced only while its deck, every parent with a limit and your overall allowance all have room. Leave a field empty to set nothing for that deck. Deck limits count cards introduced after this version was installed; earlier ratings count towards the overall allowance only. Options are stored by deck name, so a renamed deck needs its options set again.
 
 After completing a batch, choose **Continue studying** to start the next part of your selection. Remaining cards retain their original due dates; saved unfinished batches keep their remaining selection after a restart. **Study extra new cards today** in the builder explicitly bypasses the allowance for that session. Cram and exam sessions are unrestricted. With a daily allowance enabled, **Today** also offers new cards by deck.
 
@@ -516,7 +519,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 - CSV/TSV exports contain card content, not scheduling or attachment files. Anki export is not supported.
 - No persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
-- No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
+- Nested decks group and study together, but a deck's topics are still a single level. Deck options cover target retention and new cards per day; other preferences are global.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.

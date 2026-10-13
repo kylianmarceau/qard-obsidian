@@ -12,6 +12,7 @@ import {
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle, StudyMode } from './session';
 import { newAllowance, paceCards, type PacingOptions } from './pacing';
+import { deckRetention } from '../decks/deck-options';
 import { addStudy, type StudyLog } from '../time/study-time';
 import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
@@ -398,6 +399,8 @@ export class ReviewStore {
     now = Date.now(),
     step?: SessionStep,
     siblings: string[] = [],
+    /** The card's deck, for per-deck target retention and daily new-card limits. */
+    deck?: string,
   ) {
     if (!/^[A-Za-z0-9_-]+$/.test(cardId)) {
       return Promise.reject(new Error('A stable card ID is required before reviewing.'));
@@ -425,7 +428,7 @@ export class ReviewStore {
           activeSession &&
           !activeSession.examId &&
           !activeSession.extraNew &&
-          newAllowance(data, now) === 0
+          newAllowance(data, now, deck) === 0
         ) {
           throw new Error(
             'Your daily new-card allowance is complete. Skip this card or start a session with extra new cards.',
@@ -437,9 +440,10 @@ export class ReviewStore {
           );
         }
         const scheduled = data.settings.scheduling;
+        const target = deckRetention(data.settings, deck).value;
         const computed =
           data.settings.scheduler === 'fsrs'
-            ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
+            ? reviewWithFsrs(cardId, previous, rating, now, target)
             : scheduler.reviewCard(cardId, previous, rating, now);
         const metadata = {
           ...(previous?.flagsAt !== undefined ? { flagsAt: previous.flagsAt } : {}),
@@ -492,9 +496,8 @@ export class ReviewStore {
           rating,
           scheduled,
           scheduler: data.settings.scheduler,
-          ...(data.settings.scheduler === 'fsrs'
-            ? { desiredRetention: data.settings.desiredRetention }
-            : {}),
+          ...(data.settings.scheduler === 'fsrs' ? { desiredRetention: target } : {}),
+          ...(deck ? { deck } : {}),
         };
         // Keep timestamped ratings for memory reconstruction and future personalization.
         return {

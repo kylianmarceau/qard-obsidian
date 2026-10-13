@@ -7,6 +7,7 @@ import {
   type LearningReview,
 } from '../review/learning-queue';
 import { reviewIntervals } from '../review/fsrs-scheduler';
+import { deckRetention } from '../decks/deck-options';
 import {
   useCallback,
   useEffect,
@@ -165,7 +166,7 @@ export function StudyView({
             card.id,
             saved.states[card.id],
             Date.now(),
-            saved.settings.desiredRetention,
+            deckRetention(saved.settings, card.deck).value,
           )
         : undefined,
     [card, revealed, saved, cram],
@@ -244,6 +245,7 @@ export function StudyView({
           card,
           services.index?.getSnapshot().cards.length ? services.index.getSnapshot().cards : cards,
         ),
+        card.deck,
       );
       // Two lapses on a card made for a mastered objective mark it as slipping.
       const undoLapse =

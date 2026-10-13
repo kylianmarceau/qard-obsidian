@@ -32,6 +32,20 @@ function closesFence(line: string, fence: string) {
   const match = line.match(/^ {0,3}(`+|~+)\s*$/);
   return !!match && match[1]![0] === fence[0] && match[1]!.length >= fence.length;
 }
+let deckNaming: 'note' | 'folder' = 'note';
+/**
+ * How notes without `qard-deck` are named. Every parse in the plugin must agree, including the ones
+ * that verify a write, so this is one switch for the module and not an argument at each call.
+ */
+export function setDeckNaming(mode: 'note' | 'folder') {
+  deckNaming = mode;
+}
+/** The note's name, or with folder naming its folder path as nested decks (`Courses::Networks`). */
+export function defaultDeck(path: string): string {
+  const parts = path.replace(/\.md$/i, '').split('/'),
+    note = parts.pop() || 'Untitled';
+  return deckNaming === 'folder' && parts.length ? parts.join('::') : note;
+}
 export function parseCards(
   source: string,
   path: string,
@@ -70,8 +84,7 @@ export function parseCards(
     start = end + 1;
   }
   const name = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-  const deck =
-    name(metadata['qard-deck']) || path.replace(/\.md$/i, '').split('/').pop() || 'Untitled';
+  const deck = name(metadata['qard-deck']) || defaultDeck(path);
   const topicOverride = name(metadata['qard-topic']);
   onTopic?.(0, topicOverride || 'General', deck);
   const rawTags = Array.isArray(metadata.tags)
@@ -257,10 +270,7 @@ export function sameContent(a: QardCard, b: QardCard) {
 
 /** Same heading rules as indexing, including code fences and file overrides. */
 export function locationAtLine(source: string, path: string, line: number): CardLocation {
-  let location = {
-    deck: path.replace(/\.md$/i, '').split('/').pop() || 'Untitled',
-    topic: 'General',
-  };
+  let location = { deck: defaultDeck(path), topic: 'General' };
   parseCards(source, path, (headingLine, topic, deck) => {
     if (headingLine <= line) {
       location = { deck, topic };

@@ -15,7 +15,7 @@ import { ImportModal } from './views/ImportModal';
 import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
-import { parseCards, locationAtLine } from './cards/parser';
+import { parseCards, locationAtLine, setDeckNaming } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
 import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
@@ -137,6 +137,19 @@ export default class QardPlugin extends Plugin {
     this.index = new VaultIndexer(this.app, this);
     this.writer = new CardWriter(this.app, this.index);
     const settings = () => this.reviews.getSnapshot().settings;
+    // Deck names from folders change how every note is read, so the whole index follows the setting.
+    let naming = settings().deckNaming;
+    setDeckNaming(naming);
+    this.register(
+      this.reviews.subscribe(() => {
+        const next = settings().deckNaming;
+        if (next !== naming) {
+          naming = next;
+          setDeckNaming(next);
+          void this.index.reindex();
+        }
+      }),
+    );
     // Every run's tokens are added to per-day totals by feature, role, connection and model.
     const record = (e: UsageEvent) =>
       void this.reviews

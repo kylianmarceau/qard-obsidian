@@ -11,6 +11,17 @@ export class VaultIndexer extends CardIndex {
   ) {
     super();
   }
+  /** Parse every note again, for a change that affects how all of them are read. */
+  async reindex() {
+    const files = studyNotes(this.app);
+    for (let i = 0; i < files.length && !this.stopped; i++) {
+      await this.refresh(files[i]!, false);
+      if (i % 20 === 19) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      }
+    }
+    this.publish();
+  }
   async start() {
     if (this.stopped) {
       return;

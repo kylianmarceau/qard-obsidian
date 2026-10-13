@@ -4,7 +4,16 @@ import type { ReviewState } from '../review/scheduler';
 import { BulkCardActions, type CardManagement } from './BulkCardActions';
 import { matchesSearch } from '../decks/deck-index';
 import { useId, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Plus, Play, Search } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
+  Plus,
+  Play,
+  Search,
+  Settings2,
+} from 'lucide-react';
 import { DeckBadge } from './DeckBadge';
 import { DeleteItem } from './DeleteItem';
 import type { Deck, QardCard } from '../cards/card-types';
@@ -20,6 +29,7 @@ export function TopicBrowser({
   states = {},
   repairDays = new Map<string, number>(),
   back,
+  options,
   resume,
   management,
 }: {
@@ -34,6 +44,7 @@ export function TopicBrowser({
   removeDeck?: () => Promise<void>;
   removeTopic?: (topic: string) => Promise<void>;
   back?: () => void;
+  options?: () => void;
   resume?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState<string[]>([]);
@@ -109,6 +120,16 @@ export function TopicBrowser({
             <Play size={16} />
             Study
           </button>
+          {options && (
+            <button
+              className="qard-icon-button"
+              aria-label="Deck options"
+              disabled={busy}
+              onClick={options}
+            >
+              <Settings2 size={16} />
+            </button>
+          )}
           {removeDeck && !busy && (
             <DeleteItem
               label={`Delete deck ${deck.name}`}

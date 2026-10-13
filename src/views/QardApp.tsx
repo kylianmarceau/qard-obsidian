@@ -13,6 +13,7 @@ import type { Selection, SessionStyle, StudyMode } from '../review/session';
 import { hasRemainingSession } from '../review/saved-session';
 import { buildDecks, matchesSearch, topicKey } from '../decks/deck-index';
 import { DeckBrowser } from '../components/DeckBrowser';
+import { DeckOptions } from '../components/DeckOptions';
 import { TopicBrowser } from '../components/TopicBrowser';
 import { CardPreview } from '../components/CardPreview';
 import { GenerateFlashcards } from '../components/GenerateFlashcards';
@@ -132,6 +133,22 @@ export function QardApp({ services, request }: { services: QardServices; request
   const plans = () => setScreen({ kind: 'exams' });
   const builder = (selection: Selection = { decks: [], topics: [], cards: [] }) =>
     setScreen({ kind: 'builder', selection });
+  const [optionsFor, setOptionsFor] = useState<string>();
+  const deckOptions = optionsFor !== undefined &&
+    (screen.kind === 'library' || screen.kind === 'deck') && (
+      <DeckOptions
+        key={optionsFor}
+        deck={optionsFor}
+        settings={reviews.settings}
+        close={() => setOptionsFor(undefined)}
+        save={(options) =>
+          services.reviews.saveSettings({
+            ...services.reviews.getSnapshot().settings,
+            deckOptions: options,
+          })
+        }
+      />
+    );
   const start = useCallback(
     async (
       cards: QardCard[],
@@ -530,9 +547,13 @@ export function QardApp({ services, request }: { services: QardServices; request
                 )}
               </div>
             )}
+          {deckOptions}
           {screen.kind === 'library' && (
             <DeckBrowser
               hideNavigation
+              nested={!search.trim() && !repairOnly}
+              studyDecks={(names) => builder({ decks: names, topics: [], cards: [] })}
+              options={setOptionsFor}
               dueCount={dueCount}
               viewToday={learnNav.today}
               remove={(name) => services.writer.deleteGroup(name)}
@@ -585,6 +606,7 @@ export function QardApp({ services, request }: { services: QardServices; request
                   repairDays={repairDays}
                   key={deck.name}
                   deck={deck}
+                  options={() => setOptionsFor(deck.name)}
                   management={{
                     decks: index.decks,
                     move: async (cards, destination) => {

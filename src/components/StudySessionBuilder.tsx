@@ -11,7 +11,12 @@ import {
 } from '../review/session';
 import type { QardServices } from '../views/services';
 import { topicKey } from '../decks/deck-index';
-import { paceCards, introductionsToday, type PacingOptions } from '../review/pacing';
+import {
+  paceCards,
+  introductionsToday,
+  limitsNewCards,
+  type PacingOptions,
+} from '../review/pacing';
 const modes: { id: StudyMode; name: string; description: string }[] = [
   { id: 'all', name: 'All cards', description: 'Every selected card. No due-date restrictions.' },
   { id: 'due', name: 'Due cards', description: 'New cards and cards ready for another review.' },
@@ -101,7 +106,7 @@ export function StudySessionBuilder({
           : ready;
       if (style === 'cram') {
         await start(ordered, style);
-      } else if (extraNew || saved.settings.reviewBatchSize || saved.settings.newCardsPerDay) {
+      } else if (extraNew || saved.settings.reviewBatchSize || limitsNewCards(saved.settings)) {
         await start(ordered, style, mode, { extraNew });
       } else if (mode !== 'all') {
         await start(ordered, style, mode);
@@ -282,7 +287,7 @@ export function StudySessionBuilder({
             </select>
           </label>
           {style === 'normal' &&
-            (saved.settings.reviewBatchSize > 0 || saved.settings.newCardsPerDay > 0) && (
+            (saved.settings.reviewBatchSize > 0 || limitsNewCards(saved.settings)) && (
               <div className="qard-pacing-summary">
                 <p className="qard-muted qard-small">
                   {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'} · {newCount} new{' '}
@@ -295,12 +300,14 @@ export function StudySessionBuilder({
                     ? ` · ${planned.heldNew} new cards held for another day`
                     : ''}
                 </p>
-                {saved.settings.newCardsPerDay > 0 && (
+                {limitsNewCards(saved.settings) && (
                   <>
-                    <p className="qard-muted qard-small">
-                      {introductionsToday(saved.history)} / {saved.settings.newCardsPerDay} new
-                      cards introduced today
-                    </p>
+                    {saved.settings.newCardsPerDay > 0 && (
+                      <p className="qard-muted qard-small">
+                        {introductionsToday(saved.history)} / {saved.settings.newCardsPerDay} new
+                        cards introduced today
+                      </p>
+                    )}
                     <label>
                       <input
                         type="checkbox"

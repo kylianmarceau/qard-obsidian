@@ -1,14 +1,24 @@
 import { DeleteItem } from './DeleteItem';
-import type { ReactNode } from 'react';
-import { ArrowRight, ChevronRight, ClipboardCheck, Plus, Search, Play } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import {
+  ArrowRight,
+  ChevronDown,
+  ChevronRight,
+  ClipboardCheck,
+  Plus,
+  Search,
+  Play,
+  Settings2,
+} from 'lucide-react';
 import type { Deck } from '../cards/card-types';
+import { buildDeckTree, type DeckNode } from '../decks/deck-index';
 import { DeckBadge } from './DeckBadge';
 import { LibraryTabs } from './library/LibraryHeader';
 export function DeckBrowser({
   decks,
   search,
   onSearch,
-  open,
+  open: openDeck,
   create,
   study,
   loading,
@@ -22,7 +32,14 @@ export function DeckBrowser({
   hideNavigation = false,
   dueCount = 0,
   viewToday,
+  nested = false,
+  studyDecks,
+  options,
 }: {
+  /** Group decks named `Parent::Child` under their parents. Off while searching or filtering. */
+  nested?: boolean;
+  studyDecks?: (decks: string[]) => void;
+  options?: (deck: string) => void;
   repairFilter?: { active: boolean; count: number; toggle: () => void };
   decks: Deck[];
   search: string;
@@ -41,6 +58,84 @@ export function DeckBrowser({
   dueCount?: number;
   viewToday?: () => void;
 }) {
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const toggle = (name: string) =>
+    setCollapsed((old) => (old.includes(name) ? old.filter((n) => n !== name) : [...old, name]));
+  const count = (cards: number) => `${cards} ${cards === 1 ? 'card' : 'cards'}`;
+  const row = (node: DeckNode): ReactNode => {
+    const { deck } = node,
+      parent = node.children.length > 0,
+      open = !collapsed.includes(node.name);
+    const below = node.cards - (deck?.cards.length ?? 0);
+    return (
+      <div key={node.name} className="qard-deck-node">
+        <div className="qard-deletable-row qard-deck-row">
+          {parent && (
+            <button
+              className="qard-deck-toggle"
+              aria-expanded={open}
+              aria-label={`${open ? 'Collapse' : 'Expand'} ${node.name}`}
+              onClick={() => toggle(node.name)}
+            >
+              {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+          )}
+          <button
+            className="qard-deck"
+            onClick={() => (deck ? openDeck(deck.name) : toggle(node.name))}
+            {...(deck ? {} : { 'aria-expanded': open })}
+          >
+            <DeckBadge name={node.label} />
+            <span className="qard-deck-name">
+              <strong>{nested ? node.label : (deck?.name ?? node.label)}</strong>
+              <small>
+                {deck
+                  ? `${deck.cards.length} cards · ${deck.topics.length} ${deck.topics.length === 1 ? 'topic' : 'topics'}`
+                  : count(node.cards)}
+                {deck && below > 0 ? ` · ${below} in subdecks` : ''}
+              </small>
+            </span>
+            {deck && <ChevronRight size={17} />}
+          </button>
+          {parent && options && (
+            <button
+              className="qard-icon-button"
+              aria-label={`Deck options for ${node.name}`}
+              onClick={() => options(node.name)}
+            >
+              <Settings2 size={16} />
+            </button>
+          )}
+          {parent && studyDecks && (
+            <button
+              className="qard-deck-study"
+              aria-label={`Study ${node.name} and its subdecks`}
+              onClick={() => studyDecks(node.decks)}
+            >
+              <Play size={15} />
+              Study all
+            </button>
+          )}
+          {remove && deck && (
+            <DeleteItem
+              label={`Delete deck ${deck.name}`}
+              description="All flashcards in this deck, across every note, will be removed. Other note content stays. This cannot be undone from Qard."
+              remove={() => remove(deck.name)}
+            />
+          )}
+        </div>
+        {parent && open && <div className="qard-deck-children">{node.children.map(row)}</div>}
+      </div>
+    );
+  };
+  const flat = (deck: Deck): DeckNode => ({
+    name: deck.name,
+    label: deck.name,
+    deck,
+    children: [],
+    cards: deck.cards.length,
+    decks: [deck.name],
+  });
   return (
     <>
       {!hideNavigation && (
@@ -86,28 +181,7 @@ export function DeckBrowser({
             </p>
           )}
           <div className="qard-deck-list">
-            {decks.map((deck) => (
-              <div key={deck.name} className="qard-deletable-row qard-deck-row">
-                <button className="qard-deck" onClick={() => open(deck.name)}>
-                  <DeckBadge name={deck.name} />
-                  <span className="qard-deck-name">
-                    <strong>{deck.name}</strong>
-                    <small>
-                      {deck.cards.length} cards · {deck.topics.length}{' '}
-                      {deck.topics.length === 1 ? 'topic' : 'topics'}
-                    </small>
-                  </span>
-                  <ChevronRight size={17} />
-                </button>
-                {remove && (
-                  <DeleteItem
-                    label={`Delete deck ${deck.name}`}
-                    description="All flashcards in this deck, across every note, will be removed. Other note content stays. This cannot be undone from Qard."
-                    remove={() => remove(deck.name)}
-                  />
-                )}
-              </div>
-            ))}
+            {(nested ? buildDeckTree(decks) : decks.map(flat)).map(row)}
           </div>
           {!loading && !decks.length && (
             <div className="qard-empty">
