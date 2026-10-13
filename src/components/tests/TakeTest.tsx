@@ -9,6 +9,7 @@ import { useTestFolder } from './useTestFolder';
 import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 import { AgentLabel } from '../jobs/AgentLabel';
+import { LoadingIndicator } from '../common/LoadingIndicator';
 
 const CONFIDENCE: { id: Confidence; label: string }[] = [
   { id: 'sure', label: 'Sure' },
@@ -144,7 +145,7 @@ export function TakeTest({
         </div>
       ) : busy ? (
         <div className="qard-toast" role="status">
-          <span className="qard-dot" aria-hidden="true" />
+          <LoadingIndicator />
           Marking {busy.title}…<AgentLabel services={services} role="marker" />
         </div>
       ) : marking === 'section' && done && doneScore ? (

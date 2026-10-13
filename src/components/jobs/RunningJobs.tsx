@@ -5,6 +5,7 @@ import type { TestNav } from '../../views/navigation';
 import type { LearnNav } from '../../views/navigation';
 import { overdue, roleOf, timeLeft } from '../../jobs/job-clock';
 import { AgentLabel } from './AgentLabel';
+import { LoadingIndicator } from '../common/LoadingIndicator';
 import { InlineMarkdown } from '../Markdown';
 import type { GenerationSnapshot } from '../../cards/generation-service';
 
@@ -206,7 +207,7 @@ export function RunningJobs({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <span className="qard-dot" aria-hidden="true" />
+        <LoadingIndicator />
         {jobs.length} running
         <ChevronDown size={13} aria-hidden="true" />
       </button>

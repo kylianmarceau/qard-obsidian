@@ -2652,13 +2652,88 @@ body.qard-focus-active .status-bar {
   overflow-wrap: anywhere;
 }
 
-.qard-waiting > .qard-dot {
+.qard-waiting > .qard-loading {
   align-self: flex-start;
-  margin-top: 7px;
+  margin-top: 1px;
 }
 
 .qard-waiting .qard-agent {
   margin-left: 0;
+}
+
+.qard-loading {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--qard-blue);
+}
+
+.qard-loading > span {
+  --qard-card-angle: -12deg;
+
+  position: absolute;
+  inset: 3px 4px;
+  border: 1.5px solid currentcolor;
+  border-radius: 3px;
+  background: var(--qard-bg);
+  transform-origin: 50% 50%;
+  transform: rotate(var(--qard-card-angle));
+  animation: qard-card-shuffle 1.8s ease-in-out infinite;
+}
+
+.qard-loading > span:nth-child(2) {
+  --qard-card-angle: 0deg;
+
+  animation-delay: -0.6s;
+}
+
+.qard-loading > span:nth-child(3) {
+  --qard-card-angle: 12deg;
+
+  animation-delay: -1.2s;
+}
+
+.qard-loading > span::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 2px;
+  right: 2px;
+  border-top: 1px solid currentcolor;
+  opacity: 0.6;
+}
+
+@keyframes qard-card-shuffle {
+  0% {
+    transform: perspective(60px) translate(0, 0) rotateZ(var(--qard-card-angle)) rotateY(0deg);
+    z-index: 0;
+  }
+
+  22% {
+    transform: perspective(60px) translate(4px, -4px) rotateZ(calc(var(--qard-card-angle) + 38deg))
+      rotateY(90deg) scale(1.12);
+    z-index: 1;
+  }
+
+  44% {
+    transform: perspective(60px) translate(-3px, -3px) rotateZ(calc(var(--qard-card-angle) - 25deg))
+      rotateY(180deg) scale(1.12);
+    z-index: 1;
+  }
+
+  65% {
+    transform: perspective(60px) translate(-4px, 1px) rotateZ(calc(var(--qard-card-angle) - 18deg))
+      rotateY(270deg);
+    z-index: 1;
+  }
+
+  82%,
+  100% {
+    transform: perspective(60px) translate(0, 0) rotateZ(var(--qard-card-angle)) rotateY(360deg);
+    z-index: 0;
+  }
 }
 
 .qard-dot {
@@ -2667,18 +2742,11 @@ body.qard-focus-active .status-bar {
   border-radius: 50%;
   background: var(--qard-blue);
   flex-shrink: 0;
-  animation: qard-pulse 1.2s ease-in-out infinite;
 }
 
 .qard-dot.is-done {
   background: var(--qard-ok);
   animation: none;
-}
-
-@keyframes qard-pulse {
-  50% {
-    opacity: 0.3;
-  }
 }
 
 .qard-app .qard-error {
@@ -4840,6 +4908,11 @@ body.qard-focus-active .status-bar {
   margin: 0 auto;
 }
 
+.qard-wait-shell > .qard-actions {
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
 .qard-wait {
   max-width: 720px;
   margin: 0 auto;
@@ -4876,8 +4949,8 @@ body.qard-focus-active .status-bar {
 }
 
 .qard-wait-heading .qard-agent {
-  margin: 0 0 0 18px;
-  max-width: calc(100% - 18px);
+  margin: 0;
+  max-width: 100%;
 }
 
 .qard-wait-estimate {
@@ -4914,6 +4987,12 @@ body.qard-focus-active .status-bar {
 
 .qard-wait-head .qard-waiting {
   margin: 0;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.qard-wait-head .qard-waiting-text {
+  flex-basis: auto;
 }
 
 .qard-wait-ready {
