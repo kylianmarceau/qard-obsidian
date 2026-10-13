@@ -9,6 +9,7 @@
 - **Plans:** set up an exam in three steps, track coverage across selected decks/topics, launch practice tests, and see exams and revision in a monthly calendar.
 - **Card formats:** select text to create numbered cloze blanks, or draw image masks to recall diagram labels. Each variant has its own review history and works with normal or cram study.
 - **Review controls:** edit without leaving your session, flag cards that need fixing, undo the last rating, skip, or pause. Related cloze and image variants are separated until tomorrow; cram includes every variant.
+- **Nested decks:** name a deck `Biology::Cells`, or name decks after folders, to group decks under parents and study a whole branch. Set target retention and a daily new-card limit per deck.
 - **Card repair:** find flagged and often-forgotten cards with the Needs fixing filter. Repeated failures across five study days suggest editing or pausing a card; Mark fixed starts a new repair window without deleting history.
 - **Manage cards together:** search questions and answers, then select cards or whole topics to move, pause, resume or flag for repair. Moves keep source notes, attachments and review history.
 - **Improve a card:** use AI to clarify a card, shorten its answer, or split a basic card into smaller ones. Review and edit the draft before applying it. Wording edits keep history and scheduling; splits add fresh cards and pause the original with its history preserved.

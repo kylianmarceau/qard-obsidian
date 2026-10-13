@@ -344,6 +344,7 @@ function MiniReview({
         Date.now(),
         undefined,
         siblingIds(card!, services.index.getSnapshot().cards),
+        card!.deck,
       );
       if (rating === 1) {
         void services.learn?.cardLapse(card!.id).catch(() => {});

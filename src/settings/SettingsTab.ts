@@ -195,7 +195,7 @@ export class QardSettingsTab extends PluginSettingTab {
       group(
         'Files and folders',
         [
-          ...named(study, ['New-card folder']),
+          ...named(study, ['New-card folder', 'Deck names']),
           ...named(tests, ['Tests folder']),
           ...this.learnDefinitions(),
         ],
@@ -392,6 +392,18 @@ export class QardSettingsTab extends PluginSettingTab {
               }
             });
           });
+        },
+      },
+      {
+        name: 'Deck names',
+        desc: 'For notes without a qard-deck property. Folder naming turns Courses/Networks into the nested deck Courses::Networks; notes at the vault root keep their own name.',
+        render: (row) => {
+          row.addDropdown((d) =>
+            d
+              .addOptions({ note: 'Note name', folder: 'Folder path (nested decks)' })
+              .setValue(settings.deckNaming)
+              .onChange((v) => void save('deckNaming', v as QardSettings['deckNaming'])),
+          );
         },
       },
       {
