@@ -5709,28 +5709,130 @@ div.qard-ask-q {
 
 .qard-card-sources {
   margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--background-modifier-border);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  padding-top: 18px;
+  border-top: 1px solid var(--qard-border);
+  display: grid;
   gap: 12px;
 }
 
-/* The gap spaces the heading, text and button evenly; their own margins would make it uneven. */
-.qard-card-sources > * {
+.qard-card-sources > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.qard-card-sources :is(h3, p, ul) {
   margin: 0;
 }
 
-.qard-card-sources .qard-panel,
-.qard-card-sources .qard-error {
-  align-self: stretch;
+.qard-card-sources h3 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--qard-text);
 }
 
-.qard-card-sources .qard-panel {
+.qard-card-sources > header p {
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.qard-app .qard-card-sources button.qard-source-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--qard-muted);
+}
+
+.qard-app .qard-card-sources button.qard-source-add:hover:not(:disabled),
+.qard-app .qard-card-sources button.qard-source-add[aria-expanded='true'] {
+  color: var(--qard-text);
+  background: var(--qard-soft);
+}
+
+.qard-card-sources ul {
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--qard-border);
+  border-radius: 10px;
+}
+
+.qard-card-sources li {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  color: var(--qard-muted);
+}
+
+.qard-card-sources li + li {
+  border-top: 1px solid var(--qard-border);
+}
+
+.qard-card-sources li > svg {
+  flex-shrink: 0;
+}
+
+.qard-app .qard-card-sources li > button.qard-link {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 13px;
+  color: var(--qard-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qard-app .qard-card-sources li > button.qard-link:hover {
+  color: var(--qard-blue);
+  text-decoration: underline;
+}
+
+.qard-card-sources .qard-source-pending {
+  font-size: 12px;
+  color: var(--qard-blue);
+}
+
+.qard-source-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--qard-soft);
+}
+
+.qard-source-picker > select {
+  width: 100%;
+  min-width: 0;
+}
+
+.qard-source-picker > p {
+  grid-column: 1 / -1;
+}
+
+@media (width <= 520px) {
+  .qard-card-sources > header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .qard-source-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (width <= 760px) {
