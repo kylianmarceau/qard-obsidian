@@ -4,6 +4,7 @@ import {
   type CustomConnection,
 } from '../agents/custom-connection';
 import { retention } from '../review/fsrs-scheduler';
+import { clip, validParameters } from '../review/fsrs-optimizer';
 import type { CardOrder, StudyMode } from '../review/session';
 import type { AgentProvider, AgentRole } from '../agents/runner';
 export interface TestSettings {
@@ -40,6 +41,8 @@ export interface QardSettings {
   burySiblings: boolean;
   scheduler: 'simple' | 'fsrs';
   desiredRetention: number;
+  /** FSRS parameters fitted to this user's reviews; absent means the published defaults. */
+  fsrsParameters?: number[];
   newCardsPerDay: number;
   reviewBatchSize: number;
   typedAnswers: boolean;
@@ -177,6 +180,7 @@ export function readSettings(raw: unknown): QardSettings {
     burySiblings: s.burySiblings !== false,
     scheduler: s.scheduler === 'simple' ? 'simple' : 'fsrs',
     desiredRetention: retention(s.desiredRetention),
+    ...(validParameters(s.fsrsParameters) ? { fsrsParameters: clip(s.fsrsParameters) } : {}),
     newCardsPerDay:
       Number.isSafeInteger(s.newCardsPerDay) && s.newCardsPerDay! >= 0 && s.newCardsPerDay! <= 10000
         ? s.newCardsPerDay!

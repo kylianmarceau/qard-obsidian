@@ -166,6 +166,7 @@ export function StudyView({
             saved.states[card.id],
             Date.now(),
             saved.settings.desiredRetention,
+            saved.settings.fsrsParameters,
           )
         : undefined,
     [card, revealed, saved, cram],

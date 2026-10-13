@@ -25,11 +25,13 @@ it('unload releases UI resources without detaching or relocating workspace tabs'
     disposeIndex = vi.fn(),
     disposeReviews = vi.fn(),
     close = vi.fn(),
-    closeBackup = vi.fn();
+    closeBackup = vi.fn(),
+    closeOptimizer = vi.fn();
   Object.assign(plugin, {
     app: { workspace: { getLeavesOfType: () => [{ view }], detachLeavesOfType } },
     selectionModals: new Set([{ close }]),
     backupModals: new Set([{ close: closeBackup }]),
+    optimizerModals: new Set([{ close: closeOptimizer }]),
     index: { dispose: disposeIndex },
     reviews: { dispose: disposeReviews },
   });
@@ -37,6 +39,7 @@ it('unload releases UI resources without detaching or relocating workspace tabs'
   expect(view.release).toHaveBeenCalledOnce();
   expect(close).toHaveBeenCalledOnce();
   expect(closeBackup).toHaveBeenCalledOnce();
+  expect(closeOptimizer).toHaveBeenCalledOnce();
   expect(disposeIndex).toHaveBeenCalledOnce();
   expect(disposeReviews).toHaveBeenCalledOnce();
   expect(detachLeavesOfType).not.toHaveBeenCalled();

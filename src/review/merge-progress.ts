@@ -164,12 +164,13 @@ function replay(
   start: ReviewState | undefined,
   events: ReviewEvent[],
   retention: number,
+  weights?: readonly number[],
 ) {
   let state = start;
   for (const e of events) {
     const computed =
       e.scheduler === 'fsrs'
-        ? reviewWithFsrs(cardId, state, e.rating, e.at, e.desiredRetention ?? retention)
+        ? reviewWithFsrs(cardId, state, e.rating, e.at, e.desiredRetention ?? retention, weights)
         : scheduler.reviewCard(cardId, state, e.rating, e.at);
     state = e.scheduled
       ? computed
@@ -187,11 +188,12 @@ function replayCard(
   localKeys: Set<string>,
   remoteKeys: Set<string>,
   retention: number,
+  weights?: readonly number[],
 ) {
   const complete = (state: ReviewState | undefined, keys: Set<string>) =>
     (state?.reviewCount ?? 0) === keys.size;
   if (complete(local, localKeys) && complete(remote, remoteKeys)) {
-    return replay(cardId, undefined, events, retention);
+    return replay(cardId, undefined, events, retention, weights);
   }
   // Imported schedules have no complete log: continue the newer copy with the other device's later ratings.
   const useLocal = (local?.lastReviewed ?? -Infinity) >= (remote?.lastReviewed ?? -Infinity);
@@ -203,6 +205,7 @@ function replayCard(
     start,
     events.filter((e) => !known.has(eventKey(e)) && e.at > after),
     retention,
+    weights,
   );
 }
 
@@ -239,7 +242,7 @@ function mergeStates(
   local: PluginData,
   remote: PluginData,
   history: ReviewEvent[],
-  { desiredRetention: retention, scheduler }: PluginData['settings'],
+  { desiredRetention: retention, scheduler, fsrsParameters: weights }: PluginData['settings'],
 ) {
   const merged = groupEvents(history),
     localEvents = groupEvents(local.history),
@@ -266,7 +269,7 @@ function mergeStates(
           ? l
           : sameKeys(keys, rk)
             ? r
-            : replayCard(id, l, r, events, lk, rk, retention);
+            : replayCard(id, l, r, events, lk, rk, retention, weights);
     const state = compose(id, memory, flags);
     if (state) {
       states[id] = state;

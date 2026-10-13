@@ -15,7 +15,7 @@ import { newAllowance, paceCards, type PacingOptions } from './pacing';
 import { addStudy, type StudyLog } from '../time/study-time';
 import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
-import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
+import { initializeFsrs, migrateFsrs, recomputeMemory, reviewWithFsrs } from './fsrs-scheduler';
 import {
   MAX_TOMBSTONES,
   mergeProgress,
@@ -202,7 +202,7 @@ export class ReviewStore {
     }
     const scheduledStates =
       settings.scheduler === 'fsrs'
-        ? migrateFsrs(states, history, settings.desiredRetention)
+        ? migrateFsrs(states, history, settings.desiredRetention, settings.fsrsParameters)
         : states;
     const study: StudyLog = {};
     for (const [day, entries] of Object.entries(value.study || {})) {
@@ -324,7 +324,7 @@ export class ReviewStore {
       if (next.scheduler !== data.settings.scheduler) {
         states =
           next.scheduler === 'fsrs'
-            ? migrateFsrs(states, data.history, next.desiredRetention)
+            ? migrateFsrs(states, data.history, next.desiredRetention, next.fsrsParameters)
             : Object.assign(
                 Object.create(null) as Record<string, ReviewState>,
                 Object.fromEntries(
@@ -334,6 +334,13 @@ export class ReviewStore {
                   }),
                 ),
               );
+      }
+      if (
+        next.scheduler === 'fsrs' &&
+        data.settings.scheduler === 'fsrs' &&
+        !sameValue(next.fsrsParameters, data.settings.fsrsParameters)
+      ) {
+        states = recomputeMemory(states, data.history, next.desiredRetention, next.fsrsParameters);
       }
       if (!next.scheduling || !next.burySiblings) {
         states = Object.assign(
@@ -439,7 +446,14 @@ export class ReviewStore {
         const scheduled = data.settings.scheduling;
         const computed =
           data.settings.scheduler === 'fsrs'
-            ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
+            ? reviewWithFsrs(
+                cardId,
+                previous,
+                rating,
+                now,
+                data.settings.desiredRetention,
+                data.settings.fsrsParameters,
+              )
             : scheduler.reviewCard(cardId, previous, rating, now);
         const metadata = {
           ...(previous?.flagsAt !== undefined ? { flagsAt: previous.flagsAt } : {}),
@@ -542,6 +556,7 @@ export class ReviewStore {
       data.settings.scheduler === checkpoint.settings.scheduler &&
       data.settings.scheduling === checkpoint.settings.scheduling &&
       data.settings.desiredRetention === checkpoint.settings.desiredRetention &&
+      sameValue(data.settings.fsrsParameters, checkpoint.settings.fsrsParameters) &&
       checkpoint.siblings.every((sibling) => data.states[sibling.id] === sibling.after) &&
       (!checkpoint.sessionBefore ||
         data.sessions.find((s) => s.id === checkpoint.sessionBefore!.id) ===
@@ -804,6 +819,8 @@ export class ReviewStore {
                   state,
                   byCard.get(state.cardId) ?? [],
                   data.settings.desiredRetention,
+                  undefined,
+                  data.settings.fsrsParameters,
                 )
               : state;
         }

@@ -8,6 +8,7 @@ import { CardWriter } from './cards/card-writer';
 import { ReviewStore, type ProgressFile } from './review/review-store';
 import { ProgressBackups } from './review/progress-backups';
 import { BackupModal } from './settings/BackupModal';
+import { OptimizerModal } from './settings/OptimizerModal';
 import { QardSettingsTab } from './settings/SettingsTab';
 import { TransferModal, type TransferMode } from './settings/TransferModal';
 import { SelectionModal } from './views/SelectionModal';
@@ -47,6 +48,7 @@ export default class QardPlugin extends Plugin {
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
   private backupModals = new Set<BackupModal>();
+  private optimizerModals = new Set<OptimizerModal>();
   async onload() {
     const folder = `${this.app.vault.configDir}/plugins/${this.manifest.id}/study-backups`;
     const adapter = this.app.vault.adapter;
@@ -121,6 +123,16 @@ export default class QardPlugin extends Plugin {
         'Study progress is saved, but Qard could not create a backup. Check vault storage and try back up now in settings.',
       );
     }
+  }
+  openOptimizer() {
+    const modal = new OptimizerModal(this);
+    this.optimizerModals.add(modal);
+    const close = modal.onClose.bind(modal);
+    modal.onClose = () => {
+      close();
+      this.optimizerModals.delete(modal);
+    };
+    modal.open();
   }
   openBackups() {
     const modal = new BackupModal(this);
@@ -488,6 +500,8 @@ export default class QardPlugin extends Plugin {
     this.selectionModals.clear();
     this.backupModals.forEach((modal) => modal.close());
     this.backupModals.clear();
+    this.optimizerModals.forEach((modal) => modal.close());
+    this.optimizerModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach((leaf) => {
       if (leaf.view instanceof QardView) {
         leaf.view.release();

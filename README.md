@@ -16,6 +16,7 @@
 - **Study at your pace:** optionally limit new cards per day and finish reviews in smaller batches, with Continue at the end. Enable typed answers in settings (off by default), or create linked reverse pairs with separate schedules.
 - **Progress backups:** automatic rotating local copies protect review history, schedules, saved sessions and exam plans. Preview a dated backup before restoring it from Qard settings.
 - **Learning reviews:** in normal study sessions with FSRS, only cards rated Again return when their scheduled interval arrives. Hard, Good and Easy finish the card for the current session while preserving their FSRS schedules. Progress counts completed cards separately from learning repeats. Wait for the next card, save and leave, or finish the session with your reviews preserved.
+- **Personal scheduling:** once you have 400 ratings, fit FSRS to your own memory on your device, compare it with the defaults, and apply or reset it.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
 - **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
 - **Learn:** map a course into connected topics, follow guided lessons and check what you remember. Ask the Illustrator to draw reusable lesson diagrams and plots. Track your progress and what to study next.
