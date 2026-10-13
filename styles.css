@@ -5711,10 +5711,23 @@ div.qard-ask-q {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+/* The gap spaces the heading, text and button evenly; their own margins would make it uneven. */
+.qard-card-sources > * {
+  margin: 0;
+}
+
+.qard-card-sources .qard-panel,
+.qard-card-sources .qard-error {
+  align-self: stretch;
 }
 
 .qard-card-sources .qard-panel {
-  margin-top: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
