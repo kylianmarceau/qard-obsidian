@@ -34,6 +34,8 @@ const MEMORY_KEYS = [
 /** Undo, finished sessions and deleted exams leave tombstones; the newest ones are kept. */
 export const MAX_TOMBSTONES = 2000;
 
+const TOTAL_FIELDS = ['study', 'usage'] as const;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -118,10 +120,14 @@ export function recordChanges(
   if (states === next.states && !removed.length && !settingsChanged && totals === next.totals) {
     return next;
   }
+  const reset = TOTAL_FIELDS.filter((f) => next[f] !== before[f] && !Object.keys(next[f]).length);
   return {
     ...next,
     states,
     totals,
+    ...(reset.length
+      ? { resets: { ...next.resets, ...Object.fromEntries(reset.map((f) => [f, now])) } }
+      : {}),
     removed: removed.length ? capTombstones([...next.removed, ...removed]) : next.removed,
     ...(settingsChanged ? { settingsAt: now } : {}),
   };
@@ -233,7 +239,7 @@ function mergeStates(
   local: PluginData,
   remote: PluginData,
   history: ReviewEvent[],
-  retention: number,
+  { desiredRetention: retention, scheduler }: PluginData['settings'],
 ) {
   const merged = groupEvents(history),
     localEvents = groupEvents(local.history),
@@ -250,8 +256,9 @@ function mergeStates(
     const keys = keysOf(events),
       lk = keysOf(localEvents.get(id)),
       rk = keysOf(remoteEvents.get(id));
-    // Markers follow the most recent edit; a tie keeps this device's copy.
-    const flags = !l || (r && (r.flagsAt ?? 0) > (l.flagsAt ?? 0)) ? r : l;
+    // Markers follow the most recent edit. A tie is settled the same way on every device, so they agree.
+    const newer = (r?.flagsAt ?? 0) - (l?.flagsAt ?? 0);
+    const flags = !l || (r && (newer > 0 || (newer === 0 && canonical(r) > canonical(l)))) ? r : l;
     const memory =
       sameKeys(keys, lk) && sameKeys(keys, rk)
         ? flags
@@ -263,6 +270,15 @@ function mergeStates(
     const state = compose(id, memory, flags);
     if (state) {
       states[id] = state;
+    }
+  }
+  if (scheduler === 'simple') {
+    // Switching to simple intervals removes FSRS memory; a copy from before the switch must not restore it.
+    for (const [id, state] of Object.entries(states)) {
+      if (state.fsrs) {
+        const { fsrs: _memory, ...simple } = state;
+        states[id] = simple;
+      }
     }
   }
   return states;
@@ -354,12 +370,12 @@ function recordTotals(before: PluginData, next: PluginData, device: string) {
     );
   const own = next.totals[device] ?? { study: {}, usage: {} };
   const totals = { ...next.totals, [device]: { ...own } };
-  for (const field of ['study', 'usage'] as const) {
+  for (const field of TOTAL_FIELDS) {
     if (next[field] === before[field]) {
       continue;
     }
     if (!Object.keys(next[field]).length) {
-      // A reset clears every device's entry known here.
+      // A reset clears every device's entry known here; recordChanges stamps it so it also holds elsewhere.
       for (const id of Object.keys(totals)) {
         totals[id] = { ...totals[id]!, [field]: {} };
       }
@@ -378,12 +394,26 @@ function recordTotals(before: PluginData, next: PluginData, device: string) {
 
 function mergeTotals(local: PluginData, remote: PluginData) {
   const totals: Record<string, DeviceTotals> = {};
+  const resets: { study?: number; usage?: number } = {};
+  // Counts from before the most recent reset are dropped, whichever copy still holds them.
+  const merged = (field: (typeof TOTAL_FIELDS)[number], l?: DeviceTotals, r?: DeviceTotals) => {
+    const lr = local.resets?.[field] ?? 0,
+      rr = remote.resets?.[field] ?? 0;
+    if (lr || rr) {
+      resets[field] = Math.max(lr, rr);
+    }
+    return lr > rr
+      ? (l?.[field] ?? {})
+      : rr > lr
+        ? (r?.[field] ?? {})
+        : combine(l?.[field], r?.[field], Math.max);
+  };
   for (const id of new Set([...Object.keys(local.totals), ...Object.keys(remote.totals)])) {
     const l = local.totals[id],
       r = remote.totals[id];
     totals[id] = {
-      study: combine(l?.study, r?.study, Math.max) as StudyLog,
-      usage: combine(l?.usage, r?.usage, Math.max) as UsageLog,
+      study: merged('study', l, r) as StudyLog,
+      usage: merged('usage', l, r) as UsageLog,
     };
   }
   const devices = Object.values(totals);
@@ -399,6 +429,7 @@ function mergeTotals(local: PluginData, remote: PluginData) {
   const usageDays = new Set(Object.keys(usage).sort().slice(-180));
   return {
     totals,
+    ...(Object.keys(resets).length ? { resets } : {}),
     study: Object.fromEntries(Object.entries(study).filter(([day]) => day >= oldest)),
     usage: Object.fromEntries(Object.entries(usage).filter(([day]) => usageDays.has(day))),
   };
@@ -427,16 +458,17 @@ function mergeItems<T extends { id: string }>(
   tombstone: (id: string) => string,
   choose: (local: T, remote: T) => T,
 ) {
-  const byId = new Map(remote.map((item) => [item.id, item]));
+  const mine = new Map(local.map((item) => [item.id, item]));
   const out: T[] = [];
   const seen = new Set<string>();
-  for (const item of [...local, ...remote]) {
+  // The other copy's order comes first, so a device with nothing to add agrees with it and does not write back.
+  for (const item of [...remote, ...local]) {
     if (seen.has(item.id) || gone.has(tombstone(item.id))) {
       continue;
     }
     seen.add(item.id);
-    const other = byId.get(item.id);
-    out.push(other && other !== item ? choose(item, other) : item);
+    const own = mine.get(item.id);
+    out.push(own && own !== item ? choose(own, item) : item);
   }
   return out;
 }
@@ -446,7 +478,11 @@ export function mergeProgress(base: PluginData, local: PluginData, remote: Plugi
   const removed = capTombstones([...remote.removed, ...local.removed]);
   const gone = new Set(removed);
   const history = mergeHistory(local.history, remote.history, gone);
-  const remoteSettings = (remote.settingsAt ?? 0) > (local.settingsAt ?? 0);
+  // The most recent change wins; a tie is settled the same way on every device, so they agree.
+  const settingsNewer = (remote.settingsAt ?? 0) - (local.settingsAt ?? 0);
+  const remoteSettings =
+    settingsNewer > 0 ||
+    (settingsNewer === 0 && canonical(remote.settings) > canonical(local.settings));
   const settings = remoteSettings ? remote.settings : local.settings;
   const settingsAt = remoteSettings ? remote.settingsAt : local.settingsAt;
   const exams = new Map(base.exams.map((e) => [e.id, e]));
@@ -456,7 +492,7 @@ export function mergeProgress(base: PluginData, local: PluginData, remote: Plugi
     ...(settingsAt !== undefined ? { settingsAt } : {}),
     removed,
     history,
-    states: mergeStates(local, remote, history, settings.desiredRetention),
+    states: mergeStates(local, remote, history, settings),
     statistics: mergeStatistics(local.statistics, remote.statistics, history),
     links: mergeRecords(base.links, local.links, remote.links),
     timings: mergeRecords(base.timings, local.timings, remote.timings),
