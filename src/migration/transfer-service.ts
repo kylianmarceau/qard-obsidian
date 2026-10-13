@@ -7,6 +7,7 @@ import type { ReviewStore } from '../review/review-store';
 import type { ReviewState, ReviewEvent } from '../review/scheduler';
 import { studyNotes } from '../vault-access';
 import { readAnki } from './anki';
+import { buildAnkiPackage } from './anki-export';
 import { validateTransferCard, writeDelimited, type Delimiter, MAX_CARDS } from './tabular';
 import type { TransferInput, TransferCard } from './transfer-types';
 
@@ -431,5 +432,41 @@ export class TransferService {
       .join('/');
     await this.immutable(path, content);
     return { path, cards: cards.length };
+  }
+  /** Writes an .apkg into the vault. Attachments are read only when a card links them. */
+  async exportAnki(folder: string, deck?: string, includeProgress = true) {
+    folder = safeFolder(folder);
+    const cards = (await this.currentCards()).filter((c) => !deck || c.deck === deck);
+    if (!cards.length) {
+      throw new Error('There are no cards to export.');
+    }
+    const data = this.reviews.getSnapshot();
+    const result = await buildAnkiPackage({
+      cards,
+      ...(includeProgress
+        ? {
+            states: data.states,
+            history: data.history,
+            desiredRetention: data.settings.desiredRetention,
+          }
+        : {}),
+      resolveMedia: (link, source) =>
+        this.app.metadataCache.getFirstLinkpathDest(link, source)?.path,
+      readMedia: async (path) => {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (!(file instanceof TFile)) {
+          throw new Error(`A linked attachment is missing: ${path}.`);
+        }
+        return new Uint8Array(await this.app.vault.readBinary(file));
+      },
+    });
+    const path = [
+      folder,
+      `${slug(deck || 'Qard')}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.apkg`,
+    ]
+      .filter(Boolean)
+      .join('/');
+    await this.binary(path, result.bytes);
+    return { path, cards: result.cards, skipped: result.skipped, media: result.media };
   }
 }

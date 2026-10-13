@@ -298,6 +298,8 @@ Choose an import folder. New notes are grouped by deck, topic and tags inside it
 
 **Export flashcards** saves all cards or one deck to a new CSV/TSV file in your chosen vault folder. It includes questions, answers, decks, topics, tags and sibling groups. It excludes IDs, review history and attachment files. Local links use vault paths when they can be resolved; copy those attachments separately when moving the export to another vault.
 
+Choose **Anki package (.apkg)** as the format to move cards into Anki. Qard writes a compatibility package that current and older Anki versions import. Basic cards, linked reverse pairs and cloze cards become Anki notes; each reverse direction and cloze blank stays a separate card. Deck names keep their `::` nesting and each topic other than **General** becomes a subdeck. Tags, Markdown formatting, math, and linked vault images and audio are included. **Include review progress** adds due dates, intervals, FSRS memory, paused cards and your timestamped ratings; turn it off to share a deck without your history. Exporting the same cards again updates them in Anki instead of adding duplicates. Image-occlusion cards are not exported and are counted in the result. The package was verified by reading it back with Qard's own Anki importer; it has not yet been validated in every Anki version.
+
 ## Importing from Spaced Repetition
 
 Run **Qard: Import from Spaced Repetition** or use **Settings → Qard → Import and export**. Qard reads the Spaced Repetition plugin's settings (deck tags, ignored tags, separators, end marker, folder decks and cloze options) when they are installed. Otherwise it uses that plugin's defaults.
@@ -513,7 +515,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export is not supported.
+- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export does not include image-occlusion cards.
 - No persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
