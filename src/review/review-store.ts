@@ -74,6 +74,8 @@ export interface PluginData {
   settingsAt?: number;
   /** Study time and token usage by the device that counted them; `study` and `usage` are their sums. */
   totals: Record<string, DeviceTotals>;
+  /** When study time or usage was last reset on any device; older counts are not merged back. */
+  resets?: { study?: number; usage?: number };
 }
 /** The saved plugin data file, which another device may replace through sync. */
 export interface ProgressFile {
@@ -242,6 +244,7 @@ export class ReviewStore {
         ? { settingsAt: value.settingsAt }
         : {}),
       totals: readTotals(value.totals, study, usage),
+      ...readResets(value.resets),
     };
     this.base = this.data;
   }
@@ -439,6 +442,7 @@ export class ReviewStore {
             ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
             : scheduler.reviewCard(cardId, previous, rating, now);
         const metadata = {
+          ...(previous?.flagsAt !== undefined ? { flagsAt: previous.flagsAt } : {}),
           ...(previous?.needsFixing ? { needsFixing: true as const } : {}),
           ...(previous?.repairSince !== undefined ? { repairSince: previous.repairSince } : {}),
         };
@@ -547,7 +551,11 @@ export class ReviewStore {
   undoReview(candidate: ReviewUndo) {
     return this.change(
       (data) => {
-        if (!this.canUndoReview(candidate)) {
+        // The checkpoint describes this device's last save; progress merged from another device invalidates it.
+        if (data !== this.data || !this.canUndoReview(candidate)) {
+          if (data !== this.data) {
+            void this.syncExternal().catch(() => {});
+          }
           throw new Error('This review changed or a later card was reviewed. It cannot be undone.');
         }
         const checkpoint = this.undo!;
@@ -1044,6 +1052,13 @@ function counts(value: unknown, depth: number): Record<string, unknown> {
     }
   }
   return out;
+}
+function readResets(raw: unknown): Pick<PluginData, 'resets'> {
+  const resets = counts(raw, 1);
+  const { study, usage } = resets as { study?: number; usage?: number };
+  return study || usage
+    ? { resets: { ...(study ? { study } : {}), ...(usage ? { usage } : {}) } }
+    : {};
 }
 /** Totals saved before devices were tracked become one shared entry, so no device counts them twice. */
 function readTotals(raw: unknown, study: StudyLog, usage: UsageLog): Record<string, DeviceTotals> {

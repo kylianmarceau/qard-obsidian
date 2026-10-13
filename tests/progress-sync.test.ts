@@ -175,3 +175,111 @@ it('ignores an empty or damaged synced file', async () => {
       .sort(),
   ).toEqual(['next', 'shared']);
 });
+
+const card = (id: string) =>
+  ({ id, stable: true, deck: 'Networks' }) as Parameters<ReviewStore['startSession']>[0][number];
+/** Passes the file back and forth until neither device writes; returns the number of round trips. */
+async function settle(p: Awaited<ReturnType<typeof pair>>) {
+  for (let round = 0; round < 10; round++) {
+    const before = p.laptop.writes.mock.calls.length + p.phone.writes.mock.calls.length;
+    p.phoneDisk.copyFrom(p.laptopDisk);
+    await p.phone.store.syncExternal();
+    p.laptopDisk.copyFrom(p.phoneDisk);
+    await p.laptop.store.syncExternal();
+    if (p.laptop.writes.mock.calls.length + p.phone.writes.mock.calls.length === before) {
+      return round;
+    }
+  }
+  return Infinity;
+}
+
+it('stops writing once sessions and exams made on both devices are merged', async () => {
+  const p = await pair();
+  const exam = (id: string) => ({
+    id,
+    name: id,
+    date: '2026-12-01',
+    selection: { decks: ['Networks'], topics: [], cards: [] },
+    weekdays: [1, 3],
+    dailyLimit: 10,
+    createdAt: day(8),
+  });
+  await p.laptop.store.startSession([card('a')], 'cram');
+  await p.phone.store.startSession([card('b')], 'cram');
+  await p.laptop.store.saveExam(exam('laptop-exam'));
+  await p.phone.store.saveExam(exam('phone-exam'));
+  expect(await settle(p)).toBeLessThan(3);
+  expect(p.laptop.data().sessions).toHaveLength(2);
+  expect(
+    p.phone
+      .data()
+      .exams.map((e) => e.id)
+      .sort(),
+  ).toEqual(['laptop-exam', 'phone-exam']);
+});
+
+it('stops writing after one device switches scheduler', async () => {
+  const p = await pair();
+  await p.laptop.store.saveSettings({ ...p.laptop.data().settings, scheduler: 'simple' });
+  expect(await settle(p)).toBeLessThan(3);
+  expect(p.phone.data().settings.scheduler).toBe('simple');
+  expect(p.phone.data().states.shared?.fsrs).toBeUndefined();
+  await p.phone.store.saveSettings({ ...p.phone.data().settings, scheduler: 'fsrs' });
+  expect(await settle(p)).toBeLessThan(3);
+  expect(p.laptop.data().states.shared).toEqual(p.phone.data().states.shared);
+  expect(p.laptop.data().states.shared?.fsrs).toBeDefined();
+});
+
+it('keeps a resume after the card is rated, when an older paused copy arrives', async () => {
+  const p = await pair();
+  await p.phone.store.setPaused('shared', true);
+  const stale = new Disk();
+  stale.copyFrom(p.phoneDisk);
+  p.laptopDisk.copyFrom(p.phoneDisk);
+  await p.laptop.store.syncExternal();
+  await p.laptop.store.setPaused('shared', false);
+  await p.laptop.store.review('shared', 3, day(9));
+  p.laptopDisk.copyFrom(stale);
+  await p.laptop.store.syncExternal();
+  expect(p.laptop.data().states.shared?.paused).toBeUndefined();
+  expect(p.laptop.data().states.shared?.reviewCount).toBe(2);
+});
+
+it("refuses an undo that would remove another device's rating", async () => {
+  const p = await pair();
+  const undo = await p.laptop.store.review('mine', 1, day(9));
+  await p.phone.store.review('theirs', 3, day(10));
+  p.laptopDisk.copyFrom(p.phoneDisk); // Replaced, but no sync notification has run yet.
+  await expect(p.laptop.store.undoReview(undo)).rejects.toThrow('cannot be undone');
+  await p.laptop.store.flush();
+  expect(
+    p.laptop
+      .data()
+      .history.map((e) => e.cardId)
+      .sort(),
+  ).toEqual(['mine', 'shared', 'theirs']);
+  expect(p.laptop.data().removed).toEqual([]);
+  expect(p.laptop.store.canUndoReview(undo)).toBe(false);
+});
+
+it('keeps study time and usage reset on every device', async () => {
+  const p = await pair();
+  await p.phone.store.recordUsage('2026-10-02', 'k', { input: 5, output: 5 } as never);
+  await p.phone.store.recordStudy({ '2026-10-02': { 'review|': 45 } }, '2026-10-02');
+  await settle(p);
+  const stale = new Disk();
+  stale.copyFrom(p.phoneDisk);
+  await p.laptop.store.resetUsage();
+  expect(await settle(p)).toBeLessThan(3);
+  expect(p.phone.data().usage).toEqual({});
+  expect(p.phone.data().study['2026-10-02']?.['review|']).toBe(45);
+  // Counting continues after the reset, and a copy from before it adds nothing back.
+  await p.phone.store.recordUsage('2026-10-03', 'k', { input: 2, output: 1 } as never);
+  await settle(p);
+  p.laptopDisk.copyFrom(stale);
+  await p.laptop.store.syncExternal();
+  expect(Object.keys(p.laptop.data().usage)).toEqual(['2026-10-03']);
+  await p.laptop.store.resetStudy();
+  await settle(p);
+  expect(p.phone.data().study).toEqual({});
+});
