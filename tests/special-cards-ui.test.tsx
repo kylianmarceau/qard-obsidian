@@ -21,6 +21,7 @@ import { serializeCard } from '../src/cards/source-patch';
 import type { QardCard } from '../src/cards/card-types';
 import type { QardServices } from '../src/views/services';
 import type { CardWriter } from '../src/cards/card-writer';
+import { unstamp } from './review-state-helpers';
 
 let root: Root, host: HTMLElement, services: QardServices;
 const saved = vi.fn();
@@ -353,14 +354,18 @@ it('pauses and resumes a card from its preview without losing history or enablin
     button('Pause card').click();
     await services.reviews.flush();
   });
-  expect(services.reviews.getSnapshot().states[card.id]).toEqual({ ...before, paused: true });
+  expect(services.reviews.getSnapshot().states[card.id]).toEqual({
+    ...before,
+    paused: true,
+    flagsAt: expect.any(Number),
+  });
   expect(button('Study')?.disabled).toBe(true);
   expect(host.textContent).toContain('history and schedule are preserved');
   await act(async () => {
     button('Resume card').click();
     await services.reviews.flush();
   });
-  expect(services.reviews.getSnapshot().states[card.id]).toEqual(before);
+  expect(unstamp(services.reviews.getSnapshot().states[card.id])).toEqual(unstamp(before));
   expect(button('Study')?.disabled).toBe(false);
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   expect(changed).toHaveBeenCalledWith(card);

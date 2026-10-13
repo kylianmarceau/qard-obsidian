@@ -490,7 +490,9 @@ Each Claude Code or Codex call starts a new process, which adds a few seconds. F
 
 ## Review data and settings
 
-Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history. Review saves finish before a session advances; failed saves are shown and can be retried.
+Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history.
+
+**Studying on several devices.** When Obsidian Sync, iCloud or another sync service replaces `data.json` with a copy from another device, Qard merges it instead of overwriting it. Ratings from every device are kept; a card rated on two devices before they synced is rescheduled by replaying its combined ratings in time order. Undone ratings, finished sessions and deleted exams stay removed. Pause, repair and deferral changes keep the most recent edit, settings keep the most recent change, and study time and token usage are counted per device and added together. Qard writes back only when this device has progress the other copy lacks, so devices do not keep rewriting each other's files. Review saves finish before a session advances; failed saves are shown and can be retried.
 
 Choose **Settings → Qard → Study preferences → Review scheduler**:
 
@@ -516,7 +518,6 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
 - No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
-- Cross-vault concurrent review-data merging is not implemented.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
 

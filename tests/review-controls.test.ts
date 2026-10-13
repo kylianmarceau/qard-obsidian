@@ -5,6 +5,7 @@ import { selectCards } from '../src/review/session';
 import { scheduler } from '../src/review/scheduler';
 import { cardStatistics } from '../src/review/statistics';
 import { memoryStatistics } from '../src/review/fsrs-scheduler';
+import { unstamp } from './review-state-helpers';
 const cards = ['a', 'b', 'c'].map(
   (id) =>
     parseCards(`<!-- qard-id: ${id} -->\n> [!qard]- Question ${id}\n> Answer`, 'deck.md').cards[0]!,
@@ -144,7 +145,7 @@ it('pause survives reload and excludes every study mode, forecasts and memory wo
   const restored = new ReviewStore(async () => {});
   restored.load(JSON.parse(JSON.stringify(store.getSnapshot())));
   const { states, statistics } = restored.getSnapshot();
-  expect(states.a).toEqual({ ...memory, paused: true });
+  expect(states.a).toEqual({ ...memory, paused: true, flagsAt: expect.any(Number) });
   expect(scheduler.isDue(states.a, now)).toBe(false);
   for (const mode of ['all', 'due', 'new', 'difficult'] as const) {
     const selection = { decks: [], topics: [], cards: cards.map((c) => c.id) };
@@ -164,7 +165,7 @@ it('pause survives reload and excludes every study mode, forecasts and memory wo
   await expect(restored.review('a', 3, now)).rejects.toThrow(/paused/);
   await expect(restored.startSession([cards[0]!], 'cram')).rejects.toThrow(/paused/);
   await restored.setPaused('a', false);
-  expect(restored.getSnapshot().states.a).toEqual(memory);
+  expect(unstamp(restored.getSnapshot().states.a)).toEqual(unstamp(memory));
   expect(scheduler.isDue(restored.getSnapshot().states.a, now)).toBe(true);
 });
 
