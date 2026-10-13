@@ -159,6 +159,7 @@ export class QardSettingsTab extends PluginSettingTab {
           'Enable spaced repetition',
           'Review scheduler',
           'Target retention',
+          'Personalise FSRS',
           'Separate related cards',
         ]),
         'memory',
@@ -194,7 +195,7 @@ export class QardSettingsTab extends PluginSettingTab {
       group(
         'Files and folders',
         [
-          ...named(study, ['New-card folder']),
+          ...named(study, ['New-card folder', 'Deck names']),
           ...named(tests, ['Tests folder']),
           ...this.learnDefinitions(),
         ],
@@ -316,6 +317,15 @@ export class QardSettingsTab extends PluginSettingTab {
         },
       },
       {
+        name: 'Personalise FSRS',
+        desc: 'Fit the FSRS scheduler to your own review history, on this device. Needs 400 ratings.',
+        render: (row) => {
+          row.addButton((button) =>
+            button.setButtonText('Personalise…').onClick(() => this.qard.openOptimizer()),
+          );
+        },
+      },
+      {
         name: 'Default order',
         render: (row) => {
           row.addDropdown((d) =>
@@ -382,6 +392,18 @@ export class QardSettingsTab extends PluginSettingTab {
               }
             });
           });
+        },
+      },
+      {
+        name: 'Deck names',
+        desc: 'For notes without a qard-deck property. Folder naming turns Courses/Networks into the nested deck Courses::Networks; notes at the vault root keep their own name.',
+        render: (row) => {
+          row.addDropdown((d) =>
+            d
+              .addOptions({ note: 'Note name', folder: 'Folder path (nested decks)' })
+              .setValue(settings.deckNaming)
+              .onChange((v) => void save('deckNaming', v as QardSettings['deckNaming'])),
+          );
         },
       },
       {

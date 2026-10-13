@@ -96,7 +96,8 @@ The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard
 ### Decks and topics
 
 - `qard-deck` names a **logical deck**. Every note with the exact same deck name contributes to the same deck, regardless of its folder. Names are case-sensitive.
-- Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name.
+- Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name. Choose **Settings → Qard → Files and folders → Deck names → Folder path (nested decks)** to name such notes after their folder instead: `Courses/Networks/tcp.md` joins the deck `Courses::Networks`. Notes at the vault root keep their own name, and `qard-deck` and moved cards always take precedence. Changing this setting regroups cards into different decks; review history stays with each card.
+- `::` nests decks. `Biology::Cells` appears under **Biology** in the library, which is also how nested Anki decks arrive on import. A parent does not need cards of its own. Expand or collapse a parent with its arrow, and choose **Study all** to open the study builder with the parent and every deck beneath it selected. Searching or filtering shows the flat list with full names.
 - The closest preceding heading, at any level, becomes the topic. Nested headings replace the topic rather than building a hierarchy. ATX (`# Heading`) and setext headings work; headings inside fenced code are ignored.
 - Before the first heading, the topic is `General`.
 - Optional `qard-topic: Transport Layer` overrides headings for the entire file.
@@ -199,6 +200,8 @@ Choose **Study**, select any combination of decks/topics/individual cards, choos
 
 In **Settings → Qard → Study**, **New cards per day** sets an optional allowance across normal sessions, and **Review batch size** sets how many cards begin a sitting. Both default to **0** (unlimited). With pacing enabled, previously studied cards come first; the builder shows review/new counts, the batch and remaining selection. Learning repeats do not use the new-card allowance. Undoing a first rating returns the allowance. Existing imported review history does not count as a new introduction. The allowance resets at local midnight.
 
+**Deck options.** Open a deck and choose the options button beside **Study**, or use the same button on a parent row in the library. **Target retention** applies to that deck and the decks nested under it; a nested deck with its own target uses that instead, and a deck with none uses the nearest parent's or your global target. **New cards per day** is a limit shared by the deck and its subdecks together. Limits stack: a card is introduced only while its deck, every parent with a limit and your overall allowance all have room. Leave a field empty to set nothing for that deck. Deck limits count cards introduced after this version was installed; earlier ratings count towards the overall allowance only. Options are stored by deck name, so a renamed deck needs its options set again.
+
 After completing a batch, choose **Continue studying** to start the next part of your selection. Remaining cards retain their original due dates; saved unfinished batches keep their remaining selection after a restart. **Study extra new cards today** in the builder explicitly bypasses the allowance for that session. Cram and exam sessions are unrestricted. With a daily allowance enabled, **Today** also offers new cards by deck.
 
 **Type answers before revealing** in **Settings → Qard → Study experience** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
@@ -297,6 +300,8 @@ Anki import supports older compatibility packages and the current compressed pac
 Choose an import folder. New notes are grouped by deck, topic and tags inside its **Imports** folder. Source notes and existing Qard schedules are preserved. Approved import records remain in the vault; imports with media also keep a copy of the original package for recovery. If saving is interrupted, use **Resume an unfinished import** in settings. Retries reuse the same IDs and do not duplicate notes, attachments or review history. Keep the import record and package until the import is complete; edited import files are reported instead of overwritten.
 
 **Export flashcards** saves all cards or one deck to a new CSV/TSV file in your chosen vault folder. It includes questions, answers, decks, topics, tags and sibling groups. It excludes IDs, review history and attachment files. Local links use vault paths when they can be resolved; copy those attachments separately when moving the export to another vault.
+
+Choose **Anki package (.apkg)** as the format to move cards into Anki. Qard writes a compatibility package that current and older Anki versions import. Basic cards, linked reverse pairs and cloze cards become Anki notes; each reverse direction and cloze blank stays a separate card. Deck names keep their `::` nesting and each topic other than **General** becomes a subdeck. Tags, Markdown formatting, math, and linked vault images and audio are included. **Include review progress** adds due dates, intervals, FSRS memory, paused cards and your timestamped ratings; turn it off to share a deck without your history. Exporting the same cards again updates them in Anki instead of adding duplicates. Image-occlusion cards are not exported and are counted in the result. The package was verified by reading it back with Qard's own Anki importer; it has not yet been validated in every Anki version.
 
 ## Importing from Spaced Repetition
 
@@ -496,12 +501,14 @@ Review states, all saved timestamped rating events, settings, the links between 
 
 Choose **Settings → Qard → Study preferences → Review scheduler**:
 
-- **FSRS (adaptive memory):** uses [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs), with FSRS-6 defaults and a 90% target retention. New vaults start here. You can set a target from 70% to 97%; a higher target means more frequent reviews. Target changes take effect as cards are reviewed. Personal parameter optimization is not included yet.
+- **FSRS (adaptive memory):** uses [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs), with FSRS-6 defaults and a 90% target retention. New vaults start here. You can set a target from 70% to 97%; a higher target means more frequent reviews. Target changes take effect as cards are reviewed. **Personalise FSRS** in the same settings group fits the scheduler's 21 parameters to your own ratings; see below.
 - **Simple intervals:** the previous scheduler, kept as the default for existing vaults. Again schedules 10 minutes ahead, Hard starts at half a day, Good at one day, and Easy at four days; later intervals grow based on rating and ease.
 
 Switching schedulers preserves current due dates and review counts. When enabling FSRS, complete saved histories are replayed into its memory model. Cards with missing history or imported schedules start with approximate memory estimates based on their current interval; the statistics page labels these. Switching back to simple intervals retains due dates and removes FSRS memory state. No past review events are invented.
 
 FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step after a lapse. Intervals of 2.5 days or more get a small random spread (about ±15% for a few days, narrowing to ±5% beyond 20 days), so cards added and rated together fall due on nearby days instead of all on the same day. The spread is fixed per card and review, so the interval shown before rating is the one saved. Reveal the answer to preview the next review interval for each rating. **Again** means you forgot; **Hard** means you remembered with effort; **Good** means you remembered; **Easy** means immediate recall. A forgotten answer should be rated Again. Normal Due sessions bring learning/relearning cards back when their next step is due. Other session modes remain single-pass; start Due cards for further scheduled reviews.
+
+**Personalise FSRS** opens a window showing how many ratings you have saved. With at least 400 ratings, including 50 made a day or more after the previous one, **Find my parameters** fits FSRS to your history. It runs on your device, usually in a few seconds, and can be cancelled. Qard then compares the default and personal parameters on your spaced reviews: prediction error (log loss; lower is better) and the calibration gap between predicted and actual recall. **Apply** is available only when your parameters predict your history better. Applying updates each card's memory estimate from its rating history; due dates already set do not move, and later reviews are scheduled with the new parameters. Cards whose memory was estimated from an imported schedule keep that estimate. **Reset to defaults** undoes it. The comparison is measured on the same reviews used for fitting, so it shows fit, not a guarantee about future reviews; run it again after a few hundred more ratings. Personal parameters are saved with your settings and follow them to other devices.
 
 Disabling scheduling still saves ratings and updates FSRS memory estimates without changing due dates or intervals. **All cards never consults the scheduler.** All timestamped rating events are now retained locally for memory reconstruction and future personalization. Earlier versions truncated history at 10,000 events; removed events cannot be recovered.
 
@@ -513,10 +520,10 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 ## Current scope and limitations
 
-- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export is not supported.
+- CSV/TSV exports contain card content, not scheduling or attachment files. Anki export does not include image-occlusion cards.
 - No persistent recordings or speech recognition.
 - Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
-- No course/project hierarchy beyond decks and Markdown topics, and no folder-to-deck mapping.
+- Nested decks group and study together, but a deck's topics are still a single level. Deck options cover target retention and new cards per day; other preferences are global.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.

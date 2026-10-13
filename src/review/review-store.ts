@@ -12,10 +12,11 @@ import {
 import type { QardCard } from '../cards/card-types';
 import type { SessionStyle, StudyMode } from './session';
 import { newAllowance, paceCards, type PacingOptions } from './pacing';
+import { deckRetention } from '../decks/deck-options';
 import { addStudy, type StudyLog } from '../time/study-time';
 import { validateProgress } from './progress-backups';
 import { learningReview, pendingLearning } from './learning-queue';
-import { initializeFsrs, migrateFsrs, reviewWithFsrs } from './fsrs-scheduler';
+import { initializeFsrs, migrateFsrs, recomputeMemory, reviewWithFsrs } from './fsrs-scheduler';
 import {
   MAX_TOMBSTONES,
   mergeProgress,
@@ -202,7 +203,7 @@ export class ReviewStore {
     }
     const scheduledStates =
       settings.scheduler === 'fsrs'
-        ? migrateFsrs(states, history, settings.desiredRetention)
+        ? migrateFsrs(states, history, settings.desiredRetention, settings.fsrsParameters)
         : states;
     const study: StudyLog = {};
     for (const [day, entries] of Object.entries(value.study || {})) {
@@ -324,7 +325,7 @@ export class ReviewStore {
       if (next.scheduler !== data.settings.scheduler) {
         states =
           next.scheduler === 'fsrs'
-            ? migrateFsrs(states, data.history, next.desiredRetention)
+            ? migrateFsrs(states, data.history, next.desiredRetention, next.fsrsParameters)
             : Object.assign(
                 Object.create(null) as Record<string, ReviewState>,
                 Object.fromEntries(
@@ -334,6 +335,13 @@ export class ReviewStore {
                   }),
                 ),
               );
+      }
+      if (
+        next.scheduler === 'fsrs' &&
+        data.settings.scheduler === 'fsrs' &&
+        !sameValue(next.fsrsParameters, data.settings.fsrsParameters)
+      ) {
+        states = recomputeMemory(states, data.history, next.desiredRetention, next.fsrsParameters);
       }
       if (!next.scheduling || !next.burySiblings) {
         states = Object.assign(
@@ -398,6 +406,8 @@ export class ReviewStore {
     now = Date.now(),
     step?: SessionStep,
     siblings: string[] = [],
+    /** The card's deck, for per-deck target retention and daily new-card limits. */
+    deck?: string,
   ) {
     if (!/^[A-Za-z0-9_-]+$/.test(cardId)) {
       return Promise.reject(new Error('A stable card ID is required before reviewing.'));
@@ -425,7 +435,7 @@ export class ReviewStore {
           activeSession &&
           !activeSession.examId &&
           !activeSession.extraNew &&
-          newAllowance(data, now) === 0
+          newAllowance(data, now, deck) === 0
         ) {
           throw new Error(
             'Your daily new-card allowance is complete. Skip this card or start a session with extra new cards.',
@@ -437,9 +447,10 @@ export class ReviewStore {
           );
         }
         const scheduled = data.settings.scheduling;
+        const target = deckRetention(data.settings, deck).value;
         const computed =
           data.settings.scheduler === 'fsrs'
-            ? reviewWithFsrs(cardId, previous, rating, now, data.settings.desiredRetention)
+            ? reviewWithFsrs(cardId, previous, rating, now, target, data.settings.fsrsParameters)
             : scheduler.reviewCard(cardId, previous, rating, now);
         const metadata = {
           ...(previous?.flagsAt !== undefined ? { flagsAt: previous.flagsAt } : {}),
@@ -492,9 +503,8 @@ export class ReviewStore {
           rating,
           scheduled,
           scheduler: data.settings.scheduler,
-          ...(data.settings.scheduler === 'fsrs'
-            ? { desiredRetention: data.settings.desiredRetention }
-            : {}),
+          ...(data.settings.scheduler === 'fsrs' ? { desiredRetention: target } : {}),
+          ...(deck ? { deck } : {}),
         };
         // Keep timestamped ratings for memory reconstruction and future personalization.
         return {
@@ -542,6 +552,7 @@ export class ReviewStore {
       data.settings.scheduler === checkpoint.settings.scheduler &&
       data.settings.scheduling === checkpoint.settings.scheduling &&
       data.settings.desiredRetention === checkpoint.settings.desiredRetention &&
+      sameValue(data.settings.fsrsParameters, checkpoint.settings.fsrsParameters) &&
       checkpoint.siblings.every((sibling) => data.states[sibling.id] === sibling.after) &&
       (!checkpoint.sessionBefore ||
         data.sessions.find((s) => s.id === checkpoint.sessionBefore!.id) ===
@@ -804,6 +815,8 @@ export class ReviewStore {
                   state,
                   byCard.get(state.cardId) ?? [],
                   data.settings.desiredRetention,
+                  undefined,
+                  data.settings.fsrsParameters,
                 )
               : state;
         }

@@ -29,6 +29,8 @@ export interface ReviewEvent {
   scheduled: boolean;
   scheduler?: 'simple' | 'fsrs';
   desiredRetention?: number;
+  /** The deck the card was in when rated, so per-deck daily limits can count introductions. */
+  deck?: string;
 }
 export interface Scheduler {
   getCardState(cardId: string, states: Record<string, ReviewState>): ReviewState | undefined;

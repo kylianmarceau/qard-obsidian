@@ -4,9 +4,9 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 const licenses = (
   await Promise.all(
-    ['ts-fsrs', 'fflate', 'fzstd', 'sql.js', 'turndown'].map(
+    ['ts-fsrs', 'fflate', 'fzstd', 'sql.js', 'turndown', 'marked'].map(
       async (name) =>
-        `Includes ${name}:\n${await readFile(`node_modules/${name}/LICENSE`, 'utf8')}`,
+        `Includes ${name}:\n${await readFile(`node_modules/${name}/${name === 'marked' ? 'LICENSE.md' : 'LICENSE'}`, 'utf8')}`,
     ),
   )
 ).join('\n\n');

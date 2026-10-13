@@ -21,8 +21,13 @@ export const retention = (value: unknown): number =>
  * The seed is the card and its review count, not the clock: the interval shown before rating is the one
  * saved after it, and replaying the same ratings (undo, merging synced progress) gives the same dates.
  */
-const engine = (target = 0.9, fuzz?: { cardId: string; reps: number }) => {
+const engine = (
+  target = 0.9,
+  fuzz?: { cardId: string; reps: number },
+  weights?: readonly number[],
+) => {
   const model = fsrs({
+    ...(weights ? { w: [...weights] } : {}),
     request_retention: retention(target),
     enable_fuzz: !!fuzz,
     learning_steps: ['1m', '10m'],
@@ -80,6 +85,7 @@ export function initializeFsrs(
   history: ReviewEvent[],
   target = 0.9,
   now = Date.now(),
+  weights?: readonly number[],
 ): ReviewState {
   if (!state.reviewCount) {
     const { fsrs: _memory, ...fresh } = state;
@@ -97,10 +103,11 @@ export function initializeFsrs(
   if (events.length === state.reviewCount && events[events.length - 1]?.at === state.lastReviewed) {
     memory = createEmptyCard(events[0]!.at);
     for (const e of events) {
-      memory = engine(e.desiredRetention ?? target, {
-        cardId: state.cardId,
-        reps: memory.reps,
-      }).next(memory, e.at, e.rating).card;
+      memory = engine(
+        e.desiredRetention ?? target,
+        { cardId: state.cardId, reps: memory.reps },
+        weights,
+      ).next(memory, e.at, e.rating).card;
     }
     source = 'reviews';
   } else {
@@ -110,7 +117,7 @@ export function initializeFsrs(
         ? state.due - Math.max(0, state.interval) * DAY
         : now;
     const reviewed = validDate(last) ? last : now;
-    memory = engine(target).next(
+    memory = engine(target, undefined, weights).next(
       createEmptyCard(reviewed),
       reviewed,
       [1, 2, 3, 4].includes(state.lastRating ?? 0) ? state.lastRating! : 3,
@@ -131,24 +138,58 @@ export function initializeFsrs(
   }
   return { ...state, lastReviewed: memory.last_review!.getTime(), fsrs: pack(memory, source) };
 }
-export function migrateFsrs(
-  states: Record<string, ReviewState>,
-  history: ReviewEvent[],
-  target: number,
-): Record<string, ReviewState> {
+function groupByCard(history: ReviewEvent[]) {
   const byCard = new Map<string, ReviewEvent[]>();
   for (const e of history) {
     const events = byCard.get(e.cardId) ?? [];
     events.push(e);
     byCard.set(e.cardId, events);
   }
+  return byCard;
+}
+export function migrateFsrs(
+  states: Record<string, ReviewState>,
+  history: ReviewEvent[],
+  target: number,
+  weights?: readonly number[],
+): Record<string, ReviewState> {
+  const byCard = groupByCard(history);
   return Object.assign(
     Object.create(null) as Record<string, ReviewState>,
     Object.fromEntries(
       Object.entries(states).map(([id, state]) => [
         id,
-        initializeFsrs(state, byCard.get(id) ?? [], target),
+        initializeFsrs(state, byCard.get(id) ?? [], target, undefined, weights),
       ]),
+    ),
+  );
+}
+/**
+ * New parameters change what the model believes about each card. Memory built from a complete rating
+ * history is replayed under them; due dates, intervals and estimates from imported schedules stay as they are.
+ */
+export function recomputeMemory(
+  states: Record<string, ReviewState>,
+  history: ReviewEvent[],
+  target: number,
+  weights?: readonly number[],
+): Record<string, ReviewState> {
+  const byCard = groupByCard(history);
+  return Object.assign(
+    Object.create(null) as Record<string, ReviewState>,
+    Object.fromEntries(
+      Object.entries(states).map(([id, state]) => {
+        const events = byCard.get(id) ?? [];
+        if (
+          state.fsrs?.source !== 'reviews' ||
+          events.length !== state.reviewCount ||
+          Math.max(...events.map((e) => e.at)) !== state.lastReviewed
+        ) {
+          return [id, state];
+        }
+        const { fsrs: _memory, ...rest } = state;
+        return [id, initializeFsrs(rest, events, target, undefined, weights)];
+      }),
     ),
   );
 }
@@ -158,15 +199,16 @@ export function reviewWithFsrs(
   rating: Rating,
   now: number,
   target: number,
+  weights?: readonly number[],
 ): ReviewState {
-  const prepared = previous ? initializeFsrs(previous, [], target, now) : undefined;
+  const prepared = previous ? initializeFsrs(previous, [], target, now, weights) : undefined;
   const card =
     prepared?.fsrs && validFsrs(prepared.fsrs) ? unpack(prepared.fsrs) : createEmptyCard(now);
   // A device clock moving backwards must not feed negative elapsed time into the memory model.
   if (card.last_review && card.last_review.getTime() > now) {
     card.last_review = new Date(now);
   }
-  const next = engine(target, { cardId, reps: card.reps }).next(card, now, rating).card;
+  const next = engine(target, { cardId, reps: card.reps }, weights).next(card, now, rating).card;
   return {
     cardId,
     lastReviewed: now,
@@ -195,9 +237,10 @@ export function reviewIntervals(
   previous: ReviewState | undefined,
   now: number,
   target: number,
+  weights?: readonly number[],
 ): string[] {
   return ([1, 2, 3, 4] as Rating[]).map((r) =>
-    intervalLabel(reviewWithFsrs(cardId, previous, r, now, target).interval),
+    intervalLabel(reviewWithFsrs(cardId, previous, r, now, target, weights).interval),
   );
 }
 const median = (values: number[]) => {
@@ -211,6 +254,7 @@ export function memoryStatistics(
   states: Record<string, ReviewState>,
   now: number,
   target: number,
+  weights?: readonly number[],
 ) {
   const seen = new Set<string>(),
     difficulties: number[] = [],
@@ -219,7 +263,7 @@ export function memoryStatistics(
     bins = Array<number>(10).fill(0);
   let estimated = 0,
     belowTarget = 0;
-  const model = engine(target);
+  const model = engine(target, undefined, weights);
   for (const card of cards) {
     if (!card.stable || card.duplicateId || seen.has(card.id)) {
       continue;

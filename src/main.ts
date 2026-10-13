@@ -8,6 +8,7 @@ import { CardWriter } from './cards/card-writer';
 import { ReviewStore, type ProgressFile } from './review/review-store';
 import { ProgressBackups } from './review/progress-backups';
 import { BackupModal } from './settings/BackupModal';
+import { OptimizerModal } from './settings/OptimizerModal';
 import { QardSettingsTab } from './settings/SettingsTab';
 import { TransferModal, type TransferMode } from './settings/TransferModal';
 import { SelectionModal } from './views/SelectionModal';
@@ -15,7 +16,7 @@ import { ImportModal } from './views/ImportModal';
 import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
-import { parseCards, locationAtLine } from './cards/parser';
+import { parseCards, locationAtLine, setDeckNaming } from './cards/parser';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
 import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
@@ -47,6 +48,7 @@ export default class QardPlugin extends Plugin {
   private disposed = false;
   private selectionModals = new Set<SelectionModal>();
   private backupModals = new Set<BackupModal>();
+  private optimizerModals = new Set<OptimizerModal>();
   async onload() {
     const folder = `${this.app.vault.configDir}/plugins/${this.manifest.id}/study-backups`;
     const adapter = this.app.vault.adapter;
@@ -122,6 +124,16 @@ export default class QardPlugin extends Plugin {
       );
     }
   }
+  openOptimizer() {
+    const modal = new OptimizerModal(this);
+    this.optimizerModals.add(modal);
+    const close = modal.onClose.bind(modal);
+    modal.onClose = () => {
+      close();
+      this.optimizerModals.delete(modal);
+    };
+    modal.open();
+  }
   openBackups() {
     const modal = new BackupModal(this);
     this.backupModals.add(modal);
@@ -137,6 +149,19 @@ export default class QardPlugin extends Plugin {
     this.index = new VaultIndexer(this.app, this);
     this.writer = new CardWriter(this.app, this.index);
     const settings = () => this.reviews.getSnapshot().settings;
+    // Deck names from folders change how every note is read, so the whole index follows the setting.
+    let naming = settings().deckNaming;
+    setDeckNaming(naming);
+    this.register(
+      this.reviews.subscribe(() => {
+        const next = settings().deckNaming;
+        if (next !== naming) {
+          naming = next;
+          setDeckNaming(next);
+          void this.index.reindex();
+        }
+      }),
+    );
     // Every run's tokens are added to per-day totals by feature, role, connection and model.
     const record = (e: UsageEvent) =>
       void this.reviews
@@ -488,6 +513,8 @@ export default class QardPlugin extends Plugin {
     this.selectionModals.clear();
     this.backupModals.forEach((modal) => modal.close());
     this.backupModals.clear();
+    this.optimizerModals.forEach((modal) => modal.close());
+    this.optimizerModals.clear();
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach((leaf) => {
       if (leaf.view instanceof QardView) {
         leaf.view.release();

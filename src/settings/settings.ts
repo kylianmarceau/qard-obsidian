@@ -4,6 +4,7 @@ import {
   type CustomConnection,
 } from '../agents/custom-connection';
 import { retention } from '../review/fsrs-scheduler';
+import { clip, validParameters } from '../review/fsrs-optimizer';
 import type { CardOrder, StudyMode } from '../review/session';
 import type { AgentProvider, AgentRole } from '../agents/runner';
 export interface TestSettings {
@@ -29,6 +30,12 @@ export interface LearnSettings {
   folder: string;
   figures: string;
 }
+/** Overrides for one deck and, unless they set their own, the decks nested under it. */
+export interface DeckOptions {
+  desiredRetention?: number;
+  /** Daily new-card limit for this deck and its subdecks together; absent means no deck limit. */
+  newCardsPerDay?: number;
+}
 export interface QardSettings {
   defaultMode: StudyMode;
   defaultOrder: CardOrder;
@@ -40,9 +47,15 @@ export interface QardSettings {
   burySiblings: boolean;
   scheduler: 'simple' | 'fsrs';
   desiredRetention: number;
+  /** FSRS parameters fitted to this user's reviews; absent means the published defaults. */
+  fsrsParameters?: number[];
   newCardsPerDay: number;
   reviewBatchSize: number;
   typedAnswers: boolean;
+  /** Notes without `qard-deck` are named after the note, or after their folder path as nested decks. */
+  deckNaming: 'note' | 'folder';
+  /** Keyed by canonical deck name, such as `Biology::Cells`. */
+  deckOptions: Record<string, DeckOptions>;
   tests: TestSettings;
   agents: AgentSettings;
   learn: LearnSettings;
@@ -82,6 +95,8 @@ export const DEFAULT_SETTINGS: QardSettings = {
   newCardsPerDay: 0,
   reviewBatchSize: 0,
   typedAnswers: false,
+  deckNaming: 'note',
+  deckOptions: {},
   tests: DEFAULT_TEST_SETTINGS,
   agents: DEFAULT_AGENT_SETTINGS,
   learn: DEFAULT_LEARN_SETTINGS,
@@ -162,6 +177,31 @@ function readLearnSettings(raw: unknown): LearnSettings {
     figures: typeof l.figures === 'string' && l.figures.trim() ? l.figures : d.figures,
   };
 }
+function readDeckOptions(raw: unknown): Record<string, DeckOptions> {
+  const result: Record<string, DeckOptions> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return result;
+  }
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>).slice(0, 2000)) {
+    const o = value && typeof value === 'object' ? (value as DeckOptions) : {};
+    const options: DeckOptions = {
+      ...(typeof o.desiredRetention === 'number' &&
+      o.desiredRetention >= 0.7 &&
+      o.desiredRetention <= 0.97
+        ? { desiredRetention: o.desiredRetention }
+        : {}),
+      ...(Number.isSafeInteger(o.newCardsPerDay) &&
+      o.newCardsPerDay! > 0 &&
+      o.newCardsPerDay! <= 10000
+        ? { newCardsPerDay: o.newCardsPerDay! }
+        : {}),
+    };
+    if (name.trim() && name.length <= 1000 && Object.keys(options).length) {
+      result[name] = options;
+    }
+  }
+  return result;
+}
 export function readSettings(raw: unknown): QardSettings {
   const s = raw && typeof raw === 'object' ? (raw as Partial<QardSettings>) : {};
   return {
@@ -177,6 +217,7 @@ export function readSettings(raw: unknown): QardSettings {
     burySiblings: s.burySiblings !== false,
     scheduler: s.scheduler === 'simple' ? 'simple' : 'fsrs',
     desiredRetention: retention(s.desiredRetention),
+    ...(validParameters(s.fsrsParameters) ? { fsrsParameters: clip(s.fsrsParameters) } : {}),
     newCardsPerDay:
       Number.isSafeInteger(s.newCardsPerDay) && s.newCardsPerDay! >= 0 && s.newCardsPerDay! <= 10000
         ? s.newCardsPerDay!
@@ -188,6 +229,8 @@ export function readSettings(raw: unknown): QardSettings {
         ? s.reviewBatchSize!
         : 0,
     typedAnswers: s.typedAnswers === true,
+    deckNaming: s.deckNaming === 'folder' ? 'folder' : 'note',
+    deckOptions: readDeckOptions(s.deckOptions),
     tests: readTestSettings(s.tests),
     agents: readAgentSettings(s.agents, s.tests),
     learn: readLearnSettings(s.learn),

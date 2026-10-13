@@ -34,6 +34,8 @@ export class TransferModal extends Modal {
   private deck = 'Imported';
   private topic = 'General';
   private exportDeck = '';
+  private exportAnki = false;
+  private exportProgress = true;
   private exportDecks: string[] = [];
   private page = 0;
   private busy = false;
@@ -498,7 +500,9 @@ export class TransferModal extends Modal {
   private renderExport() {
     const el = this.contentEl;
     el.createEl('p', {
-      text: 'Export questions, answers, decks, topics, tags and sibling groups as UTF-8 Markdown text. CSV/TSV does not include review history or attachment files; copy linked attachments separately when moving to another vault.',
+      text: this.exportAnki
+        ? 'Export an Anki package with decks, tags, linked images and audio, and optionally your review progress. Topics become subdecks. Image-occlusion cards are not included.'
+        : 'Export questions, answers, decks, topics, tags and sibling groups as UTF-8 Markdown text. CSV/TSV does not include review history or attachment files; copy linked attachments separately when moving to another vault.',
     });
     new Setting(el).setName('Deck').addDropdown((d) =>
       d
@@ -511,13 +515,30 @@ export class TransferModal extends Modal {
     );
     new Setting(el).setName('Format').addDropdown((d) =>
       d
-        .addOptions({ csv: 'CSV', tsv: 'TSV' })
-        .setValue(this.delimiter === ',' ? 'csv' : 'tsv')
+        .addOptions({ csv: 'CSV', tsv: 'TSV', anki: 'Anki package (.apkg)' })
+        .setValue(this.exportAnki ? 'anki' : this.delimiter === ',' ? 'csv' : 'tsv')
         .setDisabled(this.busy)
         .onChange((v) => {
-          this.delimiter = v === 'csv' ? ',' : '\t';
+          this.exportAnki = v === 'anki';
+          if (!this.exportAnki) {
+            this.delimiter = v === 'csv' ? ',' : '\t';
+          }
+          this.render();
         }),
     );
+    if (this.exportAnki) {
+      new Setting(el)
+        .setName('Include review progress')
+        .setDesc('Due dates, intervals, FSRS memory and rating history. Turn off to share a deck.')
+        .addToggle((t) =>
+          t
+            .setValue(this.exportProgress)
+            .setDisabled(this.busy)
+            .onChange((v) => {
+              this.exportProgress = v;
+            }),
+        );
+    }
     new Setting(el)
       .setName('Export folder')
       .setDesc('Save a new file in the vault, ready to copy or share.')
@@ -549,17 +570,28 @@ export class TransferModal extends Modal {
     this.error = '';
     this.render();
     try {
-      const result = await this.service.export(
-        this.exportFolder,
-        this.delimiter,
-        this.exportDeck || undefined,
-      );
+      const deck = this.exportDeck || undefined;
+      let skipped = 0,
+        result: { path: string; cards: number };
+      if (this.exportAnki) {
+        const saved = await this.service.exportAnki(this.exportFolder, deck, this.exportProgress);
+        skipped = saved.skipped;
+        result = saved;
+      } else {
+        result = await this.service.export(this.exportFolder, this.delimiter, deck);
+      }
       if (!this.opened) {
         return;
       }
       this.busy = false;
       this.contentEl.empty();
       this.contentEl.createEl('p', { text: `Exported ${result.cards} cards to ${result.path}.` });
+      if (skipped) {
+        this.contentEl.createEl('p', {
+          text: `${skipped} image-occlusion ${skipped === 1 ? 'card was' : 'cards were'} not exported.`,
+          cls: 'qard-import-warning',
+        });
+      }
       this.closeButton();
     } catch (e) {
       if (this.opened) {
