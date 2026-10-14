@@ -3,7 +3,9 @@ import { isBuried } from '../review/scheduler';
 import { dueLabel } from '../review/due-label';
 import { CardSourceLinks } from './CardSourceLinks';
 import { useState, useSyncExternalStore } from 'react';
-import { Trash2, Play, Pause } from 'lucide-react';
+import { Trash2, Play, Pause, ArrowLeftRight } from 'lucide-react';
+import { canReverse } from '../cards/source-patch';
+import { cardTitle } from '../cards/card-format';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { CardContent } from './CardContent';
@@ -26,6 +28,7 @@ export function CardPreview({
   const schedule = dueLabel(saved.states[card.id], Date.now(), saved.settings.scheduling);
   const [editing, setEditing] = useState(false),
     [confirm, setConfirm] = useState(false),
+    [confirmUnlink, setConfirmUnlink] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   if (editing) {
@@ -51,6 +54,23 @@ export function CardPreview({
       }
       await services.reviews.setPaused(stable.id, !paused);
       changed(stable);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const partner = card.reverseId
+    ? services.index.getSnapshot().cards.find((c) => c.id === card.reverseId)
+    : undefined;
+  async function reverse(add: boolean) {
+    setBusy(true);
+    setError('');
+    try {
+      changed(
+        add ? await services.writer.addReverse(card) : await services.writer.removeReverse(card),
+      );
+      setConfirmUnlink(false);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -83,6 +103,24 @@ export function CardPreview({
             {paused ? <Play size={15} /> : <Pause size={15} />}
             {paused ? 'Resume card' : 'Pause card'}
           </button>
+          {canReverse(card) ? (
+            <button
+              disabled={busy}
+              title="Also test this card from back to front, with its own schedule"
+              onClick={() => void reverse(true)}
+            >
+              <ArrowLeftRight size={15} />
+              Add reverse
+            </button>
+          ) : (
+            card.reverseId &&
+            !card.duplicateId && (
+              <button disabled={busy} onClick={() => setConfirmUnlink(true)}>
+                <ArrowLeftRight size={15} />
+                Remove reverse
+              </button>
+            )
+          )}
           <button
             className="qard-icon-button"
             aria-label="Delete card"
@@ -160,6 +198,25 @@ export function CardPreview({
           </button>
           <button className="qard-danger" disabled={busy} onClick={() => void remove()}>
             {busy ? 'Deleting…' : 'Delete card'}
+          </button>
+        </div>
+      )}
+      {confirmUnlink && (
+        <div className="qard-confirm" role="alert">
+          <div>
+            <strong>Remove the reverse card?</strong>
+            <p>
+              {partner
+                ? `“${cardTitle(partner.frontMarkdown)}” is deleted from your note and its review history is lost.`
+                : 'The reverse card is deleted from your note and its review history is lost.'}{' '}
+              This card keeps its own schedule.
+            </p>
+          </div>
+          <button disabled={busy} onClick={() => setConfirmUnlink(false)}>
+            Keep both
+          </button>
+          <button className="qard-danger" disabled={busy} onClick={() => void reverse(false)}>
+            {busy ? 'Removing…' : 'Remove reverse'}
           </button>
         </div>
       )}

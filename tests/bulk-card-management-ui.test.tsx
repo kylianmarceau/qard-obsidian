@@ -76,6 +76,7 @@ async function render(count = 3) {
     const management: CardManagement = {
       decks: snapshot.decks,
       update,
+      reverse: (selected) => writer.addReverses(selected),
       move: async (selected, destination) => {
         await move(selected, destination);
         setDeck(destination.deck.trim());
@@ -216,4 +217,18 @@ it('excludes duplicate IDs from topic and whole-deck selection', async () => {
   expect(host.querySelector('.qard-bulk-actions')?.textContent).toContain('1 selected');
   await click('Pause');
   expect(update.mock.calls[0]![0]).toEqual([cards[1]]);
+});
+
+it('adds reverse cards to selected basic cards and reports the ones it skipped', async () => {
+  const f = await render(2);
+  await click('Select cards');
+  await check('Select topic Cells');
+  await click('Add reverse');
+  expect(host.textContent).toContain('Added reverse cards for 2 cards.');
+  const cards = f.index.getSnapshot().cards;
+  expect(cards).toHaveLength(4);
+  expect(cards.filter((card) => card.reverseId)).toHaveLength(4);
+  await check('Select topic Cells');
+  await click('Add reverse');
+  expect(host.textContent).toContain('Added reverse cards for 0 cards. 4 skipped');
 });

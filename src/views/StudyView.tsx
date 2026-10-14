@@ -39,7 +39,13 @@ import type { QardCard } from '../cards/card-types';
 import type { Rating } from '../review/scheduler';
 import type { SessionResult, SessionStyle } from '../review/session';
 import type { QardServices } from './services';
-import { ignoresStudyKey } from '../review/keyboard';
+import {
+  ignoresStudyKey,
+  keyLabel,
+  RATING_ACTIONS,
+  studyActionFor,
+  type StudyAction,
+} from '../review/keyboard';
 const ratings: { rating: Rating; name: string; hint: string }[] = [
   { rating: 1, name: 'Again', hint: 'I forgot the answer' },
   { rating: 2, name: 'Hard', hint: 'I recalled it with effort' },
@@ -77,6 +83,7 @@ export function StudyView({
   cards = cards.map((card) => edits[card.id] ?? card);
   const cram = style === 'cram';
   const saved = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const keys = saved.settings.studyKeys;
   const [learning, setLearning] = useState<LearningReview | undefined>(() =>
     session?.repeatLearning
       ? pendingLearning(session, saved.states).find((entry) => entry.due <= Date.now())
@@ -441,38 +448,89 @@ export function StudyView({
     setFocus(false);
     setEditing(true);
   }
+  /** One route for study keys and Obsidian commands, with the same rules as the buttons. */
+  function command(action: StudyAction, checking: boolean): boolean {
+    if (editing) {
+      return false;
+    }
+    if (action === 'focus') {
+      if (!checking) {
+        setFocus((v) => !v);
+      }
+      return true;
+    }
+    if (action === 'leave') {
+      if (!checking) {
+        if (card || waiting) {
+          setConfirmExit(true);
+        } else {
+          exit();
+        }
+      }
+      return true;
+    }
+    if (recording || confirmExit || lock.current) {
+      return false;
+    }
+    if (action === 'undo') {
+      if (!canUndo) {
+        return false;
+      }
+      if (!checking) {
+        void undoLast();
+      }
+      return true;
+    }
+    if (!card || navigationLock.current) {
+      return false;
+    }
+    const run = (available: boolean, work: () => unknown) => {
+      if (available && !checking) {
+        work();
+      }
+      return available;
+    };
+    switch (action) {
+      case 'edit':
+        return run(!courseUndo && !card.duplicateId, editCard);
+      case 'skip':
+        return run(!courseUndo, () => void skip());
+      case 'pause':
+        return run(!courseUndo && !paused && !buried, () => void skip(true));
+      case 'reveal':
+        return run(true, () => {
+          // The ref, not this render's state, so a quick double press can't advance twice.
+          if (cram && actions.current.revealed) {
+            void advance();
+          } else if (cram) {
+            actions.current.revealed = true;
+            setRevealed(true);
+          } else {
+            setRevealed((v) => !v);
+          }
+        });
+      default:
+        return run(
+          !cram && revealed && !paused && !buried && !courseUndo,
+          () => void rate((RATING_ACTIONS.indexOf(action) + 1) as Rating),
+        );
+    }
+  }
   const onRepairBusy = useCallback((value: boolean) => {
     lock.current = value;
     setBusy(value);
   }, []);
-  const actions = useRef({
-    rate,
-    editCard,
-    editing,
-    advance,
-    undoLast,
-    skip,
-    focus,
-    revealed,
-    recording,
-    confirmExit,
-  });
-  actions.current = {
-    rate,
-    editCard,
-    editing,
-    advance,
-    undoLast,
-    skip,
-    focus,
-    revealed,
-    recording,
-    confirmExit,
-  };
+  const actions = useRef({ command, editing, focus, revealed, keys });
+  actions.current = { command, editing, focus, revealed, keys };
+  useEffect(() => {
+    services.setStudyCommands?.((action, checking) => actions.current.command(action, checking));
+    return () => services.setStudyCommands?.(undefined);
+  }, [services]);
   useEffect(() => {
     const doc = services.host.ownerDocument;
     const handler = (event: KeyboardEvent) => {
-      if (!services.isActive() || ignoresStudyKey(event)) {
+      // An Obsidian hotkey that already ran a Qard command marks its key as handled.
+      if (event.defaultPrevented || !services.isActive() || ignoresStudyKey(event)) {
         return;
       }
       const current = actions.current;
@@ -491,60 +549,18 @@ export function StudyView({
         }
         return;
       }
-      if (event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        event.stopPropagation();
-        setFocus((v) => !v);
+      const action = studyActionFor(event, current.keys);
+      if (!action) {
         return;
       }
-      if (
-        event.key.toLowerCase() === 'u' &&
-        !current.recording &&
-        !current.confirmExit &&
-        !lock.current
-      ) {
+      if (current.command(action, true)) {
         event.preventDefault();
         event.stopPropagation();
-        void current.undoLast();
-        return;
-      }
-      if (
-        !card ||
-        current.recording ||
-        current.confirmExit ||
-        lock.current ||
-        navigationLock.current
-      ) {
-        return;
-      }
-      const key = event.key.toLowerCase();
-      if (key === 'e') {
+        current.command(action, false);
+      } else if (card && !cram && (RATING_ACTIONS as readonly string[]).includes(action)) {
+        // Rating keys stay inside the session even before the answer is shown.
         event.preventDefault();
         event.stopPropagation();
-        current.editCard();
-        return;
-      }
-      if (key === 's') {
-        event.preventDefault();
-        event.stopPropagation();
-        void current.skip();
-        return;
-      }
-      if (key === ' ' || (!cram && ['1', '2', '3', '4'].includes(key))) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (key === ' ') {
-          if (cram && current.revealed) {
-            void current.advance();
-          } else if (cram) {
-            current.revealed = true;
-            setRevealed(true);
-          } else {
-            setRevealed((v) => !v);
-          }
-        } else if (current.revealed) {
-          void current.rate(Number(key) as Rating);
-        }
       }
     };
     doc.addEventListener('keydown', handler, true);
@@ -603,7 +619,7 @@ export function StudyView({
         <div className="qard-actions">
           {canUndo && (
             <button disabled={busy || !!courseUndo} onClick={() => void undoLast()}>
-              Undo last rating{saved.settings.keyboardHints && <kbd>U</kbd>}
+              Undo last rating{saved.settings.keyboardHints && <kbd>{keyLabel(keys.undo)}</kbd>}
             </button>
           )}
           <button className="qard-primary" disabled={busy} onClick={exit}>
@@ -706,7 +722,7 @@ export function StudyView({
           {canUndo && (
             <button disabled={busy} onClick={() => void undoLast()}>
               <Undo2 size={16} />
-              Undo last rating{saved.settings.keyboardHints && <kbd>U</kbd>}
+              Undo last rating{saved.settings.keyboardHints && <kbd>{keyLabel(keys.undo)}</kbd>}
             </button>
           )}
           {activeCards.some((c) => skipped.includes(c.id)) && (
@@ -786,7 +802,7 @@ export function StudyView({
           onClick={() => setFocus(!focus)}
         >
           {focus ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
-          {saved.settings.keyboardHints && <kbd>F</kbd>}
+          {saved.settings.keyboardHints && <kbd>{keyLabel(keys.focus)}</kbd>}
         </button>
       </div>
       {confirmExit && (
@@ -876,7 +892,7 @@ export function StudyView({
               disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}
               onClick={() => void advance()}
             >
-              Next card {saved.settings.keyboardHints && <kbd>Space</kbd>}
+              Next card {saved.settings.keyboardHints && <kbd>{keyLabel(keys.reveal)}</kbd>}
             </button>
           ) : revealed ? (
             <>
@@ -907,7 +923,9 @@ export function StudyView({
                             {intervals[r.rating - 1]}
                           </small>
                         )}
-                        {saved.settings.keyboardHints && <kbd>{r.rating}</kbd>}
+                        {saved.settings.keyboardHints && (
+                          <kbd>{keyLabel(keys[RATING_ACTIONS[r.rating - 1]!])}</kbd>
+                        )}
                       </span>
                     )}
                   </button>
@@ -918,7 +936,7 @@ export function StudyView({
                 onClick={() => setRevealed(false)}
                 disabled={recording}
               >
-                Hide answer {saved.settings.keyboardHints && <kbd>Space</kbd>}
+                Hide answer {saved.settings.keyboardHints && <kbd>{keyLabel(keys.reveal)}</kbd>}
               </button>
             </>
           ) : (
@@ -927,7 +945,7 @@ export function StudyView({
               disabled={busy || recording || confirmExit || !!courseUndo}
               onClick={() => setRevealed(true)}
             >
-              Reveal answer {saved.settings.keyboardHints && <kbd>Space</kbd>}
+              Reveal answer {saved.settings.keyboardHints && <kbd>{keyLabel(keys.reveal)}</kbd>}
             </button>
           )}
         </div>
@@ -953,7 +971,7 @@ export function StudyView({
                 onClick={() => void undoLast()}
               >
                 <Undo2 size={14} />
-                Undo{saved.settings.keyboardHints && <kbd>U</kbd>}
+                Undo{saved.settings.keyboardHints && <kbd>{keyLabel(keys.undo)}</kbd>}
               </button>
             )}
             <button
@@ -962,7 +980,7 @@ export function StudyView({
               onClick={() => void skip()}
             >
               <SkipForward size={14} />
-              Skip{saved.settings.keyboardHints && <kbd>S</kbd>}
+              Skip{saved.settings.keyboardHints && <kbd>{keyLabel(keys.skip)}</kbd>}
             </button>
             <button
               disabled={busy || recording || confirmExit || paused || buried || !!courseUndo}

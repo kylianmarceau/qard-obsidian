@@ -7,6 +7,7 @@ import { retention } from '../review/fsrs-scheduler';
 import { clip, validParameters } from '../review/fsrs-optimizer';
 import type { CardOrder, StudyMode } from '../review/session';
 import type { AgentProvider, AgentRole } from '../agents/runner';
+import { DEFAULT_STUDY_KEYS, readStudyKeys, type StudyKeys } from '../review/keyboard';
 export interface TestSettings {
   planFirst: boolean;
   marking: 'section' | 'end';
@@ -37,9 +38,13 @@ export interface DeckOptions {
   newCardsPerDay?: number;
 }
 export interface QardSettings {
+  /** Off hides every AI feature and stops AI work; tests, courses and connections are kept. */
+  aiEnabled: boolean;
   defaultMode: StudyMode;
   defaultOrder: CardOrder;
   keyboardHints: boolean;
+  /** Single keys used while reviewing cards. */
+  studyKeys: StudyKeys;
   autoFocus: boolean;
   audioEnabled: boolean;
   cardFolder: string;
@@ -82,9 +87,11 @@ export const DEFAULT_AGENT_SETTINGS: AgentSettings = {
 };
 export const DEFAULT_LEARN_SETTINGS: LearnSettings = { folder: 'Qard', figures: 'assets' };
 export const DEFAULT_SETTINGS: QardSettings = {
+  aiEnabled: true,
   defaultMode: 'all',
   defaultOrder: 'note',
   keyboardHints: true,
+  studyKeys: DEFAULT_STUDY_KEYS,
   autoFocus: false,
   audioEnabled: false,
   cardFolder: 'Qard',
@@ -205,11 +212,13 @@ function readDeckOptions(raw: unknown): Record<string, DeckOptions> {
 export function readSettings(raw: unknown): QardSettings {
   const s = raw && typeof raw === 'object' ? (raw as Partial<QardSettings>) : {};
   return {
+    aiEnabled: s.aiEnabled !== false,
     defaultMode: ['all', 'due', 'new', 'difficult'].includes(s.defaultMode || '')
       ? s.defaultMode!
       : 'all',
     defaultOrder: s.defaultOrder === 'shuffle' ? 'shuffle' : 'note',
     keyboardHints: s.keyboardHints !== false,
+    studyKeys: readStudyKeys(s.studyKeys),
     autoFocus: s.autoFocus === true,
     audioEnabled: s.audioEnabled === true,
     cardFolder: typeof s.cardFolder === 'string' ? s.cardFolder : 'Qard',
@@ -237,3 +246,7 @@ export function readSettings(raw: unknown): QardSettings {
     showAgent: s.showAgent !== false,
   };
 }
+
+/** Whether AI features are on. Every AI entry point and background job checks this. */
+export const aiOn = (settings: Pick<QardSettings, 'aiEnabled'>): boolean =>
+  settings.aiEnabled !== false;

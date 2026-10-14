@@ -276,3 +276,38 @@ it('shows the live due count and opens Today without starting a combined review'
   expect(services.reviews.getSnapshot().sessions).toHaveLength(0);
   expect(start).not.toHaveBeenCalled();
 });
+
+it('keeps due cards but leaves out AI checks and lessons while AI features are off', async () => {
+  const learn = services.learn as unknown as {
+    todayList: () => Promise<unknown>;
+    prepare: ReturnType<typeof vi.fn>;
+  };
+  const item = {
+    mastery: 'M.md',
+    objective: 'o',
+    title: 'Objective',
+    course: 'C',
+    state: 'taught',
+    due: '2026-10-10',
+    check: 'c.json',
+  };
+  learn.todayList = async () => ({ checks: [item], lessons: [item], moreLessons: 0, cards: 3 });
+  await services.reviews.saveSettings({
+    ...services.reviews.getSnapshot().settings,
+    aiEnabled: false,
+  });
+  await mount();
+  expect(host.textContent).toContain('3 due cards · 2 decks');
+  expect(host.textContent).not.toContain('Checks');
+  expect(host.textContent).not.toContain('Lessons');
+  expect(learn.prepare).not.toHaveBeenCalled();
+  await act(async () => {
+    await services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      aiEnabled: true,
+    });
+    await tick();
+  });
+  expect(host.textContent).toContain('Checks');
+  expect(learn.prepare).toHaveBeenCalled();
+});

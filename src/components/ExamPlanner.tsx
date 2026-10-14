@@ -20,7 +20,8 @@ export function ExamPlanner({
   services: QardServices;
   start: (cards: QardCard[], examId: string) => Promise<void>;
   resume: (id: string) => Promise<void>;
-  test: (prompt: string) => void;
+  /** Absent while AI features are off. */
+  test?: (prompt: string) => void;
   back: () => void;
   tests?: () => void;
   learn?: () => void;
@@ -237,17 +238,19 @@ export function ExamPlanner({
                         ? 'Resume exam session'
                         : "Study today's cards"}
                   </button>
-                  <button
-                    className="qard-text-button"
-                    disabled={!!busy || !p.selected.length || index.loading}
-                    onClick={() =>
-                      test(
-                        `Prepare a practice test for ${plan.name}, exam date ${plan.date}. Focus on these Qard decks/topics: ${[...new Set(p.selected.map((card) => `${card.deck} / ${card.topic}`))].join('; ')}. Use these source notes: ${[...new Set(p.selected.map((card) => card.sourceFile))].join(', ')}.`,
-                      )
-                    }
-                  >
-                    Create practice test
-                  </button>
+                  {test && (
+                    <button
+                      className="qard-text-button"
+                      disabled={!!busy || !p.selected.length || index.loading}
+                      onClick={() =>
+                        test(
+                          `Prepare a practice test for ${plan.name}, exam date ${plan.date}. Focus on these Qard decks/topics: ${[...new Set(p.selected.map((card) => `${card.deck} / ${card.topic}`))].join('; ')}. Use these source notes: ${[...new Set(p.selected.map((card) => card.sourceFile))].join(', ')}.`,
+                        )
+                      }
+                    >
+                      Create practice test
+                    </button>
+                  )}
                 </div>
                 <button
                   className="qard-exam-details-toggle"

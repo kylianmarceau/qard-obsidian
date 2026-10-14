@@ -106,3 +106,37 @@ export const requestUrl = async () => ({ status: 200, json: {} });
 export const loadPdfJs = async (): Promise<never> => {
   throw new Error('PDF.js is not loaded in tests; pass a fake to PdfReader.');
 };
+// Workspace view stand-ins: enough for views that render React into contentEl.
+export class WorkspaceLeaf {
+  view: unknown;
+}
+export class ItemView extends Component {
+  contentEl =
+    typeof document === 'undefined'
+      ? ({} as HTMLElement)
+      : Object.assign(document.createElement('div'), {
+          empty(this: HTMLElement) {
+            this.replaceChildren();
+          },
+          createDiv(this: HTMLElement, options?: { cls?: string }) {
+            const div = document.createElement('div');
+            if (options?.cls) div.className = options.cls;
+            this.append(div);
+            return div;
+          },
+        });
+  app: unknown;
+  constructor(public leaf: WorkspaceLeaf) {
+    super();
+  }
+}
+export class Scope {
+  handlers: { modifiers: string[] | null; key: string | null; func: () => unknown }[] = [];
+  constructor(public parent?: Scope) {}
+  register(modifiers: string[] | null, key: string | null, func: () => unknown) {
+    const handler = { modifiers, key, func };
+    this.handlers.push(handler);
+    return handler;
+  }
+  unregister() {}
+}

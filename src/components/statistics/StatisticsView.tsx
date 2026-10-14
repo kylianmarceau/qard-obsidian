@@ -38,10 +38,12 @@ export function StatisticsView({
   services,
   back,
   study,
+  time,
 }: {
   services: QardServices;
   back: () => void;
   study: (deck?: string) => void;
+  time?: () => void;
 }) {
   const data = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
@@ -101,9 +103,16 @@ export function StatisticsView({
             {cards.decks.length === 1 ? 'deck' : 'decks'}
           </p>
         </div>
-        <button className="qard-primary" onClick={() => study()}>
-          Study cards <ArrowUpRight size={15} />
-        </button>
+        <div className="qard-actions">
+          {time && (
+            <button className="qard-text-button" onClick={time}>
+              Study time
+            </button>
+          )}
+          <button className="qard-primary" onClick={() => study()}>
+            Study cards <ArrowUpRight size={15} />
+          </button>
+        </div>
       </div>
 
       <section aria-label="Review performance" className="qard-stats-performance">

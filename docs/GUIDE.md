@@ -113,6 +113,18 @@ The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard
 
 For example, `networking-1.md` and `networking-2.md` can both declare `qard-deck: Computer Networks`; they appear as one deck. Topics with the same name in that deck merge too. Within a deck, note paths are sorted and cards keep their source order.
 
+### Where new cards go
+
+**New card** adds to the notes you already have instead of making a new note each time. A card goes after the last card of its topic in the deck's note. If the topic has a heading but no cards yet, it goes at the end of that heading's section. Otherwise Qard adds a `# Topic` heading at the end of the note. A new note, named after the deck in your **New-card folder**, is only created when the deck has no note yet. Below the fields, the editor shows **Adds to** with the note and topic, or **Creates** with the new note's name.
+
+When a deck spans several notes, Qard picks the note that already holds the topic (the one with the most cards of it), then a note with that `qard-deck` in your New-card folder, then any note with that `qard-deck`. A note whose `qard-topic` names another topic is never used. A deck named after a folder never has an unrelated note picked for it. Cloze and image cards from the editor follow the same rules as basic cards.
+
+**Add card** (or Ctrl/Cmd + Enter) saves the card and starts the next one with the same deck, topic and card type, so you can add several in a row. Choose **Done** when you're finished to open the deck. The topic field suggests the deck's existing topics. Inside a deck, the **+** beside a topic opens New card already set to that deck and topic. The editor remembers the last card type, deck and topic you used until Obsidian closes.
+
+**Qard: New card** opens the same editor in the right sidebar, beside the note you are reading, so you can copy from the note while you write. From a note that has cards, it starts on that note's deck and the topic at the cursor, and saves cards into that note. The panel stays open between cards; **Show in note** opens the card you just added.
+
+Writing callouts by hand works too. **Qard: Insert card** adds a card template after the card at the cursor, or below the current line, with the question selected so you can start typing.
+
 ### Manage several cards
 
 Open a deck and choose **Select cards**. Select individual cards, check a topic to select all its matching cards (including cards not yet displayed), or choose **Select matching cards** for the whole deck or current search. Changing the search clears the selection. Cards with duplicate IDs cannot be selected until their IDs are fixed.
@@ -176,9 +188,11 @@ The editor, delete action and ID assignment use `Vault.process` and replace only
 
 ## Linked reverse pairs
 
-For a basic question/answer card, **Also test the reverse** creates a linked pair. Each direction has its own stable identity, review history and schedule. They share a sibling group, so normal study defers the opposite direction until tomorrow by default; cram includes both. Editing either direction updates both in one note write. A missing, manually altered or ambiguous partner stops the edit to protect your notes. Deleting one direction leaves the other as an independent basic card.
+For a basic question/answer card, choose **Basic + reverse** as the card type to create a linked pair. Each direction has its own stable identity, review history and schedule. They share a sibling group, so normal study defers the opposite direction until tomorrow by default; cram includes both. Editing either direction updates both in one note write. A missing, manually altered or ambiguous partner stops the edit to protect your notes. Deleting one direction leaves the other as an independent basic card.
 
-The pair uses ordinary callouts with reciprocal `<!-- qard-reverse: PARTNER_ID -->` comments and a shared `qard-siblings` comment. Preserve these comments when editing Markdown. Cloze and image cards use their existing variants instead of reverse pairs.
+To reverse a card you already have, open its preview and choose **Add reverse**. To reverse many at once, choose **Select cards** in a deck, then **Add reverse**; cards that are not basic, or already have a reverse, are skipped and counted. The original card keeps its ID, history and schedule; the new opposite card starts fresh. **Remove reverse** in the preview deletes the opposite card and its review history after you confirm, and the card you opened keeps its own schedule. In a note, **Qard: Make card at cursor reversed** turns the basic card at the cursor into a pair in one undoable change.
+
+The pair uses ordinary callouts with reciprocal `<!-- qard-reverse: PARTNER_ID -->` comments and a shared `qard-siblings` comment. Preserve these comments when editing Markdown. Both directions must stay exact opposites, or editing is blocked to protect your notes, so let Qard create the pair rather than typing the second card yourself. Cloze and image cards use their existing variants instead of reverse pairs.
 
 ## Cloze cards and image occlusion
 
@@ -235,6 +249,10 @@ Order can be deck/note order or shuffle. The session shows progress through the 
 | F | Toggle focus mode |
 | Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
 
+Change any of these keys, except Escape, under **Settings → Qard → Study keys**: choose **Customise**, click an action and press the key you want. A key already used by another action is swapped with it, and **Reset to defaults** restores the table above. The rating keys also work by their position on the keyboard, so 1–4 rate on AZERTY layouts without Shift. Keyboard hints on the study buttons show your keys.
+
+Every study action is also a command: **Show or hide answer**, **Rate Again/Hard/Good/Easy**, **Undo last rating**, **Skip card**, **Pause card**, **Edit card**, **Toggle focus mode** and **Leave study session**. Bind them in **Settings → Hotkeys** to use key combinations. They only run during a card session in the Qard tab in front.
+
 **Undo** restores the last rating's schedule, FSRS memory, history, statistics and saved session position. The card returns with its answer hidden. It is available until you rate, skip or pause another card or leave this study view; restarting the plugin clears it. If another view changes the review, its card or its queue, undo becomes unavailable rather than overwriting that work. An undone Again rating also restores its linked course lapse when that objective has not since changed.
 
 **Edit** opens the existing editor from the study screen, or with **E**. Saving returns to the same queue position with the answer hidden. The card keeps its ID, history and sibling group. Changes to the question or answer use the answer-changed check: the card becomes due for a content check, and its memory history is retained. Cancelling an unsaved edit returns to the current answer. If the note saves but the content check cannot save, retry from the editor; the same note edit is not applied twice.
@@ -271,19 +289,36 @@ Read the explanation, expand **Original card** to compare, and edit the proposed
 
 ## Commands
 
+Any command can be bound to a hotkey in **Settings → Hotkeys**. Qard sets none by default.
+
 - Qard: Open study workspace
+- Qard: Open decks
+- Qard: Open exam plans
+- Qard: Open today
 - Qard: Review source updates
+- Qard: Show study statistics
+- Qard: Show study time
 - Qard: Study selected deck(s)
 - Qard: Study this deck
 - Qard: Study this topic
 - Qard: Study this note
+- Qard: New card
+- Qard: Insert card
+- Qard: Make card at cursor reversed
 - Qard: Create card from selection
+- Qard: Show or hide answer, Rate Again, Rate Hard, Rate Good, Rate Easy, Undo last rating, Skip card, Pause card, Edit card, Toggle focus mode, Leave study session
 - Qard: Import from Spaced Repetition
+- Qard: Toggle debug logging
+- Qard: Write debug report
+
+With AI features on, there are also:
+
+- Qard: Generate flashcards with AI
 - Qard: New practice test
 - Qard: Open practice tests
-- Qard: Open today
 - Qard: Open courses
 - Qard: Teach me this note
+- Qard: Show token usage
 
 The “this…” commands work in a Markdown note containing indexed cards. Topic selection follows the nearest Markdown heading at the cursor, respecting the file-level override. Create-from-selection opens a small transient editor to enter a question, choose a deck/topic, and save the selection as the answer. The main application is always a workspace tab.
 
@@ -501,6 +536,18 @@ Then, under **AI roles**, choose a connection and model for each job:
 
 Each Claude Code or Codex call starts a new process, which adds a few seconds. For the most responsive tutor, use an API key or OpenRouter with a fast model.
 
+## Turning AI features off
+
+Every AI feature is optional. To remove them from Qard entirely, turn off **Settings → Qard → AI features**. This hides:
+
+- the Tests and Learn tabs
+- **Generate with AI**, **Practice test**, **Improve this card** and **Suggest an update**
+- Today's checks and lessons
+- token usage
+- the AI connection, AI role and practice test settings
+
+AI commands leave the command palette, and running AI work stops. Decks, cards, study sessions, statistics, study time, exam plans, source tracking, imports and exports work as before. **Study time** stays one click away on the Statistics page. Your tests, courses, lessons, drafts and connections are kept, and come back when you turn AI features on again.
+
 ## Review data and settings
 
 Review states, all saved timestamped rating events, settings, the links between cards and mastery objectives, job timings, daily and per-card study totals, and daily token usage live in `.obsidian/plugins/qard/data.json`. It contains no canonical question or answer text. Back up both notes and this file if you want to preserve study history.
@@ -520,7 +567,7 @@ FSRS uses learning steps of 1 and 10 minutes, and a 10-minute relearning step af
 
 Disabling scheduling still saves ratings and updates FSRS memory estimates without changing due dates or intervals. **All cards never consults the scheduler.** All timestamped rating events are now retained locally for memory reconstruction and future personalization. Earlier versions truncated history at 10,000 events; removed events cannot be recovered.
 
-Settings include default All/Due mode, order, keyboard hints, automatic focus, optional voice answers, new-card folder and scheduling enable/disable.
+Settings include AI features on or off, default All/Due mode, order, keyboard hints, study keys, automatic focus, optional voice answers, new-card folder and scheduling enable/disable.
 
 ## Optional voice answers
 
@@ -530,7 +577,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 
 - CSV/TSV exports contain card content, not scheduling or attachment files. Anki export does not include image-occlusion cards.
 - No persistent recordings or speech recognition.
-- Keyboard defaults are fixed; command shortcuts can use Obsidian’s normal hotkey settings.
+- Study keys are single keys; Escape is fixed. Use Obsidian's hotkey settings with Qard's commands for key combinations.
 - Nested decks group and study together, but a deck's topics are still a single level. Deck options cover target retention and new cards per day; other preferences are global.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.

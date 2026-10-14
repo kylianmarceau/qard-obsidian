@@ -14,10 +14,14 @@ import { type LearnNav } from '../../views/navigation';
 import { StudyTimeLine } from '../usage/StudyTimeView';
 import { newAllowance, introductionsToday } from '../../review/pacing';
 import { scheduler } from '../../review/scheduler';
+import { aiOn } from '../../settings/settings';
 
-/** Loads Today and reloads it whenever the learn service changes. */
+/** Loads Today and reloads it whenever the learn service changes. Checks and lessons need AI. */
 function useToday(services: QardServices) {
   const { revision } = useLearn(services);
+  const ai = aiOn(
+    useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot).settings,
+  );
   const [today, setToday] = useState<Today>();
   useEffect(() => {
     let live = true;
@@ -33,7 +37,7 @@ function useToday(services: QardServices) {
       live = false;
     };
   }, [services, revision]);
-  return today;
+  return today && !ai ? { ...today, checks: [], lessons: [], moreLessons: 0 } : today;
 }
 
 /** The home-page summary: what is due today, one click to start. */
@@ -81,11 +85,12 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
     ),
   );
   const allowance = newAllowance(reviews);
+  const ai = aiOn(reviews.settings);
   useEffect(() => {
-    if (today) {
+    if (today && ai) {
       services.learn.prepare(today);
     }
-  }, [services, today]);
+  }, [services, today, ai]);
   if (!today || index.loading) {
     return <Waiting text="Loading…" />;
   }
@@ -113,7 +118,9 @@ export function TodayView({ services, nav }: { services: QardServices; nav: Lear
         <h1>Today</h1>
         <p className="qard-muted">
           {nothing
-            ? 'Nothing is due. Map a course or make a test to keep going.'
+            ? ai
+              ? 'Nothing is due. Map a course or make a test to keep going.'
+              : 'Nothing is due.'
             : `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}. ${suggestion}`}
         </p>
         <StudyTimeLine services={services} days={1} open={nav.time} />

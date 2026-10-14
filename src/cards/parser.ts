@@ -46,10 +46,15 @@ export function defaultDeck(path: string): string {
     note = parts.pop() || 'Untitled';
   return deckNaming === 'folder' && parts.length ? parts.join('::') : note;
 }
+/**
+ * What started a topic: the note body (`start`, or `fixed` with a `qard-topic` override), a heading,
+ * a card with its own `qard-location` (`card`), or the note's topic again after that card (`resume`).
+ */
+export type TopicEventKind = 'start' | 'fixed' | 'heading' | 'card' | 'resume';
 export function parseCards(
   source: string,
   path: string,
-  onTopic?: (line: number, topic: string, deck: string) => void,
+  onTopic?: (line: number, topic: string, deck: string, kind: TopicEventKind) => void,
 ): ParseResult {
   const lines = sourceLines(source);
   const result: ParseResult = { cards: [], issues: [] };
@@ -86,7 +91,7 @@ export function parseCards(
   const name = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
   const deck = name(metadata['qard-deck']) || defaultDeck(path);
   const topicOverride = name(metadata['qard-topic']);
-  onTopic?.(0, topicOverride || 'General', deck);
+  onTopic?.(start, topicOverride || 'General', deck, topicOverride ? 'fixed' : 'start');
   const rawTags = Array.isArray(metadata.tags)
     ? metadata.tags
     : typeof metadata.tags === 'string'
@@ -127,7 +132,7 @@ export function parseCards(
     const heading = line.text.match(/^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/);
     if (heading) {
       topic = heading[1]!.trim();
-      onTopic?.(i, topicOverride || topic, deck);
+      onTopic?.(i, topicOverride || topic, deck, 'heading');
       continue;
     }
     // Setext headings are ordinary Markdown headings too.
@@ -138,7 +143,7 @@ export function parseCards(
       !/^\s*>/.test(lines[i - 1]!.text)
     ) {
       topic = lines[i - 1]!.text.trim();
-      onTopic?.(i - 1, topicOverride || topic, deck);
+      onTopic?.(i - 1, topicOverride || topic, deck, 'heading');
       continue;
     }
     const match = line.text.match(header);
@@ -235,8 +240,8 @@ export function parseCards(
       continue;
     }
     if (location) {
-      onTopic?.(i, location.topic, location.deck);
-      onTopic?.(end, topicOverride || topic, deck);
+      onTopic?.(i, location.topic, location.deck, 'card');
+      onTopic?.(end, topicOverride || topic, deck, 'resume');
     }
     const finish = lines[end - 1]!.end;
     const fingerprint = hash(front + '\0' + back);
@@ -271,8 +276,9 @@ export function sameContent(a: QardCard, b: QardCard) {
 /** Same heading rules as indexing, including code fences and file overrides. */
 export function locationAtLine(source: string, path: string, line: number): CardLocation {
   let location = { deck: defaultDeck(path), topic: 'General' };
-  parseCards(source, path, (headingLine, topic, deck) => {
-    if (headingLine <= line) {
+  parseCards(source, path, (headingLine, topic, deck, kind) => {
+    // The note's own deck applies inside its frontmatter too.
+    if (headingLine <= line || kind === 'start' || kind === 'fixed') {
       location = { deck, topic };
     }
   });
@@ -280,4 +286,41 @@ export function locationAtLine(source: string, path: string, line: number): Card
 }
 export function topicAtLine(source: string, path: string, line: number): string {
   return locationAtLine(source, path, line).topic;
+}
+
+export interface TopicSection {
+  topic: string;
+  /** The heading's text line, or the first body line for the section before any heading. */
+  line: number;
+  /** The first line of the next section, or the line count. */
+  end: number;
+}
+/**
+ * The note's own deck and its heading sections, using the indexing rules. Cards with a
+ * `qard-location` override never start a section. Undefined when the note can't be indexed.
+ */
+export function topicSections(
+  source: string,
+  path: string,
+): { deck: string; fixedTopic?: string; sections: TopicSection[] } | undefined {
+  let deck: string | undefined, fixedTopic: string | undefined;
+  const sections: TopicSection[] = [];
+  parseCards(source, path, (line, topic, eventDeck, kind) => {
+    if (kind === 'start' || kind === 'fixed') {
+      deck = eventDeck;
+      fixedTopic = kind === 'fixed' ? topic : undefined;
+    } else if (kind !== 'heading') {
+      return;
+    }
+    const previous = sections.at(-1);
+    if (previous) {
+      previous.end = line;
+    }
+    sections.push({ topic, line, end: line });
+  });
+  if (deck === undefined) {
+    return undefined;
+  }
+  sections.at(-1)!.end = sourceLines(source).length;
+  return { deck, ...(fixedTopic ? { fixedTopic } : {}), sections };
 }

@@ -3,6 +3,7 @@ import { ChevronRight, RefreshCw } from 'lucide-react';
 import type { SourceChange, SourceSyncService } from '../cards/source-sync-service';
 import type { QardServices } from '../views/services';
 import { InlineMarkdown, Markdown } from './Markdown';
+import { useAi } from '../views/use-ai';
 
 export function SourceUpdatesRow({
   service,
@@ -32,6 +33,7 @@ export function SourceUpdatesRow({
 export function SourceUpdates({ services, back }: { services: QardServices; back: () => void }) {
   const service = services.sourceSync!;
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
+  const ai = useAi(services);
   const [selected, setSelected] = useState(''),
     [error, setError] = useState('');
   const current = state.changes.find((c) => c.card.id === selected) ?? state.changes[0];
@@ -175,19 +177,21 @@ export function SourceUpdates({ services, back }: { services: QardServices; back
               />
             ) : (
               <div className="qard-actions">
-                <button
-                  className="qard-primary"
-                  disabled={
-                    state.busy.includes(current.card.id) ||
-                    current.card.duplicateId ||
-                    current.sources.some((s) => s.after === null)
-                  }
-                  onClick={() => void run(() => service.suggest(current.card.id))}
-                >
-                  {state.busy.includes(current.card.id)
-                    ? 'Preparing suggestion…'
-                    : 'Suggest an update'}
-                </button>
+                {ai && (
+                  <button
+                    className="qard-primary"
+                    disabled={
+                      state.busy.includes(current.card.id) ||
+                      current.card.duplicateId ||
+                      current.sources.some((s) => s.after === null)
+                    }
+                    onClick={() => void run(() => service.suggest(current.card.id))}
+                  >
+                    {state.busy.includes(current.card.id)
+                      ? 'Preparing suggestion…'
+                      : 'Suggest an update'}
+                  </button>
+                )}
                 {state.busy.includes(current.card.id) && (
                   <button onClick={() => service.cancel(current.card.id)}>Cancel</button>
                 )}
@@ -200,8 +204,9 @@ export function SourceUpdates({ services, back }: { services: QardServices; back
               </div>
             )}
             <p className="qard-muted qard-small">
-              Suggestions use your Writer connection. Note changes are detected locally; an AI
-              request runs only when you choose Suggest an update.
+              {ai
+                ? 'Suggestions use your Writer connection. Note changes are detected locally; an AI request runs only when you choose Suggest an update.'
+                : 'Note changes are detected locally. Edit the card from the library, or keep it as is.'}
             </p>
           </section>
         </div>
@@ -225,6 +230,7 @@ function Suggestion({
   const [front, setFront] = useState(proposal.front),
     [back, setBack] = useState(proposal.back),
     [substantive, setSubstantive] = useState(proposal.change === 'meaning');
+  const ai = useAi(services);
   const edited =
     front.trim() !== change.card.frontMarkdown || back.trim() !== change.card.backMarkdown;
   return (
@@ -293,12 +299,14 @@ function Suggestion({
         >
           Keep card as is
         </button>
-        <button
-          disabled={busy}
-          onClick={() => void run(() => services.sourceSync!.suggest(change.card.id))}
-        >
-          Suggest again
-        </button>
+        {ai && (
+          <button
+            disabled={busy}
+            onClick={() => void run(() => services.sourceSync!.suggest(change.card.id))}
+          >
+            Suggest again
+          </button>
+        )}
       </div>
     </div>
   );
