@@ -496,6 +496,80 @@ describe('learning service', () => {
     expect(today.cards).toBe(4);
   });
 
+  it('maps the PDFs in a course folder, and never writes a lesson note edit into a PDF', async () => {
+    const t = setup();
+    const slides = 'Notes/DS346/Week 1 slides.pdf';
+    t.files.set(slides, '[Page 1]\nDirichlet draws.');
+    t.files.set('Notes/DS346/.old/draft.pdf', 'hidden');
+    t.reply(objectivesSchema, () => ({
+      course: 'DS346',
+      objectives: [
+        {
+          id: 'draws',
+          title: 'Dirichlet draws',
+          notes: [slides],
+          needs: [],
+          group: 'Priors',
+          label: 'Draws',
+          state: 'new',
+          evidence: '',
+        },
+      ],
+    }));
+    await t.learn.mapCourse('Notes/DS346');
+    expect(t.calls[0]!.task.prompt).toContain(slides);
+    expect(t.calls[0]!.task.prompt).not.toContain('draft.pdf');
+
+    const lesson = 'Qard/Lessons/2026-09-29 Draws.json';
+    t.files.set(
+      lesson,
+      JSON.stringify({
+        version: 1,
+        createdAt: 0,
+        topic: 'Draws',
+        notes: [slides],
+        steps: [],
+        state: [],
+        current: 0,
+      }),
+    );
+    await t.learn.loadLesson(lesson);
+    t.reply(closeSchema, () => ({
+      summary: 'Dirichlet draws.',
+      cards: [],
+      noteEdit: { path: slides, heading: '', text: 'A paragraph.' },
+    }));
+    await t.learn.close(lesson);
+    expect(t.learn.lessonAt(lesson)!.close!.summary).toBe('Dirichlet draws.');
+    expect(t.learn.lessonAt(lesson)!.close!.noteEdit).toBeUndefined();
+
+    // A suggestion that reaches a PDF anyway is refused rather than written into it.
+    const older = 'Qard/Lessons/2026-09-28 Draws.json';
+    t.files.set(
+      older,
+      JSON.stringify({
+        version: 1,
+        createdAt: 0,
+        topic: 'Draws',
+        notes: [slides],
+        steps: [],
+        state: [],
+        current: 0,
+        close: {
+          summary: 'Earlier.',
+          cards: [],
+          cardState: {},
+          noteEdit: { path: slides, heading: '', text: 'A paragraph.' },
+        },
+      }),
+    );
+    await t.learn.loadLesson(older);
+    await expect(t.learn.noteEdit(older, true)).rejects.toThrow(
+      'only add paragraphs to Markdown notes',
+    );
+    expect(t.files.get(slides)).toBe('[Page 1]\nDirichlet draws.');
+  });
+
   it('maps prerequisites and planned topics, and stamps the mapping time', async () => {
     const t = setup();
     t.reply(objectivesSchema, () => ({

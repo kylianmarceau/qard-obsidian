@@ -26,20 +26,24 @@ it('counts every Markdown note in ancestor folders without duplicate entries', (
     ].sort((a, b) => a.path.localeCompare(b.path)),
   );
 });
-it('excludes generated tests, hidden paths and non-Markdown files', () => {
+it('keeps notes and PDFs, and excludes generated tests, hidden paths and other files', () => {
   expect(
     testNotePaths(
       [
         ...paths,
         'Qard/Tests/old/Test.md',
+        'Qard/Tests/old/report.pdf',
         'Qard/Tests extra/note.md',
         'Courses/AI/slides.pdf',
+        'Courses/AI/Scan.PDF',
+        'Courses/AI/diagram.png',
         '.hidden/note.md',
+        '.hidden/slides.pdf',
         'Courses/.hidden/note.md',
       ],
       'Qard/Tests/',
     ),
-  ).toEqual([...paths, 'Qard/Tests extra/note.md']);
+  ).toEqual([...paths, 'Qard/Tests extra/note.md', 'Courses/AI/slides.pdf', 'Courses/AI/Scan.PDF']);
 });
 it('deduplicates overlapping folders and individual notes and excludes removed notes', () => {
   expect(

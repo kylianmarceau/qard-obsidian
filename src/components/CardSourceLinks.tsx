@@ -2,7 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { FileText, Link2, X } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
-import { studyNotes } from '../vault-access';
+import { isPdf, studySources } from '../vault-access';
 export function CardSourceLinks({
   card,
   services,
@@ -23,7 +23,7 @@ export function CardSourceLinks({
   // The same search as attaching a note to a practice test: recent notes first, filtered as you type.
   const q = query.toLowerCase().trim();
   const matches = open
-    ? studyNotes(services.app, [services.reviews.getSnapshot().settings.tests.folder])
+    ? studySources(services.app, [services.reviews.getSnapshot().settings.tests.folder])
         .filter(
           (f) =>
             !link?.sources.some((s) => s.path === f.path) &&
@@ -124,7 +124,7 @@ export function CardSourceLinks({
                   disabled={busy}
                   onClick={() => void add(f.path)}
                 >
-                  <span>{f.basename}</span>
+                  <span>{isPdf(f.path) ? f.path.split('/').pop() : f.basename}</span>
                   <small>{f.parent?.path === '/' ? '' : f.parent?.path}</small>
                 </button>
               ))}
