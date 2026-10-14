@@ -7,7 +7,13 @@ export type Screen =
   | { kind: 'library' }
   | { kind: 'deck'; deck: string }
   | { kind: 'card'; card: QardCard }
-  | { kind: 'editor' | 'generate-cards'; draft?: Partial<CardDraft> }
+  | {
+      kind: 'editor' | 'generate-cards';
+      draft?: Partial<CardDraft>;
+      /** A new value opens a fresh editor with the same draft, as after "Add card". */
+      serial?: number;
+      notice?: string;
+    }
   | { kind: 'builder'; selection: Selection }
   | {
       kind: 'study';
@@ -57,6 +63,8 @@ export interface UiRequest {
     | 'builder'
     | 'create'
     | 'library'
+    | 'exams'
+    | 'generate-cards'
     | 'tests'
     | 'new-test'
     | 'today'
@@ -70,3 +78,21 @@ export interface UiRequest {
   draft?: Partial<CardDraft>;
   path?: string;
 }
+
+/** Screens that only exist for AI features. With AI off they fall back to the library. */
+export const AI_SCREENS: ReadonlySet<Screen['kind']> = new Set<Screen['kind']>([
+  'generate-cards',
+  'tests',
+  'new-test',
+  'plan',
+  'take',
+  'results',
+  'review',
+  'test-cards',
+  'learn',
+  'map-course',
+  'course',
+  'check',
+  'lesson',
+  'usage',
+]);

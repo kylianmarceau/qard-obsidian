@@ -12,7 +12,7 @@ import type {
 } from './learn-contracts';
 import type { SourceSnapshot } from '../cards/source-sync-types';
 import { isPdf, isStudySource } from '../vault-access';
-import type { QardSettings } from '../settings/settings';
+import { aiOn, type QardSettings } from '../settings/settings';
 import {
   CANCELLED,
   guardRunner,
@@ -171,6 +171,10 @@ export class LearnService {
     this.publish(jobs);
   }
   /** Stops a running job; it shows as cancelled, with the usual Try again. */
+  /** Stop every running job, as when AI features are turned off. */
+  cancelAll() {
+    this.controllers.forEach((controller) => controller.abort());
+  }
   cancel(target: string, kind: LearnJobKind, id = '') {
     this.controllers.get(key(target, kind, id))?.abort();
   }
@@ -526,6 +530,9 @@ export class LearnService {
    * and wrap-ups) without waiting for them to be opened.
    */
   async resumeBackground() {
+    if (!aiOn(this.settings())) {
+      return;
+    }
     await this.loadProposals();
     for (const path of this.storage
       .files(`${this.root()}/Lessons`, 'json')
@@ -966,6 +973,10 @@ export class LearnService {
   }
   /** Writes the next check for an objective ahead of time, unless one is already waiting. */
   ensureCheck(mastery: string, objective: string): Promise<string | undefined> {
+    // Checks are written by AI; lapses still count as evidence while it's off.
+    if (!aiOn(this.settings())) {
+      return Promise.resolve(undefined);
+    }
     return this.track(`${mastery}#${objective}`, 'check-write', '', async (signal) => {
       const m = await this.course(mastery),
         o = m.objectives.find((x) => x.id === objective);

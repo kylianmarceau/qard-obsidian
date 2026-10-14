@@ -1,5 +1,5 @@
 import { failureDays, needsRepair } from '../review/card-repair';
-import type { Screen } from './navigation';
+import { AI_SCREENS, type Screen } from './navigation';
 import { SavedSessions } from '../components/SavedSessions';
 import { ExamPlanner } from '../components/ExamPlanner';
 import { SourceUpdates, SourceUpdatesRow } from '../components/SourceUpdates';
@@ -41,7 +41,8 @@ import type { LearnNav } from './navigation';
 import { todayDueCards } from '../review/today-cards';
 import type { PacingOptions } from '../review/pacing';
 import { scheduler, isBuried } from '../review/scheduler';
-import { ignoresStudyKey } from '../review/keyboard';
+import { ignoresStudyKey, studyActionFor } from '../review/keyboard';
+import { aiOn } from '../settings/settings';
 import { RunningJobs } from '../components/jobs/RunningJobs';
 import { StatisticsView } from '../components/statistics/StatisticsView';
 import { UsageView } from '../components/usage/UsageView';
@@ -56,6 +57,7 @@ const courseName = (path: string) =>
     .pop()!
     .replace(/\.md$/, '')
     .replace(/ mastery$/i, '');
+const LIBRARY: Screen = { kind: 'library' };
 const LEARN_SCREENS = ['today', 'learn', 'map-course', 'course', 'check', 'lesson'];
 const TEST_LABEL: Record<string, string> = {
   plan: 'Plan',
@@ -67,8 +69,11 @@ const TEST_LABEL: Record<string, string> = {
 export function QardApp({ services, request }: { services: QardServices; request?: UiRequest }) {
   const reviews = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
   const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
-  const [screen, setScreen] = useState<Screen>({ kind: 'library' }),
+  const [rawScreen, setScreen] = useState<Screen>(LIBRARY),
     [search, setSearch] = useState('');
+  // With AI off, AI screens and requests show the library. Turning it back on restores them.
+  const ai = aiOn(reviews.settings);
+  const screen = ai || !AI_SCREENS.has(rawScreen.kind) ? rawScreen : LIBRARY;
   const [issues, setIssues] = useState(false);
   const [sessionMessage, setSessionMessage] = useState('');
   useEffect(() => {
@@ -86,6 +91,10 @@ export function QardApp({ services, request }: { services: QardServices; request
       setScreen({ kind: 'new-test', serial: request.serial });
     } else if (request.kind === 'tests') {
       setScreen({ kind: 'tests' });
+    } else if (request.kind === 'exams') {
+      setScreen({ kind: 'exams' });
+    } else if (request.kind === 'generate-cards') {
+      setScreen({ kind: 'generate-cards', draft: request.draft });
     } else if (
       request.kind === 'today' ||
       request.kind === 'learn' ||
@@ -216,10 +225,11 @@ export function QardApp({ services, request }: { services: QardServices; request
       services.setFocus(enabled);
     };
     const handler = (event: KeyboardEvent) => {
-      if (!services.isActive() || ignoresStudyKey(event)) {
+      if (event.defaultPrevented || !services.isActive() || ignoresStudyKey(event)) {
         return;
       }
-      if (event.key.toLowerCase() === 'f') {
+      const keys = services.reviews.getSnapshot().settings.studyKeys;
+      if (studyActionFor(event, keys) === 'focus') {
         event.preventDefault();
         event.stopPropagation();
         setFocus(!focused);
@@ -380,8 +390,12 @@ export function QardApp({ services, request }: { services: QardServices; request
               {!deskShell &&
                 (onLearn ? (
                   <>
-                    <ChevronRight size={14} />
-                    <button onClick={learnNav.learn}>Learn</button>
+                    {ai && (
+                      <>
+                        <ChevronRight size={14} />
+                        <button onClick={learnNav.learn}>Learn</button>
+                      </>
+                    )}
                     {learnLabel && (
                       <>
                         <ChevronRight size={14} />
@@ -485,12 +499,14 @@ export function QardApp({ services, request }: { services: QardServices; request
                   deleted={learnNav.learn}
                 />
               )}
-              <RunningJobs
-                services={services}
-                nav={nav}
-                learnNav={learnNav}
-                flashcards={() => generateCards()}
-              />
+              {ai && (
+                <RunningJobs
+                  services={services}
+                  nav={nav}
+                  learnNav={learnNav}
+                  flashcards={() => generateCards()}
+                />
+              )}
             </div>
           </header>
         )}
@@ -515,8 +531,8 @@ export function QardApp({ services, request }: { services: QardServices; request
             <LibraryTabs
               active="decks"
               decks={library}
-              tests={nav.tests}
-              learn={learnNav.learn}
+              tests={ai ? nav.tests : undefined}
+              learn={ai ? learnNav.learn : undefined}
               plans={plans}
             />
           )}
@@ -569,9 +585,9 @@ export function QardApp({ services, request }: { services: QardServices; request
               create={() => setScreen({ kind: 'editor' })}
               study={() => builder()}
               loading={index.loading}
-              tests={nav.tests}
-              newTest={() => nav.newTest()}
-              learn={learnNav.learn}
+              tests={ai ? nav.tests : undefined}
+              newTest={ai ? () => nav.newTest() : undefined}
+              learn={ai ? learnNav.learn : undefined}
               plans={plans}
               resume={
                 !search.trim() && (
@@ -583,13 +599,17 @@ export function QardApp({ services, request }: { services: QardServices; request
                         open={() => setScreen({ kind: 'source-updates' })}
                       />
                     )}
-                    <TodayRow services={services} nav={learnNav} includeCards={false} />
-                    <ResumeTest services={services} nav={nav} />
-                    {services.flashcards && (
-                      <ResumeFlashcards
-                        service={services.flashcards}
-                        open={() => generateCards()}
-                      />
+                    {ai && (
+                      <>
+                        <TodayRow services={services} nav={learnNav} includeCards={false} />
+                        <ResumeTest services={services} nav={nav} />
+                        {services.flashcards && (
+                          <ResumeFlashcards
+                            service={services.flashcards}
+                            open={() => generateCards()}
+                          />
+                        )}
+                      </>
                     )}
                   </>
                 )
@@ -614,6 +634,7 @@ export function QardApp({ services, request }: { services: QardServices; request
                       setSearch('');
                       setScreen({ kind: 'deck', deck: destination.deck.trim() });
                     },
+                    reverse: (cards) => services.writer.addReverses(cards),
                     update: async (cards, action) => {
                       await services.writer.validateSelection(cards);
                       const ready = await services.writer.ensureStable(cards);
@@ -637,9 +658,14 @@ export function QardApp({ services, request }: { services: QardServices; request
                         : { decks: [deck.name], topics: [], cards: [] },
                     )
                   }
-                  create={() => setScreen({ kind: 'editor', draft: { deck: deck.name } })}
+                  create={(topic) =>
+                    setScreen({
+                      kind: 'editor',
+                      draft: topic ? { deck: deck.name, topic } : { deck: deck.name },
+                    })
+                  }
                   generate={
-                    services.flashcards ? () => generateCards({ deck: deck.name }) : undefined
+                    services.flashcards && ai ? () => generateCards({ deck: deck.name }) : undefined
                   }
                 />
               </>
@@ -668,17 +694,39 @@ export function QardApp({ services, request }: { services: QardServices; request
             />
           )}
           {screen.kind === 'editor' && (
-            <CardEditor
-              key={JSON.stringify(screen.draft)}
-              services={services}
-              initial={screen.draft}
-              generate={services.flashcards ? generateCards : undefined}
-              cancel={library}
-              saved={(card) => {
-                setSearch('');
-                setScreen({ kind: 'card', card });
-              }}
-            />
+            <>
+              {screen.notice && (
+                <p className="qard-editor-notice" role="status">
+                  {screen.notice}
+                </p>
+              )}
+              <CardEditor
+                key={screen.serial ?? JSON.stringify(screen.draft)}
+                services={services}
+                initial={screen.draft}
+                focusFront={screen.serial !== undefined}
+                generate={services.flashcards && ai ? generateCards : undefined}
+                cancelLabel={screen.serial !== undefined ? 'Done' : 'Cancel'}
+                cancel={() =>
+                  // After adding cards, Done shows the deck they went into.
+                  screen.serial !== undefined && screen.draft?.deck
+                    ? setScreen({ kind: 'deck', deck: screen.draft.deck })
+                    : library()
+                }
+                saved={(card) => {
+                  setSearch('');
+                  setScreen({ kind: 'card', card });
+                }}
+                addAnother={(draft, card) =>
+                  setScreen({
+                    kind: 'editor',
+                    draft,
+                    serial: Date.now(),
+                    notice: `Card saved to ${card.topic}.`,
+                  })
+                }
+              />
+            </>
           )}
           {screen.kind === 'generate-cards' && services.flashcards && (
             <GenerateFlashcards
@@ -709,11 +757,11 @@ export function QardApp({ services, request }: { services: QardServices; request
             <ExamPlanner
               services={services}
               back={library}
-              tests={nav.tests}
-              learn={learnNav.learn}
+              tests={ai ? nav.tests : undefined}
+              learn={ai ? learnNav.learn : undefined}
               start={(cards, examId) => start(cards, 'normal', examId)}
               resume={resume}
-              test={nav.newTest}
+              test={ai ? nav.newTest : undefined}
             />
           )}
           {screen.kind === 'tests' && (
@@ -724,6 +772,7 @@ export function QardApp({ services, request }: { services: QardServices; request
             <StatisticsView
               services={services}
               back={library}
+              time={() => setScreen({ kind: 'time' })}
               study={(deck) => builder(deck ? { decks: [deck], topics: [], cards: [] } : undefined)}
             />
           )}

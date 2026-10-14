@@ -4,6 +4,7 @@ import { QardApp } from './QardApp';
 import type QardPlugin from '../main';
 import type { QardServices } from './services';
 import type { UiRequest } from './navigation';
+import type { StudyAction, StudyCommands } from '../review/keyboard';
 export const VIEW_TYPE = 'qard-workspace';
 export class QardView extends ItemView {
   private root?: Root;
@@ -12,6 +13,7 @@ export class QardView extends ItemView {
   private focus = false;
   private services?: QardServices;
   private request?: UiRequest;
+  private study?: StudyCommands;
   constructor(
     leaf: WorkspaceLeaf,
     private plugin: QardPlugin,
@@ -49,9 +51,16 @@ export class QardView extends ItemView {
       setFocus: (enabled) => this.setFocus(enabled),
       isActive: () => this.app.workspace.getActiveViewOfType(QardView) === this,
       openSource: (card) => this.plugin.openSource(card),
+      setStudyCommands: (commands) => {
+        this.study = commands;
+      },
     };
     this.root = createRoot(this.host);
     this.render();
+  }
+  /** Run a study action in this view's card session; false when none is running or it doesn't apply. */
+  studyCommand(action: StudyAction, checking: boolean): boolean {
+    return this.study?.(action, checking) ?? false;
   }
   show(request: UiRequest) {
     this.request = request;
@@ -82,6 +91,7 @@ export class QardView extends ItemView {
     }
   }
   release() {
+    this.study = undefined;
     this.plugin.time?.set(this, undefined);
     this.setFocus(false);
     this.root?.unmount();

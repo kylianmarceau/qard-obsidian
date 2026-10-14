@@ -3,7 +3,7 @@ import { act } from 'preact/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Component, TFile } from 'obsidian';
-import { CardEditor } from '../src/components/CardEditor';
+import { CardEditor, forgetEditorChoices } from '../src/components/CardEditor';
 import { CardPreview } from '../src/components/CardPreview';
 import { StudyView } from '../src/views/StudyView';
 import { OcclusionEditor } from '../src/components/OcclusionEditor';
@@ -41,6 +41,7 @@ beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
   saved.mockClear();
+  forgetEditorChoices();
   services = {
     host,
     owner: new Component(),
@@ -52,6 +53,7 @@ beforeEach(() => {
       createBatch: vi.fn<CardWriter['createBatch']>(async (_target, cards) =>
         cards.map((c) => makeCard(c.front, c.id)),
       ),
+      targetFor: vi.fn(() => ({ path: 'Qard/Deck.md', exists: true })),
     },
     app: {
       vault: {
@@ -369,4 +371,112 @@ it('pauses and resumes a card from its preview without losing history or enablin
   expect(button('Study')?.disabled).toBe(false);
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   expect(changed).toHaveBeenCalledWith(card);
+});
+it('offers Basic + reverse as a card type and remembers the last type', async () => {
+  await editor();
+  await click(button('Basic + reverse'));
+  expect(button('Basic').getAttribute('aria-pressed')).toBe('false');
+  const areas = host.querySelectorAll('textarea');
+  await input(areas[0]!, 'Capital?');
+  await input(areas[1]!, 'Paris');
+  expect(button('Create 2 cards')).toBeTruthy();
+  await submit();
+  expect(services.writer.create).toHaveBeenCalledWith(expect.objectContaining({ reverse: true }));
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(<CardEditor services={services} cancel={vi.fn()} saved={saved} />),
+  );
+  expect(button('Basic + reverse').getAttribute('aria-pressed')).toBe('true');
+  expect((host.querySelector('input[list$="-decks"]') as HTMLInputElement).value).toBe('Networks');
+  expect((host.querySelector('input[list$="-topics"]') as HTMLInputElement).value).toBe('Labels');
+});
+it('saves and starts another card with the same deck and topic, also with Mod+Enter', async () => {
+  const another = vi.fn();
+  await act(async () =>
+    root.render(
+      <CardEditor
+        services={services}
+        initial={{ deck: 'Networks', topic: 'Labels' }}
+        cancel={vi.fn()}
+        saved={saved}
+        addAnother={another}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain('Adds to Qard/Deck.md › Labels');
+  // One save action: each save starts the next card.
+  expect(button('Create card')).toBeUndefined();
+  expect(button('Add card')).toBeTruthy();
+  const areas = host.querySelectorAll('textarea');
+  await input(areas[0]!, 'Q?');
+  await input(areas[1]!, 'A');
+  await act(async () => {
+    areas[1]!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+    );
+  });
+  await act(async () => {});
+  expect(another).toHaveBeenCalledWith(
+    expect.objectContaining({ deck: 'Networks', topic: 'Labels' }),
+    expect.anything(),
+  );
+  expect(saved).not.toHaveBeenCalled();
+  // The workspace remounts the editor for the next card.
+  await act(async () =>
+    root.render(
+      <CardEditor
+        key="next"
+        services={services}
+        initial={another.mock.calls[0]![0]}
+        cancel={vi.fn()}
+        saved={saved}
+        addAnother={another}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain('Adds to Qard/Deck.md › Labels');
+  await click(button('Cloze'));
+  await input(host.querySelector('textarea')!, '{{c1::TCP}} is reliable.');
+  await click(button('Add card'));
+  await act(async () => {});
+  expect(services.writer.createBatch).toHaveBeenCalledWith(
+    expect.objectContaining({ path: 'Qard/Deck.md' }),
+    expect.anything(),
+  );
+  expect(another).toHaveBeenCalledTimes(2);
+});
+it('claims Mod+Enter from Obsidian through a keymap scope while the form has focus', async () => {
+  const pushScope = vi.fn(),
+    popScope = vi.fn();
+  Object.assign(services.app, { keymap: { pushScope, popScope } });
+  const another = vi.fn();
+  await act(async () =>
+    root.render(
+      <CardEditor
+        services={services}
+        initial={{ deck: 'Networks', topic: 'Labels' }}
+        cancel={vi.fn()}
+        saved={saved}
+        addAnother={another}
+      />,
+    ),
+  );
+  const areas = host.querySelectorAll('textarea');
+  await act(async () => areas[0]!.focus());
+  expect(pushScope).toHaveBeenCalledOnce();
+  const scope = pushScope.mock.calls[0]![0] as {
+    handlers: { modifiers: string[]; key: string; func: () => unknown }[];
+  };
+  expect(scope.handlers[0]).toMatchObject({ modifiers: ['Mod'], key: 'Enter' });
+  await input(areas[0]!, 'Q?');
+  await input(areas[1]!, 'A');
+  await act(async () => {
+    expect(scope.handlers[0]!.func()).toBe(false);
+  });
+  await act(async () => {});
+  expect(another).toHaveBeenCalledOnce();
+  await act(async () => root.unmount());
+  expect(popScope).toHaveBeenCalledWith(scope);
+  root = createRoot(host);
 });

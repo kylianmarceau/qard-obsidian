@@ -132,6 +132,10 @@ export class TestService {
 
   /** Runs one agent job; errors stay on the job until dismissed or retried. */
   /** Stops a running job; it shows as cancelled, with the usual Try again. */
+  /** Stop every running job, as when AI features are turned off. */
+  cancelAll() {
+    this.controllers.forEach((controller) => controller.abort());
+  }
   cancel(folder: string, kind: JobKind, id = '') {
     this.controllers.get(key(folder, kind, id))?.abort();
   }

@@ -116,3 +116,107 @@ it('does not write half a reverse pair when the opposite content cannot be safel
   ).rejects.toThrow();
   expect(read()).toBe(source);
 });
+
+function vault(initial: Record<string, string> = {}) {
+  const texts: Record<string, string> = { ...initial };
+  const files = new Map<string, TFile | object>();
+  const makeFile = (path: string) => new (TFile as unknown as new (path: string) => TFile)(path);
+  for (const path of Object.keys(texts)) files.set(path, makeFile(path));
+  const index = new CardIndex();
+  for (const [path, text] of Object.entries(texts)) index.update(path, text);
+  Object.assign(index, {
+    refresh: async (file: TFile) => index.update(file.path, texts[file.path]!),
+  });
+  const app = {
+    vault: {
+      getAbstractFileByPath: (p: string) => files.get(p),
+      getMarkdownFiles: () => [...files.values()].filter((f): f is TFile => f instanceof TFile),
+      createFolder: async (p: string) => void files.set(p, {}),
+      create: async (path: string, text: string) => {
+        const file = makeFile(path);
+        files.set(path, file);
+        texts[path] = text;
+        return file;
+      },
+      read: async (f: TFile) => texts[f.path],
+      process: async (f: TFile, patch: (s: string) => string) => {
+        texts[f.path] = patch(texts[f.path]!);
+      },
+    },
+    metadataCache: {
+      getFileCache: (f: TFile) => {
+        const deck = texts[f.path]?.match(/^---\nqard-deck: "?([^"\n]+)"?\n/)?.[1];
+        return deck ? { frontmatter: { 'qard-deck': deck } } : null;
+      },
+    },
+  } as unknown as App;
+  return { writer: new CardWriter(app, index as VaultIndexer), texts, index };
+}
+const fresh = { deck: 'Bio', topic: 'Cells', front: 'Q?', back: 'A', folder: 'Qard' };
+
+it('keeps adding dashboard cards to one deck note, under the existing topic heading', async () => {
+  const { writer, texts } = vault();
+  await writer.create(fresh);
+  await writer.create({ ...fresh, front: 'Q2?' });
+  await writer.create({ ...fresh, topic: 'Genes', front: 'Q3?', reverse: true });
+  await writer.create({ ...fresh, front: 'Q4?' });
+  expect(Object.keys(texts)).toEqual(['Qard/Bio.md']);
+  const text = texts['Qard/Bio.md']!;
+  expect(text.match(/^# /gm)).toHaveLength(2);
+  expect(text.match(/^qard-deck/gm)).toHaveLength(1);
+  expect(parseCards(text, 'Qard/Bio.md').cards.map((c) => `${c.topic}:${c.frontMarkdown}`)).toEqual(
+    ['Cells:Q?', 'Cells:Q2?', 'Cells:Q4?', 'Genes:Q3?', 'Genes:A'],
+  );
+});
+it('adds to the note that already holds the topic and leaves other decks alone', async () => {
+  const notes = {
+    'Notes/Biology.md': '---\nqard-deck: Bio\n---\n# Cells\n\n' + serializeCard('x', 'Old?', 'Old'),
+    'Qard/Chem.md': '---\nqard-deck: Chem\n---\n',
+  };
+  const { writer, texts } = vault(notes);
+  await writer.create(fresh);
+  expect(Object.keys(texts).sort()).toEqual(['Notes/Biology.md', 'Qard/Chem.md']);
+  expect(parseCards(texts['Notes/Biology.md']!, 'n.md').cards).toHaveLength(2);
+  await writer.create({ ...fresh, deck: 'Physics' });
+  expect(texts['Qard/Physics.md']).toContain('# Cells');
+});
+it('puts editor cloze batches into the deck note instead of a new note each time', async () => {
+  const { writer, texts } = vault();
+  await writer.create(fresh);
+  for (const batch of ['one', 'two']) {
+    const { path } = writer.targetFor('Bio', 'Cells', 'Qard');
+    const target = {
+      deck: 'Bio',
+      topic: 'Cells',
+      folder: 'Qard',
+      batchId: batch,
+      label: 'cloze' as const,
+      path,
+    };
+    await writer.createBatch({ ...target, siblingGroup: batch }, [
+      { id: `${batch}-1`, front: clozeFront('{{c1::A}} {{c2::B}}', 1), back: FORMAT_BACK },
+      { id: `${batch}-2`, front: clozeFront('{{c1::A}} {{c2::B}}', 2), back: FORMAT_BACK },
+    ]);
+    // A retry after a failed refresh must not duplicate.
+    await writer.createBatch({ ...target, siblingGroup: batch }, [
+      { id: `${batch}-1`, front: clozeFront('{{c1::A}} {{c2::B}}', 1), back: FORMAT_BACK },
+    ]);
+  }
+  expect(Object.keys(texts)).toEqual(['Qard/Bio.md']);
+  const cards = parseCards(texts['Qard/Bio.md']!, 'Qard/Bio.md').cards;
+  expect(cards.map((c) => c.siblingGroup ?? '-')).toEqual(['-', 'one', 'one', 'two', 'two']);
+  expect(texts['Qard/Bio.md']!.match(/^# /gm)).toHaveLength(1);
+});
+it('adds and removes reverses on existing cards', async () => {
+  const { writer, texts, index } = vault();
+  const basic = await writer.create(fresh);
+  const { added, skipped } = await writer.addReverses([basic]);
+  expect(skipped).toBe(0);
+  expect(added[0]!.reverseId).toBeTruthy();
+  expect(index.getSnapshot().cards).toHaveLength(2);
+  const left = await writer.removeReverse(added[0]!);
+  expect(left.reverseId).toBeUndefined();
+  expect(parseCards(texts['Qard/Bio.md']!, 'Qard/Bio.md').cards).toHaveLength(1);
+  const again = await writer.addReverses([left, left]);
+  expect(again).toMatchObject({ added: [{ id: left.id }], skipped: 1 });
+});

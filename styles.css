@@ -792,6 +792,10 @@
   color: var(--text-normal);
 }
 
+.qard-settings-nav button[hidden] {
+  display: none;
+}
+
 .qard-settings-nav button:hover {
   background: var(--background-modifier-hover);
   border-color: var(--text-muted);
@@ -1744,9 +1748,16 @@
 
 .qard-form-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 24px;
+}
+
+/* Show preview sits at the start of the action row, the save actions at its end. */
+.qard-form-actions .qard-form-actions-start {
+  margin-right: auto;
 }
 
 .qard-selection-modal {
@@ -1881,16 +1892,60 @@
   resize: vertical;
 }
 
-.qard-editor .qard-reverse-toggle {
-  display: grid;
-  grid-template-columns: auto 1fr;
+.qard-editor-notice,
+.qard-card-panel-saved {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  color: var(--qard-muted);
   font-size: 13px;
 }
 
-.qard-editor .qard-reverse-toggle span {
-  grid-column: 2;
+.qard-editor-destination {
+  overflow-wrap: anywhere;
+}
+
+/* The New card panel lives in a narrow sidebar beside the note being read. */
+.qard-card-panel {
+  padding: 12px;
+}
+
+.qard-card-panel .qard-editor-meta,
+.qard-card-panel .qard-editor-rendered {
+  grid-template-columns: 1fr;
+}
+
+/* A narrow sidebar: card types in a 2 × 2 grid, and the save button across the full width. */
+.qard-card-panel .qard-card-type {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.qard-app .qard-card-panel .qard-card-type button {
+  justify-content: center;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.qard-card-panel .qard-form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.qard-card-panel .qard-form-actions > button {
+  justify-content: center;
+  margin: 0;
+}
+
+.qard-card-panel .qard-form-actions .qard-primary {
+  grid-column: 1 / -1;
 }
 
 .qard-study progress {

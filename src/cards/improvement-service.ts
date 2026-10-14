@@ -300,6 +300,10 @@ Study material: ${JSON.stringify({ front: stable.frontMarkdown, back: stable.bac
       }
     });
   }
+  /** Stop every running job, as when AI features are turned off. */
+  cancelAll() {
+    this.controllers.forEach((controller) => controller.abort());
+  }
   cancel(id: string) {
     this.controllers.get(id)?.abort();
   }
