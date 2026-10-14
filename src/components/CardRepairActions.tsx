@@ -12,6 +12,8 @@ import { ImproveCard } from './ImproveCard';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { failureDays, REPAIR_FAILURE_DAYS } from '../review/card-repair';
+import { aiOn } from '../settings/settings';
+import { keyLabel } from '../review/keyboard';
 
 export function CardRepairActions({
   card,
@@ -142,7 +144,10 @@ export function CardRepairActions({
           onClick={edit}
         >
           <Pencil size={14} />
-          Edit{shortcut && data.settings.keyboardHints && <kbd>E</kbd>}
+          Edit
+          {shortcut && data.settings.keyboardHints && (
+            <kbd>{keyLabel(data.settings.studyKeys.edit)}</kbd>
+          )}
         </button>
         <div className="qard-card-more" ref={menu}>
           <button
@@ -166,7 +171,7 @@ export function CardRepairActions({
                 <Flag size={14} />
                 {flagged ? 'Clear needs fixing' : 'Needs fixing'}
               </button>
-              {services.improvements && (
+              {services.improvements && aiOn(data.settings) && (
                 <button
                   disabled={disabled || busy || card.duplicateId}
                   onClick={() => {

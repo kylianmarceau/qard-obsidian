@@ -154,6 +154,11 @@ function tracked(
 }
 
 /** pdfs: the plugin's shared reader, so PDF text extracted once is reused across runs. */
+export const AI_OFF_MESSAGE = 'AI features are turned off. Turn them on in Settings → Qard.';
+/** Stands in for every connection while AI features are off, so no AI request can start. */
+export function aiOffRunner(): AgentRunner {
+  return { name: 'AI off', run: () => Promise.reject(new Error(AI_OFF_MESSAGE)) };
+}
 export function createRunner(
   app: App,
   settings: QardSettings,

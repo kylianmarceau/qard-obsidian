@@ -1,6 +1,6 @@
 import { locationComment, type CardLocation } from './card-location';
 import type { QardCard } from './card-types';
-import { parseCards, sameContent } from './parser';
+import { parseCards, sameContent, sourceLines, topicSections } from './parser';
 import { siblingGroup } from './siblings';
 import { readCardFormat } from './card-format';
 
@@ -234,4 +234,175 @@ export function placeCardInSource(
     prefix +
     source.slice(current.sourcePosition.calloutStart)
   );
+}
+
+/** Insert at `at` with one blank line on each side, so a callout never runs into nearby text. */
+function insertBlock(source: string, at: number, block: string, eol: string) {
+  let before = source.slice(0, at);
+  const after = source.slice(at);
+  if (before && !/[\r\n]$/.test(before)) {
+    before += eol;
+  }
+  if (before && !/(?:\r\n|\n|\r){2}$/.test(before) && before !== eol) {
+    before += eol;
+  }
+  return before + block + (after && !/^[\r\n]/.test(after) ? eol : '') + after;
+}
+/**
+ * Put new card markup where a card of `deck`/`topic` belongs in this note: after the topic's last
+ * card, else at the end of its last heading section, else under a new heading at the end. Location
+ * overrides are inherited when the only cards of the topic were moved here from another deck.
+ */
+export function insertIntoTopic(
+  source: string,
+  path: string,
+  deck: string,
+  topic: string,
+  content: (eol: string, location?: CardLocation) => string,
+): string {
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const note = topicSections(source, path);
+  if (!note) {
+    throw new Error('This note has invalid frontmatter. Fix it or choose another note.');
+  }
+  const matching = parseCards(source, path).cards.filter(
+    (card) => card.deck === deck && card.topic === topic,
+  );
+  const anchor = matching.filter((card) => !card.location).at(-1) ?? matching.at(-1);
+  if (anchor) {
+    return insertBlock(source, anchor.sourcePosition.end, content(eol, anchor.location), eol);
+  }
+  if (note.fixedTopic && note.fixedTopic !== topic) {
+    throw new Error(
+      `This note fixes its topic to “${note.fixedTopic}”. Choose that topic or create the card in a new note.`,
+    );
+  }
+  if (note.deck !== deck) {
+    throw new Error('This note changed or belongs to another deck. Choose another note.');
+  }
+  const section = [...note.sections].reverse().find((entry) => entry.topic === topic);
+  if (section) {
+    const lines = sourceLines(source);
+    let last = section.end - 1;
+    while (last >= section.line && !lines[last]?.text.trim()) {
+      last--;
+    }
+    const at = lines[last]?.end ?? 0;
+    return insertBlock(source, at, content(eol), eol);
+  }
+  return (
+    source +
+    (!source || source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) +
+    `# ${topic}${eol}${eol}` +
+    content(eol)
+  );
+}
+
+export interface SourceEdit {
+  at: number;
+  text: string;
+}
+/** Apply insertions given as offsets into the original source. */
+export function applyEdits(source: string, edits: SourceEdit[]): string {
+  for (const edit of [...edits].sort((a, b) => b.at - a.at)) {
+    source = source.slice(0, edit.at) + edit.text + source.slice(edit.at);
+  }
+  return source;
+}
+export function canReverse(card: QardCard): boolean {
+  return (
+    !card.reverseId &&
+    !card.duplicateId &&
+    readCardFormat(card.frontMarkdown).kind === 'basic' &&
+    readCardFormat(card.backMarkdown).kind === 'basic'
+  );
+}
+/**
+ * Link a basic card to a new opposite card placed right after it. Only comment lines are added
+ * above the card; its callout stays byte-for-byte intact. `id` names a card that has no ID yet.
+ */
+export function reversePairEdits(
+  source: string,
+  card: QardCard,
+  ids: { reverseId: string; group: string; id?: string },
+): SourceEdit[] {
+  const current = locateCard(source, card);
+  if (!canReverse(current)) {
+    throw new Error('Only basic cards without a reverse can get one.');
+  }
+  const id = current.stable ? current.id : ids.id;
+  if (!id) {
+    throw new Error('Assign a card ID before adding a reverse.');
+  }
+  const group = current.siblingGroup ?? ids.group;
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  const partner = serializeCard(
+    ids.reverseId,
+    current.backMarkdown,
+    current.frontMarkdown,
+    eol,
+    group,
+    current.location,
+    id,
+  );
+  const comments = [
+    `<!-- qard-reverse: ${ids.reverseId} -->`,
+    ...(current.siblingGroup ? [] : [`<!-- qard-siblings: ${group} -->`]),
+    ...(current.stable ? [] : [`<!-- qard-id: ${id} -->`]),
+  ];
+  const end = current.sourcePosition.end;
+  const after = source.slice(end);
+  return [
+    { at: current.sourcePosition.start, text: comments.map((line) => line + eol).join('') },
+    {
+      at: end,
+      text:
+        (/[\r\n]$/.test(current.sourceText) ? '' : eol) +
+        eol +
+        partner +
+        (after && !/^[\r\n]/.test(after) ? eol : ''),
+    },
+  ];
+}
+export function addReverseInSource(
+  source: string,
+  card: QardCard,
+  ids: { reverseId: string; group: string; id?: string },
+): string {
+  const next = applyEdits(source, reversePairEdits(source, card, ids));
+  const id = card.stable ? card.id : ids.id;
+  const parsed = parseCards(next, card.sourceFile).cards;
+  const original = parsed.filter((c) => c.id === id);
+  const partner = parsed.filter((c) => c.id === ids.reverseId);
+  if (
+    original.length !== 1 ||
+    partner.length !== 1 ||
+    original[0]!.reverseId !== ids.reverseId ||
+    partner[0]!.reverseId !== id ||
+    partner[0]!.frontMarkdown !== original[0]!.backMarkdown ||
+    partner[0]!.backMarkdown !== original[0]!.frontMarkdown ||
+    partner[0]!.deck !== original[0]!.deck ||
+    partner[0]!.topic !== original[0]!.topic
+  ) {
+    throw new Error('The reverse card could not be added safely to this note.');
+  }
+  return next;
+}
+/** Delete the opposite card of a pair and unlink the one that stays. */
+export function removeReverseInSource(source: string, card: QardCard): string {
+  const current = locateCard(source, card);
+  const partner = parseCards(source, card.sourceFile).cards.filter(
+    (c) => c.id === current.reverseId,
+  );
+  if (!current.reverseId || partner.length !== 1 || partner[0]!.reverseId !== current.id) {
+    throw new Error('This reverse pair changed in the note. Reopen the card before removing it.');
+  }
+  return deleteCardInSource(source, partner[0]!);
+}
+/** The card whose markup, including its comment lines, covers this line. */
+export function cardAtLine(source: string, cards: QardCard[], line: number): QardCard | undefined {
+  const at = sourceLines(source)[line]?.start;
+  return at === undefined
+    ? undefined
+    : cards.find((card) => card.sourcePosition.start <= at && at < card.sourcePosition.end);
 }

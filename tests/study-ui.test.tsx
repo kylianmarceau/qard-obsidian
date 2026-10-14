@@ -441,3 +441,58 @@ it('undo reverses linked-course lapses and offers a separate retry when that cou
   await key('3');
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
 });
+
+async function press(init: KeyboardEventInit) {
+  await act(async () => {
+    host.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...init }));
+    await services.reviews.flush().catch(() => {});
+  });
+}
+it('uses remapped study keys and shows them as hints', async () => {
+  await services.reviews.saveSettings({
+    ...services.reviews.getSnapshot().settings,
+    studyKeys: { ...services.reviews.getSnapshot().settings.studyKeys, reveal: 'Enter', good: 'g' },
+  });
+  await mount();
+  await key(' ');
+  expect(host.querySelector('.qard-study-card')?.classList.contains('is-revealed')).toBe(false);
+  expect(host.textContent).toContain('Enter');
+  await key('Enter');
+  expect(host.querySelector('.qard-study-card')?.classList.contains('is-revealed')).toBe(true);
+  expect(host.querySelector('.qard-rating-3 kbd')?.textContent).toBe('G');
+  await key('3');
+  expect(host.textContent).not.toContain('Session complete');
+  await key('g');
+  expect(host.textContent).toContain('Session complete');
+});
+it('rates with the physical 1–4 keys on AZERTY and ignores keys a hotkey already handled', async () => {
+  await mount();
+  await key(' ');
+  const handled = new KeyboardEvent('keydown', { key: '3', bubbles: true, cancelable: true });
+  handled.preventDefault();
+  await act(async () => void host.dispatchEvent(handled));
+  expect(host.textContent).not.toContain('Session complete');
+  await press({ key: '"', code: 'Digit3' });
+  expect(host.textContent).toContain('Session complete');
+});
+it('registers study commands that follow the same rules as the buttons', async () => {
+  let commands: ((action: string, checking: boolean) => boolean) | undefined;
+  services.setStudyCommands = (c) => {
+    commands = c as typeof commands;
+  };
+  await mount();
+  expect(commands?.('good', true)).toBe(false);
+  expect(commands?.('reveal', true)).toBe(true);
+  await act(async () => void commands?.('reveal', false));
+  expect(commands?.('good', true)).toBe(true);
+  expect(commands?.('undo', true)).toBe(false);
+  await act(async () => {
+    commands?.('good', false);
+    await services.reviews.flush().catch(() => {});
+  });
+  expect(host.textContent).toContain('Session complete');
+  expect(commands?.('undo', true)).toBe(true);
+  await act(async () => root.unmount());
+  expect(commands).toBeUndefined();
+  root = createRoot(host);
+});

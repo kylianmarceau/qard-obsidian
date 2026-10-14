@@ -2,16 +2,28 @@ import { TFile, normalizePath, type App } from 'obsidian';
 import type { QardCard } from './card-types';
 import type { VaultIndexer } from './indexer';
 import {
+  addReverseInSource,
+  canReverse,
   deleteCardInSource,
   deleteGroupInSource,
   ensureSiblingGroupsInSource,
+  insertIntoTopic,
   locateCard,
+  removeReverseInSource,
   replaceCardInSource,
   serializeCard,
   placeCardInSource,
 } from './source-patch';
-import { parseCards } from './parser';
+import { defaultDeck, parseCards } from './parser';
 import { readCardLocation, type CardLocation } from './card-location';
+import {
+  chooseCardNote,
+  deckSlug,
+  newNotePath,
+  parentFolder,
+  type NoteCandidate,
+} from './card-target';
+import { isStudyNote } from '../vault-access';
 import { siblingGroup } from './siblings';
 import type { SourceSnapshot } from './source-sync-types';
 import { readCardFormat } from './card-format';
@@ -47,6 +59,88 @@ export class CardWriter {
       throw new Error('The source note no longer exists. Reopen the card from the library.');
     }
     return file;
+  }
+  private frontmatter(path: string): Record<string, unknown> | undefined {
+    const file = this.app.vault.getAbstractFileByPath(path);
+    return file instanceof TFile
+      ? this.app.metadataCache?.getFileCache(file)?.frontmatter
+      : undefined;
+  }
+  /** Notes that could hold a new card: indexed card notes plus deck notes that have no cards yet. */
+  private candidates(deck: string, topic: string): NoteCandidate[] {
+    const notes = new Map<string, QardCard[]>();
+    for (const card of this.index.getSnapshot().cards) {
+      notes.set(card.sourceFile, [...(notes.get(card.sourceFile) ?? []), card]);
+    }
+    for (const file of this.app.vault.getMarkdownFiles?.() ?? []) {
+      if (!notes.has(file.path) && isStudyNote(file.path)) {
+        const named = this.frontmatter(file.path)?.['qard-deck'];
+        if (typeof named === 'string' && named.trim() === deck) {
+          notes.set(file.path, []);
+        }
+      }
+    }
+    return [...notes].map(([path, cards]) => {
+      const matter = this.frontmatter(path),
+        named = matter?.['qard-deck'],
+        fixed = matter?.['qard-topic'];
+      return {
+        path,
+        deck: this.noteDeck(path, cards),
+        qardDeck: typeof named === 'string' && !!named.trim(),
+        ...(typeof fixed === 'string' && fixed.trim() ? { fixedTopic: fixed.trim() } : {}),
+        topicCards: cards.filter((c) => !c.location && c.deck === deck && c.topic === topic).length,
+      };
+    });
+  }
+  /** Parsed cards are the truth; cached frontmatter can lag behind an edit. */
+  private noteDeck(path: string, cards: QardCard[]) {
+    const natural = cards.find((card) => !card.location);
+    if (natural) {
+      return natural.deck;
+    }
+    const named = this.frontmatter(path)?.['qard-deck'];
+    return typeof named === 'string' && named.trim() ? named.trim() : defaultDeck(path);
+  }
+  /**
+   * Where a new card of this deck and topic goes: a note that already holds the topic or deck,
+   * else a new note in `folder`. From a source note, only notes beside it are used, so relative
+   * links and attachments keep their meaning.
+   */
+  targetFor(
+    deck: string,
+    topic: string,
+    folder: string,
+    sourceFile?: string,
+  ): { path: string; exists: boolean } {
+    deck = deck.trim();
+    topic = topic.trim() || 'General';
+    const exists = (path: string) => !!this.app.vault.getAbstractFileByPath(path);
+    let notes = this.candidates(deck, topic);
+    if (sourceFile && exists(sourceFile)) {
+      const own = this.index.getSnapshot().cards.filter((c) => c.sourceFile === sourceFile);
+      if (this.noteDeck(sourceFile, own) === deck) {
+        return { path: sourceFile, exists: true };
+      }
+      folder = parentFolder(sourceFile);
+      notes = notes.filter((note) => parentFolder(note.path) === folder);
+    } else {
+      folder = safeFolder(folder);
+    }
+    const chosen = chooseCardNote(notes, deck, topic, folder);
+    return chosen
+      ? { path: chosen, exists: true }
+      : { path: newNotePath(deck, folder, exists), exists: false };
+  }
+  private async createNote(path: string, source: string) {
+    let built = '';
+    for (const part of safeFolder(parentFolder(path)).split('/').filter(Boolean)) {
+      built = built ? `${built}/${part}` : part;
+      if (!this.app.vault.getAbstractFileByPath(built)) {
+        await this.app.vault.createFolder(built);
+      }
+    }
+    return this.app.vault.create(path, source);
   }
   private unique(card: QardCard) {
     if (
@@ -200,6 +294,48 @@ export class CardWriter {
     await this.index.refresh(file);
     return this.index.getSnapshot().cards.find((c) => c.id === id)!;
   }
+  /** Add an opposite card after each basic card. Cards that can't have one are counted, not changed. */
+  async addReverses(cards: QardCard[]): Promise<{ added: QardCard[]; skipped: number }> {
+    const eligible = [...new Map(cards.map((card) => [card.id, card])).values()].filter(canReverse);
+    const ready = eligible.length ? await this.ensureStable(eligible) : [];
+    const groups = new Map<string, QardCard[]>();
+    for (const card of ready) {
+      groups.set(card.sourceFile, [...(groups.get(card.sourceFile) ?? []), card]);
+    }
+    for (const [path, group] of groups) {
+      const file = this.file(path);
+      await this.app.vault.process(file, (source) =>
+        group.reduce(
+          (text, card) =>
+            addReverseInSource(text, card, {
+              reverseId: crypto.randomUUID(),
+              group: crypto.randomUUID(),
+            }),
+          source,
+        ),
+      );
+      await this.index.refresh(file);
+    }
+    const cardsNow = this.index.getSnapshot().cards;
+    return {
+      added: ready.map((card) => cardsNow.find((c) => c.id === card.id)!),
+      skipped: cards.length - ready.length,
+    };
+  }
+  async addReverse(card: QardCard): Promise<QardCard> {
+    if (!canReverse(card)) {
+      throw new Error('Only basic cards without a reverse can get one.');
+    }
+    return (await this.addReverses([card])).added[0]!;
+  }
+  /** Delete the opposite card of a pair. Returns the card that stays, now unlinked. */
+  async removeReverse(card: QardCard): Promise<QardCard> {
+    this.unique(card);
+    const file = this.file(card.sourceFile);
+    await this.app.vault.process(file, (source) => removeReverseInSource(source, card));
+    await this.index.refresh(file);
+    return this.index.getSnapshot().cards.find((c) => c.id === card.id)!;
+  }
   /** Read the latest note before resuming a save whose index refresh may have failed. */
   async refresh(card: QardCard) {
     this.unique(card);
@@ -302,6 +438,8 @@ export class CardWriter {
       batchId: string;
       label?: 'cloze' | 'occlusion';
       siblingGroup?: string;
+      /** A note chosen with `targetFor`: cards join their topics there instead of a batch note. */
+      path?: string;
     },
     cards: {
       id: string;
@@ -334,15 +472,11 @@ export class CardWriter {
       }
       serializeCard(c.id, c.front, c.back, '\n', target.siblingGroup);
     });
-    const slug =
-      deck
-        .replace(/[\\/:*?"<>|#^[\]]/g, '-')
-        .replace(/^\.+/, '')
-        .trim()
-        .slice(0, 80) || 'Cards';
-    const path = [folder, `${slug} ${target.label || 'generated'} ${target.batchId}.md`]
-      .filter(Boolean)
-      .join('/');
+    const path =
+      target.path ??
+      [folder, `${deckSlug(deck)} ${target.label || 'generated'} ${target.batchId}.md`]
+        .filter(Boolean)
+        .join('/');
     for (const card of cards) {
       if (card.source) {
         await this.trackSources?.(card.id, [card.source], card.sourceSnapshots);
@@ -376,18 +510,29 @@ export class CardWriter {
         const name = topicOf(card);
         groups.set(name, [...(groups.get(name) ?? []), card]);
       }
-      const next =
-        source +
-        eol +
-        [...groups]
-          .map(
-            ([name, group]) =>
-              `# ${name}${eol}${eol}` +
-              group
-                .map((c) => serializeCard(c.id, c.front, c.back, eol, target.siblingGroup))
-                .join(eol),
+      const next = target.path
+        ? [...groups].reduce(
+            (text, [name, group]) =>
+              insertIntoTopic(text, path, deck, name, (eol, location) =>
+                group
+                  .map((c) =>
+                    serializeCard(c.id, c.front, c.back, eol, target.siblingGroup, location),
+                  )
+                  .join(eol),
+              ),
+            source,
           )
-          .join(eol);
+        : source +
+          eol +
+          [...groups]
+            .map(
+              ([name, group]) =>
+                `# ${name}${eol}${eol}` +
+                group
+                  .map((c) => serializeCard(c.id, c.front, c.back, eol, target.siblingGroup))
+                  .join(eol),
+            )
+            .join(eol);
       const parsed = parseCards(next, path).cards;
       if (
         cards.some(
@@ -409,15 +554,7 @@ export class CardWriter {
     if (file instanceof TFile) {
       await this.app.vault.process(file, append);
     } else {
-      const source = append(`---\nqard-deck: ${JSON.stringify(deck)}\n---\n`);
-      let built = '';
-      for (const part of folder.split('/').filter(Boolean)) {
-        built = built ? `${built}/${part}` : part;
-        if (!this.app.vault.getAbstractFileByPath(built)) {
-          await this.app.vault.createFolder(built);
-        }
-      }
-      file = await this.app.vault.create(path, source);
+      file = await this.createNote(path, append(`---\nqard-deck: ${JSON.stringify(deck)}\n---\n`));
     }
     if (!(file instanceof TFile)) {
       throw new Error('The generated note could not be created.');
@@ -447,10 +584,10 @@ export class CardWriter {
     ) {
       throw new Error('Only basic cards can test the reverse.');
     }
-    const content = (eol = '\n') =>
-      serializeCard(id, draft.front, draft.back, eol, group, undefined, reverseId) +
+    const content = (eol = '\n', location?: CardLocation) =>
+      serializeCard(id, draft.front, draft.back, eol, group, location, reverseId) +
       (reverseId
-        ? eol + serializeCard(reverseId, draft.back, draft.front, eol, group, undefined, id)
+        ? eol + serializeCard(reverseId, draft.back, draft.front, eol, group, location, id)
         : '');
     // Validate before creating directories or notes.
     serializeCard(id, draft.front, draft.back);
@@ -461,36 +598,13 @@ export class CardWriter {
         await this.trackSources?.(reverseId, draft.generatedFrom, draft.sourceSnapshots);
       }
     }
-    let file: TFile | undefined;
-    if (draft.sourceFile) {
-      const existing = this.file(draft.sourceFile);
-      const source = await this.app.vault.read(existing);
-      const cards = parseCards(source, existing.path).cards;
-      const cacheDeck: unknown =
-        this.app.metadataCache.getFileCache(existing)?.frontmatter?.['qard-deck'];
-      const existingDeck =
-        typeof cacheDeck === 'string' ? cacheDeck.trim() : cards[0]?.deck || existing.basename;
-      if (existingDeck === deck) {
-        file = existing;
-      }
-    }
-    if (file) {
+    const target = this.targetFor(deck, topic, draft.folder, draft.sourceFile);
+    let file: TFile;
+    if (target.exists) {
+      file = this.file(target.path);
       await this.app.vault.process(file, (source) => {
-        const eol = source.includes('\r\n') ? '\r\n' : '\n';
-        const override: unknown = this.app.metadataCache.getFileCache(file!)?.frontmatter?.[
-          'qard-topic'
-        ];
-        if (typeof override === 'string' && override.trim() !== topic) {
-          throw new Error(
-            `This note fixes its topic to “${override}”. Choose that topic or create the card in a new note.`,
-          );
-        }
-        const next =
-          source +
-          (source.endsWith(eol + eol) ? '' : source.endsWith(eol) ? eol : eol + eol) +
-          `# ${topic}${eol}${eol}` +
-          content(eol);
-        const created = parseCards(next, file!.path).cards.find((c) => c.id === id);
+        const next = insertIntoTopic(source, file.path, deck, topic, content);
+        const created = parseCards(next, file.path).cards.find((c) => c.id === id);
         if (!created || created.deck !== deck || created.topic !== topic) {
           throw new Error(
             'This note changed or has an unfinished Markdown block. Fix its source or choose a new note before adding a card.',
@@ -499,31 +613,8 @@ export class CardWriter {
         return next;
       });
     } else {
-      // A selection moved to a different deck stays beside its source so relative attachments retain their meaning.
-      const folder = safeFolder(
-        draft.sourceFile ? draft.sourceFile.split('/').slice(0, -1).join('/') : draft.folder,
-      );
-      let built = '';
-      for (const part of folder.split('/').filter(Boolean)) {
-        built = built ? `${built}/${part}` : part;
-        if (!this.app.vault.getAbstractFileByPath(built)) {
-          await this.app.vault.createFolder(built);
-        }
-      }
-      const slug =
-        deck
-          .replace(/[\\/:*?"<>|#^[\]]/g, '-')
-          .replace(/^\.+/, '')
-          .trim()
-          .slice(0, 80) || 'Cards';
-      const base = [folder, slug].filter(Boolean).join('/');
-      let path = base + '.md',
-        n = 2;
-      while (this.app.vault.getAbstractFileByPath(path)) {
-        path = `${base} ${n++}.md`;
-      }
-      file = await this.app.vault.create(
-        path,
+      file = await this.createNote(
+        target.path,
         `---\nqard-deck: ${JSON.stringify(deck)}\n---\n\n# ${topic}\n\n${content()}`,
       );
     }

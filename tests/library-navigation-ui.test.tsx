@@ -129,3 +129,39 @@ it('opens the full deck from a filtered library and returns to the same search',
   expect(host.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('Reliable');
   expect(host.querySelector('.qard-desk-heading h1')?.textContent).toBe('Your decks');
 });
+it('hides AI workspaces and buttons while AI features are off, and brings them back', async () => {
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+  const setAi = async (aiEnabled: boolean) => {
+    await act(async () => {
+      await services.reviews.saveSettings({
+        ...services.reviews.getSnapshot().settings,
+        aiEnabled,
+      });
+    });
+    await settle();
+  };
+  await click('Tests');
+  await settle();
+  expect(host.textContent).toContain('No tests yet.');
+  await setAi(false);
+  // An AI screen that was open falls back to the library.
+  expect(selected().textContent).toBe('Decks');
+  expect([...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+    'Decks',
+    'Plans',
+  ]);
+  const buttons = () => [...host.querySelectorAll('button')].map((b) => b.textContent);
+  expect(buttons()).not.toContain('Practice test');
+  await act(async () =>
+    root.render(<QardApp services={services} request={{ serial: 1, kind: 'tests' }} />),
+  );
+  expect(selected().textContent).toBe('Decks');
+  await setAi(true);
+  expect(host.textContent).toContain('No tests yet.');
+  expect([...host.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+    'Decks',
+    'Tests',
+    'Learn',
+    'Plans',
+  ]);
+});

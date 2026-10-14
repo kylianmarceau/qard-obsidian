@@ -1,5 +1,14 @@
-import { Plugin, addIcon, Notice, MarkdownView, TFile } from 'obsidian';
+import {
+  Plugin,
+  addIcon,
+  Notice,
+  MarkdownView,
+  TFile,
+  type Editor,
+  type EditorPosition,
+} from 'obsidian';
 import { QardView, VIEW_TYPE } from './views/QardView';
+import { CARD_PANEL_VIEW_TYPE, CardPanelView, type CardTarget } from './views/CardPanelView';
 import { VaultIndexer } from './cards/indexer';
 import { SourceSyncService, sourceSyncPath } from './cards/source-sync-service';
 import { CardImprovementService } from './cards/improvement-service';
@@ -17,9 +26,12 @@ import type { QardCard } from './cards/card-types';
 import type { Selection } from './review/session';
 import { topicKey } from './decks/deck-index';
 import { parseCards, locationAtLine, setDeckNaming } from './cards/parser';
+import { canReverse, cardAtLine, reversePairEdits } from './cards/source-patch';
+import type { StudyAction } from './review/keyboard';
 import { TestService } from './tests/test-service';
 import { VaultTestStorage } from './tests/vault-storage';
-import { createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
+import { aiOffRunner, createRunner, nodeHost, type UsageEvent } from './agents/create-runner';
+import { aiOn } from './settings/settings';
 import { pythonRunner } from './agents/python';
 import { usageKey } from './agents/usage-report';
 import { LearnService } from './learn/learn-service';
@@ -171,8 +183,11 @@ export default class QardPlugin extends Plugin {
       void this.reviews
         .recordUsage(isoDay(Date.now()), usageKey(e.purpose, e.role, e.provider, e.model), e.usage)
         .catch(() => {});
+    // One gate for every AI call: each job asks for its runner when it starts.
     const runner = (role: Parameters<typeof createRunner>[2]) =>
-      createRunner(this.app, settings(), role, record, this.pdfs);
+      aiOn(settings())
+        ? createRunner(this.app, settings(), role, record, this.pdfs)
+        : aiOffRunner();
     const links = {
       get: (id: string) => this.reviews.getSnapshot().links[id],
       set: (id: string, link: { mastery: string; objective: string; lapses: number }) =>
@@ -282,6 +297,7 @@ export default class QardPlugin extends Plugin {
   private registerWorkspace() {
     addIcon('qard', QARD_OBSIDIAN_ICON);
     this.registerView(VIEW_TYPE, (leaf) => new QardView(leaf, this));
+    this.registerView(CARD_PANEL_VIEW_TYPE, (leaf) => new CardPanelView(leaf, this));
     this.addRibbonIcon('qard', 'Open study workspace', () => {
       void this.open().catch((e) => new Notice(String(e)));
     });
@@ -289,18 +305,23 @@ export default class QardPlugin extends Plugin {
 
   private registerCommands() {
     this.addCommand({ id: 'open', name: 'Open study workspace', callback: () => this.open() });
-    this.addCommand({
-      id: 'new-practice-test',
-      name: 'New practice test',
-      callback: () => this.show('new-test'),
-    });
-    this.addCommand({
-      id: 'open-practice-tests',
-      name: 'Open practice tests',
-      callback: () => this.show('tests'),
-    });
+    this.aiCommand('new-practice-test', 'New practice test', () => this.show('new-test'));
+    this.aiCommand('open-practice-tests', 'Open practice tests', () => this.show('tests'));
     this.addCommand({ id: 'open-today', name: 'Open today', callback: () => this.show('today') });
-    this.addCommand({ id: 'open-learn', name: 'Open courses', callback: () => this.show('learn') });
+    this.aiCommand('open-learn', 'Open courses', () => this.show('learn'));
+    this.addCommand({
+      id: 'open-library',
+      name: 'Open decks',
+      callback: () => this.show('library'),
+    });
+    this.addCommand({
+      id: 'open-plans',
+      name: 'Open exam plans',
+      callback: () => this.show('exams'),
+    });
+    this.aiCommand('generate-cards', 'Generate flashcards with AI', () =>
+      this.show('generate-cards'),
+    );
     this.addCommand({
       id: 'source-updates',
       name: 'Review source updates',
@@ -311,11 +332,7 @@ export default class QardPlugin extends Plugin {
       name: 'Show study statistics',
       callback: () => this.show('statistics'),
     });
-    this.addCommand({
-      id: 'open-usage',
-      name: 'Show token usage',
-      callback: () => this.show('usage'),
-    });
+    this.aiCommand('open-usage', 'Show token usage', () => this.show('usage'));
     this.removeDevTools = installDevTools(this, (command) => this.addCommand(command));
     this.addCommand({
       id: 'open-study-time',
@@ -327,7 +344,7 @@ export default class QardPlugin extends Plugin {
       name: 'Teach me this note',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        if (!file || (file.extension !== 'md' && !isPdf(file.path))) {
+        if (!this.ai() || !file || (file.extension !== 'md' && !isPdf(file.path))) {
           return false;
         }
         if (!checking) {
@@ -401,6 +418,61 @@ export default class QardPlugin extends Plugin {
         return true;
       },
     });
+    // Study commands run in the card session of the Qard tab in front, so they can share a hotkey with notes.
+    for (const [action, id, name] of STUDY_COMMANDS) {
+      this.addCommand({
+        id,
+        name,
+        checkCallback: (checking) =>
+          this.app.workspace.getActiveViewOfType(QardView)?.studyCommand(action, checking) ?? false,
+      });
+    }
+    this.addCommand({
+      id: 'new-card',
+      name: 'New card',
+      callback: () => {
+        const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const file = view?.file;
+        // From a note with cards, the card joins that note under the topic at the cursor.
+        const target =
+          file && this.index.getSnapshot().cards.some((c) => c.sourceFile === file.path)
+            ? {
+                ...locationAtLine(view.editor.getValue(), file.path, view.editor.getCursor().line),
+                sourceFile: file.path,
+              }
+            : undefined;
+        void this.openCardPanel(target).catch((e) => new Notice(String(e)));
+      },
+    });
+    this.addCommand({
+      id: 'insert-card',
+      name: 'Insert card',
+      editorCallback: (editor, view) => insertCard(editor, view.file?.path ?? ''),
+    });
+    this.addCommand({
+      id: 'reverse-card-at-cursor',
+      name: 'Make card at cursor reversed',
+      editorCheckCallback: (checking, editor, view) => {
+        const path = view.file?.path ?? '';
+        const source = editor.getValue();
+        const card = cardAtLine(source, parseCards(source, path).cards, editor.getCursor().line);
+        if (!card || !canReverse(card)) {
+          return false;
+        }
+        if (!checking) {
+          const edits = reversePairEdits(source, card, {
+            reverseId: crypto.randomUUID(),
+            group: crypto.randomUUID(),
+            id: card.stable ? undefined : crypto.randomUUID(),
+          });
+          // One transaction, so a single undo removes the whole pair.
+          editor.transaction({
+            changes: edits.map((edit) => ({ from: editor.offsetToPos(edit.at), text: edit.text })),
+          });
+        }
+        return true;
+      },
+    });
     this.addCommand({
       id: 'import-spaced-repetition',
       name: 'Import from Spaced Repetition',
@@ -449,8 +521,33 @@ export default class QardPlugin extends Plugin {
       .then(() => this.sourceSync.refresh())
       .catch(() => new Notice('Qard could not index the vault. Reload the plugin to retry.'));
     // Pick up background work that a reload of Obsidian or Qard interrupted.
-    void this.learn.resumeBackground().catch(() => {});
-    void this.tests.resume().catch(() => {});
+    const resume = () => {
+      void this.learn.resumeBackground().catch(() => {});
+      void this.tests.resume().catch(() => {});
+    };
+    let ai = aiOn(this.reviews.getSnapshot().settings);
+    if (ai) {
+      resume();
+    }
+    // Turning AI off stops its jobs; they can be tried again once it's back on.
+    this.register(
+      this.reviews.subscribe(() => {
+        const next = aiOn(this.reviews.getSnapshot().settings);
+        if (next === ai) {
+          return;
+        }
+        ai = next;
+        if (next) {
+          resume();
+        } else {
+          this.tests.cancelAll();
+          this.learn.cancelAll();
+          this.flashcards.cancel();
+          this.improvements.cancelAll();
+          this.sourceSync.cancelAll();
+        }
+      }),
+    );
   }
 
   async open() {
@@ -472,8 +569,43 @@ export default class QardPlugin extends Plugin {
   openTransfer(mode: TransferMode) {
     new TransferModal(this, mode).open();
   }
+  private ai() {
+    return aiOn(this.reviews.getSnapshot().settings);
+  }
+  /** AI commands leave the command palette, and hotkeys stop working, while AI features are off. */
+  private aiCommand(id: string, name: string, run: () => unknown) {
+    this.addCommand({
+      id,
+      name,
+      checkCallback: (checking) => {
+        if (!this.ai()) {
+          return false;
+        }
+        if (!checking) {
+          void Promise.resolve(run()).catch((e) => new Notice(String(e)));
+        }
+        return true;
+      },
+    });
+  }
+  /** Open the New card panel in the right sidebar, or bring it forward. */
+  async openCardPanel(target?: CardTarget) {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(CARD_PANEL_VIEW_TYPE)[0];
+    if (!leaf) {
+      leaf = workspace.getRightLeaf(false) ?? workspace.getLeaf('split');
+      await leaf.setViewState({ type: CARD_PANEL_VIEW_TYPE, active: true });
+    }
+    await workspace.revealLeaf(leaf);
+    if (target && leaf.view instanceof CardPanelView) {
+      leaf.view.prefill(target);
+    }
+  }
   async show(
     kind:
+      | 'library'
+      | 'exams'
+      | 'generate-cards'
       | 'tests'
       | 'new-test'
       | 'today'
@@ -524,6 +656,11 @@ export default class QardPlugin extends Plugin {
     this.backupModals.clear();
     this.optimizerModals.forEach((modal) => modal.close());
     this.optimizerModals.clear();
+    this.app.workspace.getLeavesOfType(CARD_PANEL_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view instanceof CardPanelView) {
+        leaf.view.release();
+      }
+    });
     this.app.workspace.getLeavesOfType(VIEW_TYPE).forEach((leaf) => {
       if (leaf.view instanceof QardView) {
         leaf.view.release();
@@ -541,6 +678,48 @@ export default class QardPlugin extends Plugin {
   }
 }
 
+const STUDY_COMMANDS: [StudyAction, string, string][] = [
+  ['reveal', 'study-reveal', 'Show or hide answer'],
+  ['again', 'study-again', 'Rate Again'],
+  ['hard', 'study-hard', 'Rate Hard'],
+  ['good', 'study-good', 'Rate Good'],
+  ['easy', 'study-easy', 'Rate Easy'],
+  ['undo', 'study-undo', 'Undo last rating'],
+  ['skip', 'study-skip', 'Skip card'],
+  ['pause', 'study-pause', 'Pause card'],
+  ['edit', 'study-edit', 'Edit card'],
+  ['focus', 'study-focus', 'Toggle focus mode'],
+  ['leave', 'study-leave', 'Leave study session'],
+];
+/** A card template after the card at the cursor, or at the cursor, with "Question" selected. */
+export function insertCard(editor: Editor, path: string) {
+  const source = editor.getValue();
+  const cursor = editor.getCursor();
+  const around = cardAtLine(source, parseCards(source, path).cards, cursor.line);
+  let at: EditorPosition, before: string;
+  if (around) {
+    at = editor.offsetToPos(around.sourcePosition.end);
+    before = /[\r\n]$/.test(around.sourceText) ? '\n' : '\n\n';
+  } else if (editor.getLine(cursor.line).trim()) {
+    at = { line: cursor.line, ch: editor.getLine(cursor.line).length };
+    before = '\n\n';
+  } else {
+    at = { line: cursor.line, ch: 0 };
+    before = cursor.line > 0 && editor.getLine(cursor.line - 1).trim() ? '\n' : '';
+  }
+  // Keep a blank line between the new callout and any text after it.
+  const rest = source.slice(editor.posToOffset(at));
+  const after = !rest
+    ? ''
+    : /^\r?\n/.test(rest)
+      ? /^\r?\n[ \t]*(?:\r?\n|$)/.test(rest)
+        ? ''
+        : '\n'
+      : '\n\n';
+  editor.replaceRange(`${before}> [!qard]- Question\n> Answer${after}`, at);
+  const line = at.line + before.length;
+  editor.setSelection({ line, ch: 11 }, { line, ch: 19 });
+}
 /** A stable random ID for this device; browser storage is never synced with the vault. */
 function deviceId(): string {
   const key = 'qard-device-id';

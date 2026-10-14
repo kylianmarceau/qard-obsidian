@@ -10,6 +10,7 @@ import type { JobClock } from '../jobs/job-clock';
 import type { SourceSyncService } from '../cards/source-sync-service';
 import type { CardImprovementService } from '../cards/improvement-service';
 import type { StudyClock } from '../time/study-time';
+import type { StudyCommands } from '../review/keyboard';
 export interface QardServices {
   app: App;
   owner: Component;
@@ -27,4 +28,6 @@ export interface QardServices {
   setFocus: (enabled: boolean) => void;
   isActive: () => boolean;
   openSource: (card: QardCard) => Promise<void>;
+  /** A study session registers its actions here so Obsidian commands can run them. */
+  setStudyCommands?: (commands?: StudyCommands) => void;
 }

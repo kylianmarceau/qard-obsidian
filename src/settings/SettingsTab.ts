@@ -1,7 +1,14 @@
 import { PluginSettingTab, Setting, Notice, setIcon, requireApiVersion } from 'obsidian';
 import type { TextComponent, ButtonComponent } from 'obsidian';
 import type QardPlugin from '../main';
-import type { QardSettings, RoleSetting, TestSettings } from './settings';
+import { aiOn, type QardSettings, type RoleSetting, type TestSettings } from './settings';
+import {
+  DEFAULT_STUDY_KEYS,
+  keyLabel,
+  keyName,
+  STUDY_KEY_ACTIONS,
+  type StudyKeyAction,
+} from '../review/keyboard';
 import type { AgentProvider, AgentRole } from '../agents/runner';
 import { API_MODELS } from '../agents/api-runner';
 import { customBaseUrl } from '../agents/custom-connection';
@@ -42,7 +49,16 @@ export class QardSettingsTab extends PluginSettingTab {
   private advancedRows = new Set<HTMLElement>();
   private retentionInput?: TextComponent;
   private advancedButton?: ButtonComponent;
+  private studyKeysOpen = false;
+  private studyKeyRows = new Set<HTMLElement>();
+  private studyKeyButtons = new Map<StudyKeyAction, ButtonComponent>();
+  private studyKeysButton?: ButtonComponent;
+  private aiNav: HTMLElement[] = [];
   hide() {
+    this.studyKeyRows.clear();
+    this.studyKeyButtons.clear();
+    this.studyKeysButton = undefined;
+    this.aiNav = [];
     this.connectionCheck?.abort();
     this.localSetup?.close();
     this.advancedRows.clear();
@@ -80,9 +96,18 @@ export class QardSettingsTab extends PluginSettingTab {
   // Obsidian 1.13+ discovers these definitions for rendering and settings search.
   // Earlier supported versions call display(), which uses the same rows.
   getSettingDefinitions() {
-    const group = (heading: string, items: SettingRow[], id: string, hero = false) => ({
+    const ai = () => aiOn(this.qard.reviews.getSnapshot().settings);
+    const aiOnly = (row: SettingRow): SettingRow => ({ ...row, visible: ai });
+    const group = (
+      heading: string,
+      items: SettingRow[],
+      id: string,
+      hero = false,
+      visible?: () => boolean,
+    ) => ({
       type: 'group' as const,
       heading,
+      ...(visible ? { visible } : {}),
       cls: hero ? 'qard-settings-hero' : 'qard-settings-card',
       items: items.map((definition, index) => ({
         ...definition,
@@ -117,13 +142,14 @@ export class QardSettingsTab extends PluginSettingTab {
         [
           {
             name: 'Your study workspace',
-            desc: 'Study preferences, AI connections and storage. Changes save automatically.',
+            desc: 'Study preferences, optional AI features and storage. Changes save automatically.',
             render: (row) => {
               row.settingEl?.classList.add('qard-settings-intro');
               const nav = row.controlEl.createEl('nav', {
                 cls: 'qard-settings-nav',
                 attr: { 'aria-label': 'Settings sections' },
               });
+              this.aiNav = [];
               for (const [label, id] of [
                 ['Study', 'study'],
                 ['AI', 'ai'],
@@ -131,12 +157,28 @@ export class QardSettingsTab extends PluginSettingTab {
                 ['Files & data', 'files'],
               ]) {
                 const button = nav.createEl('button', { text: label, attr: { type: 'button' } });
+                if (id === 'ai' || id === 'tests') {
+                  button.hidden = !ai();
+                  this.aiNav.push(button);
+                }
                 button.addEventListener('click', () => {
                   this.containerEl
                     .querySelector<HTMLElement>(`[data-qard-section="${id}"]`)
                     ?.scrollIntoView({ block: 'start', behavior: 'smooth' });
                 });
               }
+            },
+          },
+          {
+            name: 'AI features',
+            desc: 'Practice tests, courses and lessons, AI flashcards, card improvements and update suggestions. Turn this off to hide them and stop AI work; your tests, courses, cards and connections are kept.',
+            render: (row) => {
+              row.addToggle((t) =>
+                t.setValue(ai()).onChange(async (value) => {
+                  await this.patch((s) => ({ ...s, aiEnabled: value }));
+                  this.refreshVisibility();
+                }),
+              );
             },
           },
         ],
@@ -174,7 +216,8 @@ export class QardSettingsTab extends PluginSettingTab {
         ]),
         'experience',
       ),
-      group('AI connections', this.connectionDefinitions(), 'ai'),
+      group('Study keys', this.studyKeyDefinitions(), 'keys'),
+      group('AI connections', this.connectionDefinitions(), 'ai', false, ai),
       group(
         'AI roles',
         named(this.roleDefinitions(), [
@@ -186,18 +229,22 @@ export class QardSettingsTab extends PluginSettingTab {
           'Token usage',
         ]),
         'roles',
+        false,
+        ai,
       ),
       group(
         'Practice tests',
         tests.filter((item) => item.name !== 'Tests folder'),
         'tests',
+        false,
+        ai,
       ),
       group(
         'Files and folders',
         [
           ...named(study, ['New-card folder', 'Deck names']),
-          ...named(tests, ['Tests folder']),
-          ...this.learnDefinitions(),
+          ...named(tests, ['Tests folder']).map(aiOnly),
+          ...this.learnDefinitions().map(aiOnly),
         ],
         'files',
       ),
@@ -341,7 +388,7 @@ export class QardSettingsTab extends PluginSettingTab {
           [
             'keyboardHints',
             'Show keyboard hints',
-            'Space to reveal. 1–4 to rate. E to edit. F for focus. Escape to leave focus.',
+            'Show keys on study buttons. Change them under Study keys.',
           ],
           [
             'autoFocus',
@@ -560,6 +607,126 @@ export class QardSettingsTab extends PluginSettingTab {
         },
       })),
     ];
+  }
+  /** Show or hide rows whose visibility depends on a setting that just changed. */
+  private refreshVisibility() {
+    const ai = aiOn(this.qard.reviews.getSnapshot().settings);
+    for (const button of this.aiNav) {
+      button.hidden = !ai;
+    }
+    if (requireApiVersion('1.13.0')) {
+      this.refreshDomState();
+    } else {
+      this.redraw();
+    }
+  }
+  private studyKeyDefinitions(): SettingRow[] {
+    const keys = () => this.qard.reviews.getSnapshot().settings.studyKeys;
+    const relabel = () => {
+      for (const [action, button] of this.studyKeyButtons) {
+        button.setButtonText(keyLabel(keys()[action]));
+      }
+    };
+    const save = async (next: QardSettings['studyKeys']) => {
+      await this.patch((s) => ({ ...s, studyKeys: next }));
+      relabel();
+    };
+    return [
+      {
+        name: 'Study keys',
+        desc: 'Single keys used while reviewing cards. Escape always leaves focus mode or the session. For key combinations, bind Qard commands in Settings → Hotkeys.',
+        render: (row) => {
+          row.addButton((button) => {
+            this.studyKeysButton = button;
+            button.setButtonText(this.studyKeysOpen ? 'Hide' : 'Customise');
+            button.buttonEl?.setAttribute('aria-expanded', String(this.studyKeysOpen));
+            button.onClick(() => this.showStudyKeys(!this.studyKeysOpen));
+          });
+          row.addButton((button) =>
+            button.setButtonText('Reset to defaults').onClick(() => void save(DEFAULT_STUDY_KEYS)),
+          );
+        },
+      },
+      ...STUDY_KEY_ACTIONS.map(
+        ({ action, name }): SettingRow => ({
+          name,
+          visible: () => this.studyKeysOpen,
+          render: (row) => {
+            if (row.settingEl) {
+              this.studyKeyRows.add(row.settingEl);
+              row.settingEl.hidden = !this.studyKeysOpen;
+              row.settingEl.classList.add('qard-settings-advanced');
+            }
+            row.addButton((button) => {
+              this.studyKeyButtons.set(action, button);
+              button.setButtonText(keyLabel(keys()[action]));
+              let stop: (() => void) | undefined;
+              button.onClick(() => {
+                const el = button.buttonEl;
+                if (stop || !el) {
+                  stop?.();
+                  return;
+                }
+                button.setButtonText('Press a key…');
+                const onKey = (event: KeyboardEvent) => {
+                  if (event.key === 'Tab') {
+                    stop?.();
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(event.key)) {
+                    return;
+                  }
+                  if (event.key === 'Escape') {
+                    stop?.();
+                    return;
+                  }
+                  const key = keyName(event);
+                  if (!key || event.metaKey || event.ctrlKey || event.altKey) {
+                    new Notice(
+                      'Choose one key on its own. Key combinations go in the hotkeys settings.',
+                    );
+                    return;
+                  }
+                  stop?.();
+                  const next = { ...keys() };
+                  const other = STUDY_KEY_ACTIONS.find(
+                    (entry) => entry.action !== action && next[entry.action] === key,
+                  );
+                  if (other) {
+                    next[other.action] = next[action];
+                    new Notice(`Swapped with ${other.name}.`);
+                  }
+                  next[action] = key;
+                  void save(next);
+                };
+                const onBlur = () => stop?.();
+                el.addEventListener('keydown', onKey, true);
+                el.addEventListener('blur', onBlur);
+                stop = () => {
+                  el.removeEventListener('keydown', onKey, true);
+                  el.removeEventListener('blur', onBlur);
+                  stop = undefined;
+                  button.setButtonText(keyLabel(keys()[action]));
+                };
+              });
+            });
+          },
+        }),
+      ),
+    ];
+  }
+  private showStudyKeys(show: boolean) {
+    this.studyKeysOpen = show;
+    this.studyKeysButton?.setButtonText(show ? 'Hide' : 'Customise');
+    this.studyKeysButton?.buttonEl?.setAttribute('aria-expanded', String(show));
+    for (const row of this.studyKeyRows) {
+      row.hidden = !show;
+    }
+    if (requireApiVersion('1.13.0')) {
+      this.refreshDomState();
+    }
   }
   private showAdvanced(show: boolean) {
     this.advancedAI = show;
@@ -995,8 +1162,14 @@ export class QardSettingsTab extends PluginSettingTab {
       ? Array.from(activeRow.querySelectorAll('input, select, button')).indexOf(active!)
       : -1;
     this.advancedRows.clear();
+    this.studyKeyRows.clear();
+    this.studyKeyButtons.clear();
     this.containerEl.empty();
     for (const group of this.getSettingDefinitions()) {
+      // Before Obsidian 1.13, visibility predicates are applied here.
+      if ('visible' in group && group.visible?.() === false) {
+        continue;
+      }
       const section = this.containerEl.createDiv({ cls: group.cls });
       new Setting(section).setName(group.heading).setHeading();
       for (const definition of group.items) {
@@ -1005,6 +1178,9 @@ export class QardSettingsTab extends PluginSettingTab {
           row.setDesc(definition.desc);
         }
         definition.render(row);
+        if (definition.visible?.() === false && row.settingEl) {
+          row.settingEl.hidden = true;
+        }
       }
     }
     if (name && index >= 0) {

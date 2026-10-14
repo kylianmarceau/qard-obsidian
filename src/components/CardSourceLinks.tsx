@@ -3,6 +3,7 @@ import { FileText, Link2, X } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
 import { isPdf, studySources } from '../vault-access';
+import { useAi } from '../views/use-ai';
 export function CardSourceLinks({
   card,
   services,
@@ -14,6 +15,7 @@ export function CardSourceLinks({
 }) {
   const service = services.sourceSync!;
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
+  const ai = useAi(services);
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
     [busy, setBusy] = useState(false),
@@ -80,7 +82,9 @@ export function CardSourceLinks({
           <h3>Source notes</h3>
           <p className="qard-muted">
             {link
-              ? 'Qard suggests edits to this card when these notes change.'
+              ? ai
+                ? 'Qard suggests edits to this card when these notes change.'
+                : 'Qard flags this card when these notes change.'
               : 'Link a note to track changes to the material this card is based on.'}
           </p>
         </div>

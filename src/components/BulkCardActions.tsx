@@ -6,6 +6,8 @@ export interface CardManagement {
   decks: Deck[];
   move: (cards: QardCard[], destination: CardLocation) => Promise<void>;
   update: (cards: QardCard[], action: BulkAction) => Promise<void>;
+  /** Add an opposite card to each basic card; others are skipped. */
+  reverse?: (cards: QardCard[]) => Promise<{ added: QardCard[]; skipped: number }>;
 }
 export function BulkCardActions({
   cards,
@@ -27,7 +29,7 @@ export function BulkCardActions({
   const [topic, setTopic] = useState(cards[0]?.topic ?? 'General');
   const locked = useRef(false);
   const id = useId();
-  async function run(action: BulkAction | 'move') {
+  async function run(action: BulkAction | 'move' | 'reverse') {
     if (locked.current || !cards.length) {
       return;
     }
@@ -37,6 +39,14 @@ export function BulkCardActions({
     try {
       if (action === 'move') {
         await management.move(cards, { deck, topic });
+      } else if (action === 'reverse') {
+        const { added, skipped } = await management.reverse!(cards);
+        report(
+          `Added reverse cards for ${added.length} ${added.length === 1 ? 'card' : 'cards'}.` +
+            (skipped ? ` ${skipped} skipped: only basic cards without a reverse can get one.` : ''),
+        );
+        clear();
+        return;
       } else {
         await management.update(cards, action);
       }
@@ -74,6 +84,11 @@ export function BulkCardActions({
         <button disabled={busy} onClick={() => void run('repair')}>
           Needs fixing
         </button>
+        {management.reverse && (
+          <button disabled={busy} onClick={() => void run('reverse')}>
+            Add reverse
+          </button>
+        )}
         <button disabled={busy} onClick={clear}>
           Clear selection
         </button>

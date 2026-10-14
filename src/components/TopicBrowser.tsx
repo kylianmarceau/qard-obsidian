@@ -39,7 +39,8 @@ export function TopicBrowser({
   repairDays?: Map<string, number>;
   select: (card: QardCard) => void;
   study: (topic?: string) => void;
-  create: () => void;
+  /** Opens the card editor, set to this topic when one is given. */
+  create: (topic?: string) => void;
   generate?: () => void;
   removeDeck?: () => Promise<void>;
   removeTopic?: (topic: string) => Promise<void>;
@@ -106,7 +107,7 @@ export function TopicBrowser({
           </div>
         </div>
         <div className="qard-actions">
-          <button disabled={busy} onClick={create}>
+          <button disabled={busy} onClick={() => create()}>
             <Plus size={16} />
             New card
           </button>
@@ -255,6 +256,14 @@ export function TopicBrowser({
                   {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   <strong>{topic.name}</strong>
                   <span>{topic.cards.length} cards</span>
+                </button>
+                <button
+                  className="qard-icon-button"
+                  aria-label={`New card in ${topic.name}`}
+                  disabled={busy}
+                  onClick={() => create(topic.name)}
+                >
+                  <Plus size={16} />
                 </button>
                 <button
                   className="qard-icon-button"

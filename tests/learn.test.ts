@@ -442,6 +442,7 @@ function setup(python?: (script: string) => Promise<string>) {
     links,
     notices,
     restart: make,
+    settings,
     advance: (days: number) => {
       now += days * 86_400_000;
     },
@@ -1122,6 +1123,17 @@ describe('learning service', () => {
     const today = await t.learn.todayList();
     expect(today.lessons.map((l) => l.objective)).toEqual(['e', 'a', 'b']);
     expect(today.moreLessons).toBe(2);
+  });
+
+  it('writes no checks and resumes no lessons while AI features are off', async () => {
+    const t = await mapped();
+    await t.learn.setState(t.path, 'params', 'taught', DAY);
+    const calls = t.calls.length;
+    t.settings.aiEnabled = false;
+    expect(await t.learn.ensureCheck(t.path, 'params')).toBeUndefined();
+    await t.learn.resumeBackground();
+    expect(t.calls).toHaveLength(calls);
+    t.settings.aiEnabled = true;
   });
 
   it('runs a check: written ahead by the writer, marked by the tutor, recorded as evidence', async () => {

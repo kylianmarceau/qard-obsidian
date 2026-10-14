@@ -47,7 +47,11 @@ Write queues remain specific to their owners. Review metadata, per-file lesson/c
 
 `review/pacing.ts` selects bounded batches without changing schedules and counts distinct introductions from history using local calendar days. Daily allowances are checked again inside the serialized rating transaction. Batch remainder IDs, selection mode and the explicit new-card override live with saved sessions; cram and exam queues bypass pacing. Typed recall is component-local scratch state.
 
-Basic reverse pairs use reciprocal Markdown IDs and a shared sibling group. Source patches validate and replace both directions in one `Vault.process` operation; deletion unlinks the surviving direction. Independent review metadata remains keyed by each stable ID.
+Basic reverse pairs use reciprocal Markdown IDs and a shared sibling group. Source patches validate and replace both directions in one `Vault.process` operation; deletion unlinks the surviving direction. Independent review metadata remains keyed by each stable ID. `addReverseInSource` only adds comment lines above an existing card and its opposite after it, so the original callout stays byte-for-byte intact.
+
+New cards join existing notes. `cards/card-target.ts` ranks candidate notes (one already holding the topic, then deck notes) without touching the vault, and `insertIntoTopic` in `cards/source-patch.ts` places markup after the topic's last card or at the end of its heading section, using the parser's own topic events so fences, comments and setext headings follow indexing rules. Every write is reparsed and verified before it is saved.
+
+AI features have one switch, `aiEnabled`. Services stay constructed; the runner factory in `main.ts` returns a runner that refuses every request while it is off, AI commands use `checkCallback`, and views hide AI entry points at render time. Study keys and Obsidian commands share one route: `StudyView` registers a `command(action, checking)` function through `QardServices.setStudyCommands`, which the keyboard handler and `QardView.studyCommand` both call.
 
 `review/progress-backups.ts` stores immutable checksummed study metadata through the vault adapter, excludes preferences and credentials, serializes capture/rotation, and verifies a new file before removing old copies. Main saves live plugin data first; backup failures never roll back a durable review. Restoration validates the snapshot, preserves current settings/usage, checks that progress has not changed since the safety copy, and publishes only after persistence succeeds.
 

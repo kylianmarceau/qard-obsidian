@@ -25,7 +25,7 @@
 
 ## Qard in action
 
-Review cards with a focused study screen and keyboard shortcuts.
+Review cards with a focused study screen and keyboard shortcuts you can change.
 
 ![Studying a flashcard in Qard](https://raw.githubusercontent.com/kylianmarceau/qard-obsidian/main/docs/images/study.jpg)
 
@@ -39,7 +39,7 @@ See how course topics connect and choose what to learn next.
 
 1. In **Settings → Community plugins → Browse**, search for **Qard**, install it and enable it.
 2. Click the Qard ribbon icon or run **Qard: Open study workspace**.
-3. Choose **New card** to write a card, or set up an AI connection and choose **Generate with AI** inside a deck or on the New card page.
+3. Choose **New card** to write a card, or set up an AI connection and choose **Generate with AI** inside a deck or on the New card page. To write cards while reading a note, run **Qard: New card**: the editor opens in the sidebar and keeps your deck and topic between cards.
 
 Requires Obsidian 1.7.2 or newer. Qard adds no sample decks; your cards stay in ordinary Markdown notes.
 
@@ -49,7 +49,7 @@ For **oMLX**, start its server and download a chat model, then choose **Connect 
 
 ## Your notes and privacy
 
-Manual flashcard study works without AI or a network connection. AI features let your chosen provider read relevant vault notes and the text of PDFs you choose. Qard checks its replies and saves accepted content; cards and study progress stay in your vault. API keys use Obsidian’s secure storage (requires Obsidian 1.11.4+).
+Manual flashcard study works without AI or a network connection. Turn off **Settings → Qard → AI features** to remove every AI feature from Qard. AI features let your chosen provider read relevant vault notes and the text of PDFs you choose. Qard checks its replies and saves accepted content; cards and study progress stay in your vault. API keys use Obsidian’s secure storage (requires Obsidian 1.11.4+).
 
 Qard discovers flashcards and source notes across ordinary Markdown files, skipping hidden notes and folders. It does not access the system clipboard; **Select answer** lets you copy with your device’s usual controls. [Community review details](https://github.com/kylianmarceau/qard-obsidian/blob/main/docs/REVIEW_NOTES.md).
 

@@ -1,5 +1,6 @@
-import { useState, useId, useRef, type SyntheticEvent } from 'react';
-import { Check, Sparkles, Layers, TextCursorInput, Scan } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Scope } from 'obsidian';
+import { ArrowLeftRight, Check, Sparkles, Layers, TextCursorInput, Scan } from 'lucide-react';
 import {
   clozeFront,
   clozeGroups,
@@ -15,6 +16,22 @@ import { Markdown } from './Markdown';
 import { ClozeEditor } from './ClozeEditor';
 import { OcclusionEditor } from './OcclusionEditor';
 import { CardContent } from './CardContent';
+type FormatKind = ReturnType<typeof readCardFormat>['kind'];
+/** The last card type, deck and topic you created with, kept while Obsidian is open. */
+let remembered: { kind: FormatKind; reverse: boolean; deck?: string; topic?: string } = {
+  kind: 'basic',
+  reverse: false,
+};
+export function forgetEditorChoices() {
+  remembered = { kind: 'basic', reverse: false };
+}
+const CARD_TYPES = [
+  { type: 'basic', label: 'Basic', icon: Layers },
+  { type: 'reverse', label: 'Basic + reverse', icon: ArrowLeftRight },
+  { type: 'cloze', label: 'Cloze', icon: TextCursorInput },
+  { type: 'occlusion', label: 'Image occlusion', icon: Scan },
+] as const;
+const OCCLUSION_PROMPT = 'Identify the hidden part.';
 export function CardEditor({
   services,
   card,
@@ -23,6 +40,10 @@ export function CardEditor({
   saved,
   compact = false,
   generate,
+  addAnother,
+  cancelLabel = 'Cancel',
+  focusFront = false,
+  prefill,
 }: {
   services: QardServices;
   card?: QardCard;
@@ -31,14 +52,32 @@ export function CardEditor({
   saved: (card: QardCard) => void;
   compact?: boolean;
   generate?: (draft: Partial<CardDraft>) => void;
+  /** When creating, each save starts a new card with the same deck and topic. */
+  addAnother?: (next: Partial<CardDraft>, card: QardCard) => void;
+  /** "Done" once cards were added in this run; "Cancel" before. */
+  cancelLabel?: string;
+  focusFront?: boolean;
+  /** A new serial moves the editor to this deck and topic without clearing what you typed. */
+  prefill?: { serial: number; deck: string; topic: string; sourceFile?: string };
 }) {
+  const fresh = !card && !initial?.front;
+  const continuous = !!addAnother && !card;
   const original = readCardFormat(card?.frontMarkdown || initial?.front || '');
-  const batch = useRef({ id: crypto.randomUUID(), ids: new Map<string, string>() });
+  const batch = useRef({
+    id: crypto.randomUUID(),
+    ids: new Map<string, string>(),
+    path: undefined as string | undefined,
+  });
+  const form = useRef<HTMLFormElement>(null);
   const submitting = useRef(false);
   const written = useRef<{ card: QardCard; front: string; back: string } | undefined>(undefined);
-  const [kind, setKind] = useState(original.kind);
-  const [reverse, setReverse] = useState(initial?.reverse ?? false);
-  const [front, setFront] = useState(original.text),
+  const [kind, setKind] = useState<FormatKind>(fresh ? remembered.kind : original.kind);
+  const [reverse, setReverse] = useState(
+    card ? !!card.reverseId : (initial?.reverse ?? (fresh && remembered.reverse)),
+  );
+  const [front, setFront] = useState(
+      kind === 'occlusion' && !original.text ? OCCLUSION_PROMPT : original.text,
+    ),
     [back, setBack] = useState(
       original.kind !== 'basic' && card?.backMarkdown === FORMAT_BACK
         ? ''
@@ -51,16 +90,44 @@ export function CardEditor({
     [oneAtATime, setOneAtATime] = useState(true),
     [previewTarget, setPreviewTarget] = useState<number>(),
     [previewMask, setPreviewMask] = useState<string>();
-  const [deck, setDeck] = useState(card?.deck || initial?.deck || ''),
-    [topic, setTopic] = useState(card?.topic || initial?.topic || 'General');
+  const startDeck = card?.deck || initial?.deck || remembered.deck || '';
+  const [deck, setDeck] = useState(startDeck),
+    [topic, setTopic] = useState(
+      card?.topic ||
+        initial?.topic ||
+        (startDeck === remembered.deck ? remembered.topic : undefined) ||
+        'General',
+    ),
+    [sourceFile, setSourceFile] = useState(initial?.sourceFile);
+  // Only a newer request moves the editor; the one it opened with is already in `initial`.
+  const prefilled = useRef(prefill?.serial);
+  useEffect(() => {
+    if (prefill && prefill.serial !== prefilled.current) {
+      prefilled.current = prefill.serial;
+      setDeck(prefill.deck);
+      setTopic(prefill.topic);
+      setSourceFile(prefill.sourceFile);
+    }
+  }, [prefill?.serial]);
   const [preview, setPreview] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const index = useSyncExternalStore(services.index.subscribe, services.index.getSnapshot);
+  const cardFolder = services.reviews.getSnapshot().settings.cardFolder;
+  // Where a new card will be saved, shown before saving.
+  const destination = useMemo(() => {
+    if (card || !deck.trim() || /[\r\n]/.test(deck + topic)) {
+      return undefined;
+    }
+    try {
+      return services.writer.targetFor(deck, topic, cardFolder, sourceFile);
+    } catch {
+      return undefined;
+    }
+    // The index revision covers notes that were added, changed or removed.
+  }, [card, deck, topic, cardFolder, sourceFile, index.revision, services.writer]);
   const id = useId(),
-    path =
-      card?.sourceFile ||
-      initial?.sourceFile ||
-      `${services.reviews.getSnapshot().settings.cardFolder}/Cards.md`;
+    path = card?.sourceFile || destination?.path || sourceFile || `${cardFolder}/Cards.md`;
   const groups = kind === 'cloze' ? clozeGroups(front) : [];
   const target =
     original.kind === 'cloze'
@@ -100,8 +167,71 @@ export function CardEditor({
         : reverse
           ? 2
           : 1;
-  async function submit(e: SyntheticEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const shortcut = useRef(() => {});
+  shortcut.current = () => {
+    if (!busy) {
+      submitWith(continuous ? 'another' : 'done');
+    }
+  };
+  // Obsidian binds Mod+Enter to opening links in a new tab and handles it before the page sees
+  // it, so the editor claims it through a keymap scope while focus is inside the form.
+  useEffect(() => {
+    const el = form.current,
+      keymap = services.app?.keymap;
+    if (!el || !keymap) {
+      return;
+    }
+    const scope = new Scope(services.app.scope);
+    scope.register(['Mod'], 'Enter', () => {
+      shortcut.current();
+      return false;
+    });
+    let pushed = false;
+    const enter = () => {
+      if (!pushed) {
+        keymap.pushScope(scope);
+        pushed = true;
+      }
+    };
+    const leave = (event: FocusEvent) => {
+      if (pushed && !el.contains(event.relatedTarget as Node | null)) {
+        keymap.popScope(scope);
+        pushed = false;
+      }
+    };
+    el.addEventListener('focusin', enter);
+    el.addEventListener('focusout', leave);
+    if (el.contains(el.ownerDocument.activeElement)) {
+      enter();
+    }
+    return () => {
+      el.removeEventListener('focusin', enter);
+      el.removeEventListener('focusout', leave);
+      if (pushed) {
+        keymap.popScope(scope);
+      }
+    };
+  }, [services.app]);
+  /** Validate like a normal submit, for the second button and Mod+Enter. */
+  function submitWith(mode: 'done' | 'another') {
+    if (form.current?.reportValidity() !== false) {
+      void submit(mode);
+    }
+  }
+  function created(result: QardCard, mode: 'done' | 'another') {
+    remembered = {
+      kind,
+      reverse: kind === 'basic' && reverse,
+      deck: deck.trim(),
+      topic: topic.trim(),
+    };
+    if (mode === 'another' && addAnother) {
+      addAnother({ deck: deck.trim(), topic: topic.trim(), sourceFile }, result);
+    } else {
+      saved(result);
+    }
+  }
+  async function submit(mode: 'done' | 'another' = 'done') {
     if (submitting.current) {
       return;
     }
@@ -126,10 +256,10 @@ export function CardEditor({
         throw new Error('Add a blank or an image mask before saving.');
       }
       if (!card && kind !== 'basic') {
-        const folder = initial?.sourceFile
-          ? initial.sourceFile.split('/').slice(0, -1).join('/')
-          : services.reviews.getSnapshot().settings.cardFolder;
-        const created = await services.writer.createBatch(
+        const folder = sourceFile ? sourceFile.split('/').slice(0, -1).join('/') : cardFolder;
+        // Fixed on the first try, so a retry can't land in another note.
+        batch.current.path ??= services.writer.targetFor(deck, topic, cardFolder, sourceFile).path;
+        const result = await services.writer.createBatch(
           {
             deck,
             topic,
@@ -137,6 +267,7 @@ export function CardEditor({
             batchId: batch.current.id,
             label: kind === 'cloze' ? 'cloze' : 'occlusion',
             siblingGroup: batch.current.id,
+            path: batch.current.path,
           },
           variants.map((value) => {
             const format = readCardFormat(value);
@@ -154,7 +285,7 @@ export function CardEditor({
             return { id: identity, front: value, back: answer };
           }),
         );
-        saved(created[0]!);
+        created(result[0]!, mode);
         return;
       }
       const result = card
@@ -166,8 +297,8 @@ export function CardEditor({
             topic,
             front: variants[0]!,
             back: answer,
-            folder: services.reviews.getSnapshot().settings.cardFolder,
-            sourceFile: initial?.sourceFile,
+            folder: cardFolder,
+            sourceFile,
             reverse: kind === 'basic' && reverse,
           });
       if (card) {
@@ -178,8 +309,10 @@ export function CardEditor({
             await services.reviews.requireContentCheck(result.reverseId);
           }
         }
+        saved(result);
+      } else {
+        created(result, mode);
       }
-      saved(result);
     } catch (e) {
       submitting.current = false;
       setError((e as Error).message);
@@ -194,40 +327,56 @@ export function CardEditor({
           <button
             disabled={busy}
             type="button"
-            onClick={() => generate({ deck, topic, sourceFile: initial?.sourceFile })}
+            onClick={() => generate({ deck, topic, sourceFile })}
           >
             <Sparkles size={16} />
             Generate with AI
           </button>
         )}
       </div>
-      <form onSubmit={(e) => void submit(e)}>
+      <form
+        ref={form}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit(continuous ? 'another' : 'done');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.defaultPrevented) {
+            e.preventDefault();
+            e.stopPropagation();
+            shortcut.current();
+          }
+        }}
+      >
         <fieldset disabled={busy}>
           <div className="qard-card-type" role="group" aria-label="Card type">
-            {(
-              [
-                { kind: 'basic', label: 'Basic', icon: Layers },
-                { kind: 'cloze', label: 'Cloze', icon: TextCursorInput },
-                { kind: 'occlusion', label: 'Image occlusion', icon: Scan },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.kind}
-                type="button"
-                aria-pressed={kind === item.kind}
-                disabled={(!!card && kind !== item.kind) || uploading}
-                onClick={() => {
-                  setKind(item.kind);
-                  setPreview(false);
-                  if (item.kind === 'occlusion' && !front.trim()) {
-                    setFront('Identify the hidden part.');
-                  }
-                }}
-              >
-                <item.icon size={15} />
-                {item.label}
-              </button>
-            ))}
+            {CARD_TYPES.map((item) => {
+              const format = item.type === 'reverse' ? 'basic' : item.type;
+              const pressed =
+                kind === format && (format !== 'basic' || reverse === (item.type === 'reverse'));
+              return (
+                <button
+                  key={item.type}
+                  type="button"
+                  aria-pressed={pressed}
+                  disabled={(!!card && !pressed) || uploading}
+                  onClick={() => {
+                    setKind(format);
+                    setReverse(item.type === 'reverse');
+                    setPreview(false);
+                    if (format === 'occlusion' && !front.trim()) {
+                      setFront(OCCLUSION_PROMPT);
+                    } else if (format !== 'occlusion' && front.trim() === OCCLUSION_PROMPT) {
+                      // The image prompt is a placeholder, not a question for other card types.
+                      setFront('');
+                    }
+                  }}
+                >
+                  <item.icon size={15} />
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
           <div className="qard-editor-meta">
             <label>
@@ -254,10 +403,18 @@ export function CardEditor({
                 value={topic}
                 readOnly={!!card}
                 onChange={(e) => setTopic(e.target.value)}
+                list={id + '-topics'}
                 placeholder="e.g. Transport Layer"
                 maxLength={200}
               />
             </label>
+            <datalist id={id + '-topics'}>
+              {index.decks
+                .find((d) => d.name === deck.trim())
+                ?.topics.map((t) => (
+                  <option key={t.name} value={t.name} />
+                ))}
+            </datalist>
           </div>
           {card && <p className="qard-muted">To change deck or topic, edit the source note.</p>}
           {kind === 'basic' ? (
@@ -266,6 +423,7 @@ export function CardEditor({
                 Front
                 <textarea
                   required
+                  autoFocus={focusFront}
                   value={front}
                   onChange={(e) => setFront(e.target.value)}
                   rows={compact ? 3 : 5}
@@ -332,18 +490,10 @@ export function CardEditor({
               </label>
             </div>
           )}
-          {kind === 'basic' && !card && (
-            <label className="qard-reverse-toggle">
-              <input
-                type="checkbox"
-                checked={reverse}
-                onChange={(event) => setReverse(event.target.checked)}
-              />
-              Also test the reverse
-              <span className="qard-muted qard-small">
-                Creates a linked pair with a separate schedule for each direction.
-              </span>
-            </label>
+          {kind === 'basic' && reverse && !card && !compact && (
+            <p className="qard-muted qard-small">
+              Creates a linked pair: front → back and back → front, each with its own schedule.
+            </p>
           )}
           {card?.reverseId && (
             <p className="qard-muted qard-small">
@@ -351,9 +501,6 @@ export function CardEditor({
               histories.
             </p>
           )}
-          <button type="button" aria-expanded={preview} onClick={() => setPreview(!preview)}>
-            {preview ? 'Hide' : 'Show'} preview
-          </button>
           {preview && kind !== 'basic' && !card && groups.length > 1 && (
             <div className="qard-format-tools">
               {groups.map((group) => (
@@ -418,31 +565,52 @@ export function CardEditor({
                 </div>
               </div>
             ))}
-          <p className="qard-muted">
-            {initial?.sourceFile
-              ? `Source: ${initial.sourceFile}`
-              : card
+          {!compact && (
+            <p className="qard-muted qard-editor-destination">
+              {card
                 ? card.sourceFile
-                : `Folder: ${services.reviews.getSnapshot().settings.cardFolder || 'vault root'}`}
-          </p>
+                : destination
+                  ? destination.exists
+                    ? `Adds to ${destination.path} › ${topic.trim() || 'General'}`
+                    : `Creates ${destination.path}`
+                  : `Folder: ${cardFolder || 'vault root'}`}
+            </p>
+          )}
           {error && (
             <p role="alert" className="qard-error">
               {error}
             </p>
           )}
           <div className="qard-form-actions">
-            <button type="button" disabled={!!written.current && !!error} onClick={cancel}>
-              Cancel
+            <button
+              type="button"
+              className="qard-form-actions-start"
+              aria-expanded={preview}
+              onClick={() => setPreview(!preview)}
+            >
+              {preview ? 'Hide' : 'Show'} preview
             </button>
-            <button className="qard-primary" type="submit" disabled={uploading}>
+            <button type="button" disabled={!!written.current && !!error} onClick={cancel}>
+              {cancelLabel}
+            </button>
+            <button
+              className="qard-primary"
+              type="submit"
+              disabled={uploading}
+              title={card ? undefined : 'Ctrl/Cmd + Enter'}
+            >
               <Check size={17} />
               {busy
                 ? 'Saving…'
                 : card
                   ? 'Save changes'
-                  : count > 1
-                    ? `Create ${count} cards`
-                    : 'Create card'}
+                  : continuous
+                    ? count > 1
+                      ? `Add ${count} cards`
+                      : 'Add card'
+                    : count > 1
+                      ? `Create ${count} cards`
+                      : 'Create card'}
             </button>
           </div>
         </fieldset>

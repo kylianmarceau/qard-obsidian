@@ -224,3 +224,54 @@ it('renders every definition once, and section links target their section', () =
   link.click();
   expect(ai.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' });
 });
+
+it('hides AI settings while AI features are off and shows them again', async () => {
+  const { reviews, row, tab } = fixture();
+  const nav = () =>
+    [...tab.containerEl.querySelectorAll<HTMLButtonElement>('.qard-settings-nav button')]
+      .filter((button) => !button.hidden)
+      .map((button) => button.textContent);
+  expect(nav()).toEqual(['Study', 'AI', 'Tests', 'Files & data']);
+  const toggle = row('AI features').querySelector('input')!;
+  expect(toggle.checked).toBe(true);
+  expect(row('Plan tests first')).toBeDefined();
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(row('Tutor')).toBeUndefined());
+  expect(reviews.getSnapshot().settings.aiEnabled).toBe(false);
+  expect(row('Anthropic API key')).toBeUndefined();
+  expect(row('Plan tests first')).toBeUndefined();
+  expect(row('Tests folder').hidden).toBe(true);
+  expect(row('New-card folder').hidden).toBe(false);
+  expect(nav()).toEqual(['Study', 'Files & data']);
+  const again = row('AI features').querySelector('input')!;
+  again.checked = true;
+  again.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(row('Tutor')).toBeDefined());
+  expect(row('Tests folder').hidden).toBe(false);
+});
+
+it('remaps a study key by pressing it, swapping a key already in use, and resets', async () => {
+  const { reviews, row } = fixture();
+  const good = row('Good');
+  expect(good.hidden).toBe(true);
+  row('Study keys').querySelector('button')!.click();
+  expect(good.hidden).toBe(false);
+  const button = good.querySelector('button')!;
+  expect(button.textContent).toBe('3');
+  button.click();
+  expect(button.textContent).toBe('Press a key…');
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', bubbles: true }));
+  expect(button.textContent).toBe('Press a key…');
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: 'U', bubbles: true }));
+  await vi.waitFor(() => expect(reviews.getSnapshot().settings.studyKeys.good).toBe('u'));
+  expect(reviews.getSnapshot().settings.studyKeys.undo).toBe('3');
+  expect(button.textContent).toBe('U');
+  expect(row('Undo last rating').querySelector('button')!.textContent).toBe('3');
+  button.click();
+  button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(button.textContent).toBe('U');
+  [...row('Study keys').querySelectorAll('button')][1]!.click();
+  await vi.waitFor(() => expect(reviews.getSnapshot().settings.studyKeys.good).toBe('3'));
+  expect(button.textContent).toBe('3');
+});
