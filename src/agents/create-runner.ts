@@ -8,7 +8,8 @@ import { AnthropicRunner, DEFAULT_API_MODEL, FAST_API_MODEL } from './api-runner
 import { CustomRunner } from './custom-runner';
 import { OpenRouterRunner } from './openrouter-runner';
 import { ClaudeCodeRunner, CodexRunner, findBinary, type NodeHost } from './cli-runner';
-import { isStudyNote, studyNotes } from '../vault-access';
+import { isPdf, isStudySource, studyPdfs, studySources } from '../vault-access';
+import { PdfReader } from '../sources/pdf-reader';
 
 export const API_KEY_SECRET = 'qard-anthropic-api-key';
 export const CUSTOM_KEY_SECRET = 'qard-custom-api-key';
@@ -152,33 +153,40 @@ function tracked(
   };
 }
 
+/** pdfs: the plugin's shared reader, so PDF text extracted once is reused across runs. */
 export function createRunner(
   app: App,
   settings: QardSettings,
   role: AgentRole,
   record?: (e: UsageEvent) => void,
+  pdfs: PdfReader = new PdfReader(app),
 ): AgentRunner {
   const { provider } = settings.agents.roles[role],
     model = settings.agents.roles[role].model.trim() || defaultModel(provider, role, settings);
-  return tracked(buildRunner(app, settings, provider, model), role, provider, model, record);
+  return tracked(buildRunner(app, settings, provider, model, pdfs), role, provider, model, record);
 }
 function buildRunner(
   app: App,
   settings: QardSettings,
   provider: AgentProvider,
   model: string,
+  pdfs: PdfReader,
 ): AgentRunner {
+  const excluded = [settings.tests.folder];
   const reader = {
-    paths: () => studyNotes(app, [settings.tests.folder]).map((f) => f.path),
+    paths: () => studySources(app, excluded).map((f) => f.path),
     read: (p: string) => {
-      if (!isStudyNote(p, [settings.tests.folder])) {
+      if (!isStudySource(p, excluded)) {
         return Promise.resolve('');
+      }
+      if (isPdf(p)) {
+        return pdfs.read(p).then((text) => text ?? '');
       }
       const f = app.vault.getAbstractFileByPath(p);
       return f instanceof TFile ? app.vault.cachedRead(f) : Promise.resolve('');
     },
   };
-  // The note tools only list Markdown, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
+  // The note tools only list Markdown and PDFs, so test, check and lesson JSON is never visible; the tests folder is hidden as before.
   const exclude = [settings.tests.folder.replace(/\/+$/, '')];
   if (provider === 'custom') {
     return new CustomRunner(
@@ -212,8 +220,12 @@ function buildRunner(
         ),
     };
   }
+  // Claude Code opens PDFs with its own Read tool; Codex can't, so it is given their text.
   return provider === 'codex'
-    ? new CodexRunner(host, vault, settings.agents.codexPath, model)
+    ? new CodexRunner(host, vault, settings.agents.codexPath, model, {
+        paths: () => studyPdfs(app, excluded).map((f) => f.path),
+        read: (p) => pdfs.read(p),
+      })
     : new ClaudeCodeRunner(host, vault, settings.agents.claudePath, model);
 }
 /** For the settings status lines. */

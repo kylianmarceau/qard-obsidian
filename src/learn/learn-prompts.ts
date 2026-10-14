@@ -215,7 +215,7 @@ ${steps}
 Return:
 - summary: what the lesson covered and what the student showed, for the lesson note. At most 200 words.
 - cards: two to four flashcards for the ideas most worth keeping fresh, and any gap the checks exposed. front is a precise question; back is short and complete.
-- noteEdit: only if one of the notes is missing something the lesson had to explain, the paragraph to add (path, the heading to put it under or "" for the end, and the Markdown). Omit it otherwise.`;
+- noteEdit: only if one of the Markdown notes is missing something the lesson had to explain, the paragraph to add (path, the heading to put it under or "" for the end, and the Markdown). Never a PDF. Omit it otherwise.`;
 }
 
 /** The illustrator draws one figure for a lesson step or an answer, from a brief. */

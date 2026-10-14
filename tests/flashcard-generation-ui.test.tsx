@@ -63,7 +63,10 @@ beforeEach(async () => {
     owner: new Component(),
     reviews: new ReviewStore(async () => {}),
     index: new CardIndex(),
-    app: { vault: { getMarkdownFiles: () => [file] }, workspace: { openLinkText: vi.fn() } },
+    app: {
+      vault: { getMarkdownFiles: () => [file], getFiles: () => [file] },
+      workspace: { openLinkText: vi.fn() },
+    },
   } as unknown as QardServices;
 });
 afterEach(async () => {
@@ -133,6 +136,32 @@ it('chooses notes, previews and edits generated cards, then adds only the select
   expect(host.textContent).toContain('1 of 2 added');
   await click(button('Open deck'));
   expect(openDeck).toHaveBeenCalledWith('Networks');
+});
+it('attaches a PDF from the vault like a note and generates from it', async () => {
+  const note = Object.assign(new (TFile as unknown as new (p: string) => TFile)('Notes/TCP.md'), {
+      stat: { mtime: 1 },
+    }),
+    slides = Object.assign(new (TFile as unknown as new (p: string) => TFile)('Notes/TCP.pdf'), {
+      stat: { mtime: 2 },
+    });
+  services = {
+    ...services,
+    app: {
+      vault: { getMarkdownFiles: () => [note], getFiles: () => [note, slides] },
+      workspace: { openLinkText: vi.fn() },
+    },
+  } as unknown as QardServices;
+  const start = vi.spyOn(services.flashcards!, 'start');
+  await render();
+  await click(button('+ Note'));
+  // A note and the PDF beside it are told apart by the PDF's extension.
+  await click(button('TCP.pdf'));
+  await act(async () => {
+    host
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  expect(start.mock.calls[0]![0].notes).toEqual(['Notes/TCP.pdf']);
 });
 it('keeps generation running after leaving, then reopens the same review draft', async () => {
   let resolve!: (v: unknown) => void;

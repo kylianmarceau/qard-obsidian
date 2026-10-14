@@ -48,7 +48,7 @@ beforeEach(() => {
     index,
     reviews: new ReviewStore(async () => {}),
     tests: { plan, generate },
-    app: { vault: { getMarkdownFiles: () => files } },
+    app: { vault: { getMarkdownFiles: () => files, getFiles: () => files } },
   } as unknown as QardServices;
 });
 afterEach(async () => {
@@ -145,6 +145,6 @@ it('handles a folder that becomes empty before Start without invoking the AI', a
   expect(plan).not.toHaveBeenCalled();
   expect(generate).not.toHaveBeenCalled();
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-    'no longer contain any Markdown notes',
+    'no longer contain any notes or PDFs',
   );
 });

@@ -1,11 +1,13 @@
-/** Shared folder expansion for the composer. Match path boundaries, not similar folder names. */
+import { isPdf } from '../vault-access';
+
+/** Shared folder expansion for the composer: notes and PDFs. Match path boundaries, not similar folder names. */
 export function testNotePaths(paths: string[], testsFolder: string): string[] {
   const excluded = testsFolder.replace(/\/+$/, '');
   return [
     ...new Set(
       paths.filter(
         (p) =>
-          p.endsWith('.md') &&
+          (p.endsWith('.md') || isPdf(p)) &&
           !p.split('/').some((part) => part.startsWith('.')) &&
           p !== excluded &&
           !p.startsWith(excluded + '/'),

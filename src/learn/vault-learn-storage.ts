@@ -1,16 +1,23 @@
 import { TFile, TFolder, normalizePath, type App } from 'obsidian';
 import type { LearnStorage } from './learn-contracts';
-import { isStudyNote, studyNotes } from '../vault-access';
+import { isPdf, isStudyNote, studyNotes } from '../vault-access';
 
 /** Mastery files, checks and lessons through the Vault API, so sync and file explorers see every change. */
 export class VaultLearnStorage implements LearnStorage {
-  constructor(private app: App) {}
+  /** pdfText: a PDF's extracted text, so lessons can teach from PDFs as from notes. */
+  constructor(
+    private app: App,
+    private pdfText?: (path: string) => Promise<string | null>,
+  ) {}
   private file(path: string) {
     const f = this.app.vault.getAbstractFileByPath(normalizePath(path));
     return f instanceof TFile ? f : undefined;
   }
   async read(path: string) {
     const f = this.file(path);
+    if (f && this.pdfText && isPdf(f.path)) {
+      return this.pdfText(f.path);
+    }
     return f ? this.app.vault.read(f) : null;
   }
   exists(path: string) {
@@ -52,7 +59,8 @@ export class VaultLearnStorage implements LearnStorage {
           walk(c);
         } else if (
           c instanceof TFile &&
-          c.extension === extension &&
+          // Scanners and Windows often save PDFs as .PDF.
+          (extension === 'pdf' ? c.extension.toLowerCase() : c.extension) === extension &&
           (extension !== 'md' || isStudyNote(c.path))
         ) {
           found.push(c.path);

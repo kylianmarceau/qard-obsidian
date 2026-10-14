@@ -19,7 +19,8 @@ Qard is an Obsidian plugin with a React component tree rendered through Preact c
 | `src/audio/` | In-memory recording and voice-answer interaction. |
 | `src/jobs/` | Job timing estimates. |
 | `src/settings/`, `src/migration/` | Settings UI and the explicit Spaced Repetition import. |
-| `src/vault-access.ts` | Shared filtering of ordinary Markdown notes and folders. |
+| `src/vault-access.ts` | Shared filtering of ordinary Markdown notes, PDF sources and folders. |
+| `src/sources/` | PDF sources: page-marked text from Obsidian's PDF.js (`pdf-text.ts`, pure apart from the injected library) and a reader cached by file version (`pdf-reader.ts`). |
 
 Domain files contain deterministic calculations where possible. Obsidian adapters handle vault access and lifecycle ownership. Components subscribe to service snapshots and call service operations; they do not duplicate persistence rules. Contracts use type-only imports so a component can describe a service without loading its implementation.
 
@@ -68,9 +69,9 @@ Flashcard generation uses the same prompt composer styling and folder expansion 
 
 ## Source consistency and cram sessions
 
-`cards/source-sync-service.ts` records provenance by stable card ID, compares note versions locally, validates Writer suggestions and journals approved updates before editing. `Source links.json` deduplicates baseline note versions across cards; applying journals allow a saved card edit and its pending review flag to finish after an interrupted write. Source links are registered before card creation so a metadata failure cannot leave a successfully generated card silently untracked. Current source snapshots are verified again before an edit; handwritten edits are protected by the existing atomic card writer. When a card lives in its source note, comparison excludes that derived card itself but retains other cards and prose.
+`cards/source-sync-service.ts` records provenance by stable card ID, compares note versions locally, validates Writer suggestions and journals approved updates before editing. `Source links.json` deduplicates baseline note versions across cards; applying journals allow a saved card edit and its pending review flag to finish after an interrupted write. Source links are registered before card creation so a metadata failure cannot leave a successfully generated card silently untracked. Current source snapshots are verified again before an edit; handwritten edits are protected by the existing atomic card writer. When a card lives in its source note, comparison excludes that derived card itself but retains other cards and prose. A PDF source is compared as its extracted text, one `[Page N]` marker line per page, so an appended page leaves earlier lines unchanged; PDFs are never searched for cards.
 
-Generation snapshots travel with AI drafts, practice tests and lessons, then into generated card creation. A source inferred by a test or flashcard writer is captured after generation only if its vault modification time shows it did not change during that run. Source-update calls include the relevant old and new notes directly and disable vault tools. They appear under Updating flashcards in Usage. Tests and lesson transcripts remain historical records.
+Generation snapshots travel with AI drafts, practice tests and lessons, then into generated card creation. A draft saves each source's snapshot once at batch level and restores it to every card on load; drafts with a copy on each card still load. A source inferred by a test or flashcard writer is captured after generation only if its vault modification time shows it did not change during that run. Source-update calls include the relevant old and new notes directly and disable vault tools. They appear under Updating flashcards in Usage. Tests and lesson transcripts remain historical records.
 
 `SessionStyle` is separate from `StudyMode`: normal/cram controls the interaction, while all/due/new/difficult controls selection. Cram never calls the card writer to assign identities or the review store to record events. It uses synchronous navigation guards to avoid skipping a question on rapid input, with the same typing, recording, confirmation, active-view and focus protections as normal study.
 

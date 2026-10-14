@@ -219,15 +219,23 @@ it('stops writing once sessions and exams made on both devices are merged', asyn
 });
 
 it('stops writing after one device switches scheduler', async () => {
-  const p = await pair();
-  await p.laptop.store.saveSettings({ ...p.laptop.data().settings, scheduler: 'simple' });
-  expect(await settle(p)).toBeLessThan(3);
-  expect(p.phone.data().settings.scheduler).toBe('simple');
-  expect(p.phone.data().states.shared?.fsrs).toBeUndefined();
-  await p.phone.store.saveSettings({ ...p.phone.data().settings, scheduler: 'fsrs' });
-  expect(await settle(p)).toBeLessThan(3);
-  expect(p.laptop.data().states.shared).toEqual(p.phone.data().states.shared);
-  expect(p.laptop.data().states.shared?.fsrs).toBeDefined();
+  // The later change wins by its timestamp, so the two changes must not land in the same millisecond.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(day(12));
+    const p = await pair();
+    await p.laptop.store.saveSettings({ ...p.laptop.data().settings, scheduler: 'simple' });
+    expect(await settle(p)).toBeLessThan(3);
+    expect(p.phone.data().settings.scheduler).toBe('simple');
+    expect(p.phone.data().states.shared?.fsrs).toBeUndefined();
+    vi.setSystemTime(day(13));
+    await p.phone.store.saveSettings({ ...p.phone.data().settings, scheduler: 'fsrs' });
+    expect(await settle(p)).toBeLessThan(3);
+    expect(p.laptop.data().states.shared).toEqual(p.phone.data().states.shared);
+    expect(p.laptop.data().states.shared?.fsrs).toBeDefined();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('keeps a resume after the card is rated, when an older paused copy arrives', async () => {

@@ -47,7 +47,7 @@ const profileBlock = (profile?: string) =>
 const requestBlock = (r: TestRequest) =>
   `The student's request:\n<request>\n${r.prompt.trim() || '(no prompt: build a balanced test from the sources)'}\n</request>\n\n` +
   (r.folders?.length
-    ? `Course folders the student attached:\n${list(r.folders)}\nThe source list below includes their Markdown notes and subfolders. Read across the course material and balance coverage unless the request narrows the scope.\n\n`
+    ? `Course folders the student attached:\n${list(r.folders)}\nThe source list below includes their Markdown notes, PDFs and subfolders. Read across the course material and balance coverage unless the request narrows the scope.\n\n`
     : '') +
   (r.sources.length
     ? `Sources the student chose (read these first):\n${list(r.sources)}${r.decks.length ? `\n(These include the flashcard decks: ${r.decks.join(', ')}.)` : ''}\n`

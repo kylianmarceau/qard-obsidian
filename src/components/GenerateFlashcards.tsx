@@ -1,4 +1,4 @@
-import { studyNotes } from '../vault-access';
+import { isPdf, studySources } from '../vault-access';
 import { useId, useMemo, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import type { CardDraft } from '../cards/card-writer';
@@ -36,7 +36,7 @@ export function GenerateFlashcards({
   const id = useId(),
     excluded = services.reviews.getSnapshot().settings.tests.folder;
   const files = useMemo(() => {
-    const all = studyNotes(services.app),
+    const all = studySources(services.app),
       allowed = new Set(
         testNotePaths(
           all.map((f) => f.path),
@@ -70,13 +70,13 @@ export function GenerateFlashcards({
     setError('');
     try {
       const latest = testNotePaths(
-        studyNotes(services.app).map((f) => f.path),
+        studySources(services.app).map((f) => f.path),
         excluded,
       );
       const selected = resolveTestNotes(latest, notes, folders);
       if (!prompt.trim() && !selected.length) {
         throw new Error(
-          'The selected sources no longer contain any Markdown notes. Choose another source or describe the cards.',
+          'The selected sources no longer contain any notes or PDFs. Choose another source or describe the cards.',
         );
       }
       await service.start({
@@ -244,7 +244,7 @@ export function GenerateFlashcards({
                             setQuery('');
                           }}
                         >
-                          <span>{f.basename}</span>
+                          <span>{isPdf(f.path) ? f.path.split('/').pop() : f.basename}</span>
                           <small>{f.parent?.path === '/' ? '' : f.parent?.path}</small>
                         </button>
                       ))}

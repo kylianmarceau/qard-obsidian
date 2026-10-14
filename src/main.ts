@@ -29,7 +29,8 @@ import { todayDueCards } from './review/today-cards';
 import { StudyClock } from './time/study-time';
 import { installDevTools } from './debug/dev-tools';
 import { JobClock } from './jobs/job-clock';
-import { studyNotes } from './vault-access';
+import { isPdf, studySources } from './vault-access';
+import { PdfReader } from './sources/pdf-reader';
 import { QARD_OBSIDIAN_ICON } from './icons/qard-icon';
 export default class QardPlugin extends Plugin {
   index!: VaultIndexer;
@@ -42,6 +43,7 @@ export default class QardPlugin extends Plugin {
   private backupWarning = false;
   tests!: TestService;
   learn!: LearnService;
+  pdfs!: PdfReader;
   jobs!: JobClock;
   time!: StudyClock;
   private removeDevTools?: () => void;
@@ -148,6 +150,8 @@ export default class QardPlugin extends Plugin {
   private initializeServices() {
     this.index = new VaultIndexer(this.app, this);
     this.writer = new CardWriter(this.app, this.index);
+    // PDFs are read as text wherever notes are AI sources; one reader keeps their text cached.
+    this.pdfs = new PdfReader(this.app);
     const settings = () => this.reviews.getSnapshot().settings;
     // Deck names from folders change how every note is read, so the whole index follows the setting.
     let naming = settings().deckNaming;
@@ -168,7 +172,7 @@ export default class QardPlugin extends Plugin {
         .recordUsage(isoDay(Date.now()), usageKey(e.purpose, e.role, e.provider, e.model), e.usage)
         .catch(() => {});
     const runner = (role: Parameters<typeof createRunner>[2]) =>
-      createRunner(this.app, settings(), role, record);
+      createRunner(this.app, settings(), role, record, this.pdfs);
     const links = {
       get: (id: string) => this.reviews.getSnapshot().links[id],
       set: (id: string, link: { mastery: string; objective: string; lapses: number }) =>
@@ -183,8 +187,13 @@ export default class QardPlugin extends Plugin {
       () => settings().agents.roles,
     );
     const timing = (kind: string, ms: number) => this.jobs.record(kind, ms);
+    const files = new VaultTestStorage(this.app);
     this.sourceSync = new SourceSyncService(
-      new VaultTestStorage(this.app),
+      {
+        read: (path) => (isPdf(path) ? this.pdfs.read(path) : files.read(path)),
+        write: (path, text) => files.write(path, text),
+        modified: (path) => files.modified(path),
+      },
       sourceSyncPath('Qard'),
       () => this.index.getSnapshot().cards,
       this.writer,
@@ -225,7 +234,7 @@ export default class QardPlugin extends Plugin {
     this.flashcards = new FlashcardGenerationService(
       new VaultTestStorage(this.app),
       () => settings().cardFolder,
-      () => studyNotes(this.app, [settings().tests.folder]).map((f) => f.path),
+      () => studySources(this.app, [settings().tests.folder]).map((f) => f.path),
       () => runner('writer'),
       this.writer,
       (message) => new Notice(message, 8000),
@@ -238,7 +247,7 @@ export default class QardPlugin extends Plugin {
     );
     void this.flashcards.load();
     this.learn = new LearnService(
-      new VaultLearnStorage(this.app),
+      new VaultLearnStorage(this.app, (path) => this.pdfs.read(path)),
       settings,
       runner,
       links,
@@ -318,7 +327,7 @@ export default class QardPlugin extends Plugin {
       name: 'Teach me this note',
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        if (!file || file.extension !== 'md') {
+        if (!file || (file.extension !== 'md' && !isPdf(file.path))) {
           return false;
         }
         if (!checking) {
@@ -412,14 +421,14 @@ export default class QardPlugin extends Plugin {
     };
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
-        if (file instanceof TFile && file.extension === 'md') {
+        if (file instanceof TFile && (file.extension === 'md' || isPdf(file.path))) {
           scanSources();
         }
       }),
     );
     this.registerEvent(
       this.app.vault.on('create', (file) => {
-        if (file instanceof TFile && file.extension === 'md') {
+        if (file instanceof TFile && (file.extension === 'md' || isPdf(file.path))) {
           scanSources();
         }
       }),

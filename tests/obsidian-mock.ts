@@ -103,3 +103,6 @@ export const Platform = { isDesktopApp: false, isWin: false };
 export const requireApiVersion = () => false;
 export class FileSystemAdapter {}
 export const requestUrl = async () => ({ status: 200, json: {} });
+export const loadPdfJs = async (): Promise<never> => {
+  throw new Error('PDF.js is not loaded in tests; pass a fake to PdfReader.');
+};

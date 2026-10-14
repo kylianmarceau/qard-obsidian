@@ -33,15 +33,17 @@ function setup(linked: string[] = []) {
   };
   const track = vi.fn(async () => {}),
     capture = vi.fn(async (paths: string[]) => paths.map((path) => ({ path, text: 'x' })));
+  const notes = [
+    note('Networks/tcp.md', 3),
+    note('Networks/udp.md', 5),
+    note('Algorithms.md', 9),
+    note('Qard/Tests/quiz.md', 99),
+  ];
   const services = {
     app: {
       vault: {
-        getMarkdownFiles: () => [
-          note('Networks/tcp.md', 3),
-          note('Networks/udp.md', 5),
-          note('Algorithms.md', 9),
-          note('Qard/Tests/quiz.md', 99),
-        ],
+        getMarkdownFiles: () => notes,
+        getFiles: () => notes,
       },
       workspace: { openLinkText: vi.fn() },
     },

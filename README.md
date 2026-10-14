@@ -4,7 +4,7 @@
 
 **Your learning, in focus.** Flashcards, practice tests and guided learning from your Obsidian notes.
 
-- **Decks:** write Markdown flashcards or let AI draft them from your notes. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic with FSRS spaced repetition, or use Cram mode to reveal and advance without ratings. Generated cards track their source notes; review suggested edits when the material changes.
+- **Decks:** write Markdown flashcards or let AI draft them from your notes and PDFs. AI chooses how many cards the material needs; review and edit before adding. Study by deck or topic with FSRS spaced repetition, or use Cram mode to reveal and advance without ratings. Generated cards track their source notes; review suggested edits when the material changes.
 - **Import and export:** from Qard settings, preview CSV/TSV and Anki `.apkg` imports, keep supported Anki media and review data, or export a deck to CSV/TSV or an Anki `.apkg` with media and review progress. Migrate Spaced Repetition cards, including standard clozes.
 - **Plans:** set up an exam in three steps, track coverage across selected decks/topics, launch practice tests, and see exams and revision in a monthly calendar.
 - **Card formats:** select text to create numbered cloze blanks, or draw image masks to recall diagram labels. Each variant has its own review history and works with normal or cram study.
@@ -19,7 +19,7 @@
 - **Learning reviews:** in normal study sessions with FSRS, only cards rated Again return when their scheduled interval arrives. Hard, Good and Easy finish the card for the current session while preserving their FSRS schedules. Progress counts completed cards separately from learning repeats. Wait for the next card, save and leave, or finish the session with your reviews preserved.
 - **Personal scheduling:** once you have 400 ratings, fit FSRS to your own memory on your device, compare it with the defaults, and apply or reset it.
 - **Statistics:** see your yearly study heatmap, streaks, recall rate, card difficulty, FSRS memory estimates and upcoming reviews, with a breakdown by deck.
-- **Tests:** generate a practice test from notes, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
+- **Tests:** generate a practice test from notes, PDFs, flashcards or a whole course folder. Answer, get feedback and turn missed points into cards.
 - **Learn:** map a course into connected topics, follow guided lessons and check what you remember. Ask the Illustrator to draw reusable lesson diagrams and plots. Track your progress and what to study next.
 - **Study time:** see daily time by activity and course. Qard tracks active study locally and excludes idle periods.
 
@@ -49,7 +49,7 @@ For **oMLX**, start its server and download a chat model, then choose **Connect 
 
 ## Your notes and privacy
 
-Manual flashcard study works without AI or a network connection. AI features let your chosen provider read relevant vault notes. Qard checks its replies and saves accepted content; cards and study progress stay in your vault. API keys use Obsidian’s secure storage (requires Obsidian 1.11.4+).
+Manual flashcard study works without AI or a network connection. AI features let your chosen provider read relevant vault notes and the text of PDFs you choose. Qard checks its replies and saves accepted content; cards and study progress stay in your vault. API keys use Obsidian’s secure storage (requires Obsidian 1.11.4+).
 
 Qard discovers flashcards and source notes across ordinary Markdown files, skipping hidden notes and folders. It does not access the system clipboard; **Select answer** lets you copy with your device’s usual controls. [Community review details](https://github.com/kylianmarceau/qard-obsidian/blob/main/docs/REVIEW_NOTES.md).
 
