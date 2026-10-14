@@ -1,4 +1,4 @@
-import { studyNotes } from '../../vault-access';
+import { isPdf, studySources } from '../../vault-access';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, FileText, Folder, X } from 'lucide-react';
 import {
@@ -34,7 +34,7 @@ export function NewTest({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const files = useMemo(() => {
-    const candidates = studyNotes(services.app);
+    const candidates = studySources(services.app);
     const allowed = new Set(
       testNotePaths(
         candidates.map((f) => f.path),
@@ -76,7 +76,7 @@ export function NewTest({
       .filter((d) => chosenDecks.includes(d.name))
       .flatMap((d) => d.files);
     const latest = testNotePaths(
-      studyNotes(services.app).map((f) => f.path),
+      studySources(services.app).map((f) => f.path),
       settings.folder,
     );
     const selected = resolveTestNotes(latest, notes, folders);
@@ -90,7 +90,7 @@ export function NewTest({
     try {
       if (!request.prompt && !request.sources.length) {
         throw new Error(
-          'The selected sources no longer contain any Markdown notes. Choose another source or enter a prompt.',
+          'The selected sources no longer contain any notes or PDFs. Choose another source or enter a prompt.',
         );
       }
       planFirst
@@ -235,7 +235,7 @@ export function NewTest({
                       setQuery('');
                     }}
                   >
-                    <span>{f.basename}</span>
+                    <span>{isPdf(f.path) ? f.path.split('/').pop() : f.basename}</span>
                     <small>{f.parent?.path === '/' ? '' : f.parent?.path}</small>
                   </button>
                 ))}

@@ -311,6 +311,14 @@ it('retains the generated source version when tracking is retried after the sour
 });
 it('rejects hidden and non-vault source paths', async () => {
   const { service } = setup();
-  for (const path of ['../a.md', '/a.md', '.obsidian/a.md', 'C:/a.md', 'a.pdf'])
+  for (const path of [
+    '../a.md',
+    '/a.md',
+    '.obsidian/a.md',
+    'C:/a.md',
+    'a.png',
+    '../a.pdf',
+    '.hidden/a.pdf',
+  ])
     await expect(service.capture([path])).rejects.toThrow('ordinary Markdown');
 });

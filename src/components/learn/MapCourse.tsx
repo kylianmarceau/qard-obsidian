@@ -1,7 +1,7 @@
 import { DeleteLearnItem } from './DeleteLearnItem';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Folder } from 'lucide-react';
-import { studyNotes } from '../../vault-access';
+import { studySources } from '../../vault-access';
 import { testFolders } from '../../tests/test-sources';
 import type { QardServices } from '../../views/services';
 import { InlineMarkdown } from '../Markdown';
@@ -30,7 +30,7 @@ export function MapCourse({
   const folders = useMemo(() => {
     const q = query.toLowerCase().trim();
     return testFolders(
-      studyNotes(services.app, [services.reviews.getSnapshot().settings.tests.folder]).map(
+      studySources(services.app, [services.reviews.getSnapshot().settings.tests.folder]).map(
         (f) => f.path,
       ),
     )

@@ -1,5 +1,5 @@
 import { CANCELLED, deadline, runValidated, type AgentRunner } from '../agents/runner';
-import { isStudyNote } from '../vault-access';
+import { isPdf, isStudySource } from '../vault-access';
 import type { CardWriter } from './card-writer';
 import type { QardCard } from './card-types';
 import { parseCards } from './parser';
@@ -50,15 +50,15 @@ export interface SourceSyncSnapshot {
 }
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const validPath = (path: string) =>
-  isStudyNote(path) &&
+  isStudySource(path) &&
   !/^(?:[\\/]|[A-Za-z]:)/.test(path) &&
   !path.includes('\\') &&
   !path.split('/').includes('..');
 const equalSources = (a: SourceSnapshot[], b: SourceSnapshot[]) =>
   a.length === b.length && a.every((s, i) => s.path === b[i]?.path && s.text === b[i]?.text);
-/** Ignore the derived card itself when it lives in its source note, while retaining other study material. */
+/** Ignore the derived card itself when it lives in its source note, while retaining other study material. A PDF holds no cards. */
 export function sourceNoteText(source: string, path: string, ignore: string[] = []) {
-  const cards = parseCards(source, path).cards;
+  const cards = isPdf(path) ? [] : parseCards(source, path).cards;
   const excluded = new Set(ignore);
   for (const card of cards) {
     if (
@@ -247,7 +247,7 @@ export class SourceSyncService {
     return Promise.all(
       [...new Set(paths)].map(async (path) => {
         if (!validPath(path)) {
-          throw new Error('Choose an ordinary Markdown source note.');
+          throw new Error('Choose an ordinary Markdown note or PDF as the source.');
         }
         const modified = this.storage.modified?.(path);
         const text = await this.storage.read(path);

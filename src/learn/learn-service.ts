@@ -11,6 +11,7 @@ import type {
   LearnStorage,
 } from './learn-contracts';
 import type { SourceSnapshot } from '../cards/source-sync-types';
+import { isPdf, isStudySource } from '../vault-access';
 import type { QardSettings } from '../settings/settings';
 import {
   CANCELLED,
@@ -586,7 +587,7 @@ export class LearnService {
     this.removed.delete(this.proposalFile('map', clean));
     return this.track(clean, 'map-course', '', (signal) =>
       this.courseJob('map', clean, request, signal, async () => {
-        const notes = this.storage.files(clean, 'md');
+        const notes = this.courseFiles(clean);
         const result = await runValidated(
           this.activeRunner('writer', signal),
           {
@@ -645,6 +646,13 @@ export class LearnService {
   private folderOf(mastery: string) {
     return mastery.split('/').slice(0, -1).join('/');
   }
+  /** A course's notes and PDFs, the material its objectives come from. */
+  private courseFiles(folder: string) {
+    return [
+      ...this.storage.files(folder, 'md'),
+      ...this.storage.files(folder, 'pdf').filter((p) => isStudySource(p)),
+    ].sort();
+  }
   /** Course notes created or edited since the course was last mapped. Without a date, nothing counts as changed. */
   changedNotes(m: Mastery): string[] {
     const since = m.mapped
@@ -654,12 +662,10 @@ export class LearnService {
       return [];
     }
     const root = this.root() + '/';
-    return this.storage
-      .files(this.folderOf(m.path), 'md')
-      .filter(
-        (p) =>
-          p !== m.path && !p.startsWith(root) && (this.storage.modified(p) ?? 0) > since + 60_000,
-      );
+    return this.courseFiles(this.folderOf(m.path)).filter(
+      (p) =>
+        p !== m.path && !p.startsWith(root) && (this.storage.modified(p) ?? 0) > since + 60_000,
+    );
   }
   update(mastery: string) {
     return this.updates.get(mastery);
@@ -675,7 +681,7 @@ export class LearnService {
           changed = this.changedNotes(m);
         const notes = changed.length
           ? changed
-          : this.storage.files(this.folderOf(mastery), 'md').filter((p) => p !== mastery);
+          : this.courseFiles(this.folderOf(mastery)).filter((p) => p !== mastery);
         const result = await runValidated(
           this.activeRunner('writer', signal),
           {
@@ -1786,7 +1792,11 @@ export class LearnService {
         close: {
           summary: result.summary,
           cards: result.cards.slice(0, 4),
-          noteEdit: result.noteEdit?.text.trim() ? result.noteEdit : undefined,
+          // A paragraph can be added to a note, never to a PDF.
+          noteEdit:
+            result.noteEdit?.text.trim() && !isPdf(result.noteEdit.path)
+              ? result.noteEdit
+              : undefined,
           cardState: {},
           note,
           nextCheck,
@@ -1834,6 +1844,9 @@ export class LearnService {
         : this.storage.resolve(edit.path.replace(/\.md$/, ''), path);
       if (!target) {
         throw new Error(`Could not find ${edit.path}.`);
+      }
+      if (!target.endsWith('.md')) {
+        throw new Error(`Qard can only add paragraphs to Markdown notes, not ${target}.`);
       }
       await this.storage.process(target, (text) =>
         insertUnderHeading(text, edit.heading, edit.text),

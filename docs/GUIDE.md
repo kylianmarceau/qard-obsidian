@@ -39,7 +39,7 @@ Reload Obsidian and enable Qard. Do not copy `node_modules`, the source tree, or
 
 ## AI flashcards
 
-Choose **Generate with AI** inside a deck or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
+Choose **Generate with AI** inside a deck or from the New card page. Describe what you want in the prompt box and choose **Start**; you do not need to choose a deck or topic first. Optionally attach notes with **+ Note** or a whole course folder with **+ Folder** (including subfolders), or let the writer find relevant vault notes. PDFs in your vault attach the same way; see [PDFs as sources](#pdfs-as-sources). The AI chooses how many cards the material needs and suggests a deck and topic, reusing existing ones when appropriate. Starting from a deck or the card editor carries that context forward. Generation uses the existing Writer connection and model in Qard settings.
 
 Review the questions and answers, edit them or preview their Markdown, and adjust the suggested **Save to deck** and **Topic** if needed. Deselect anything you do not want, and choose **Add selected**. Approved cards are saved together as a normal Qard Markdown note in your card folder and immediately appear in the chosen deck. Existing notes are preserved. Once adding begins, the batch's destination stays fixed so later selections and save retries go into the same generated note without duplicating cards. Folder sources are snapshotted at Start, so background retries use the same notes even if a folder later gains new files.
 
@@ -53,9 +53,17 @@ When a linked note changes, an affected-card row appears on Decks. Open the row 
 
 Wording edits keep the card's ID, review history and schedule. When the correct answer changes, leave **The correct answer changed** checked: Qard preserves the history, makes the card due now and flags it for a fresh normal review. That flag clears after an actual rating; cram sessions do not clear it. Memory statistics omit flagged cards until they are reviewed. This does not reset the FSRS model or erase previous reviews.
 
-Linked sources follow note and folder renames while Qard is enabled. Deleted sources are shown as missing and cannot be used for AI suggestions until restored. Existing cards retain their identities when their card notes move. A partially saved update can be finished after a reload without adding a duplicate card.
+A PDF can be a source too: replacing it with a new version is detected like an edited note, and the comparison shows the changed lines of its text. Linked sources follow note and folder renames while Qard is enabled. Deleted sources are shown as missing and cannot be used for AI suggestions until restored. Existing cards retain their identities when their card notes move. A partially saved update can be finished after a reload without adding a duplicate card.
 
-For older generated cards and handwritten cards, open a card's preview and choose **Link a source note**. Tracking starts from that note's current version; Qard cannot reconstruct the source of an older card automatically. You can link more than one source note. Source versions, links and pending suggestions are stored locally in `Qard/Source links.json`; back up that file with your notes. Keep this metadata file at its original path. Generation drafts, new practice tests and new lessons also retain their source versions so a change before adding their suggested cards is still detected. Historical tests and lesson transcripts remain records of their original attempts; updates edit the derived flashcards, including their answers and explanations.
+For older generated cards and handwritten cards, open a card's preview and choose **Link a source note** (a note or a PDF). Tracking starts from that note's current version; Qard cannot reconstruct the source of an older card automatically. You can link more than one source note. Source versions, links and pending suggestions are stored locally in `Qard/Source links.json`; back up that file with your notes. Keep this metadata file at its original path. Generation drafts, new practice tests and new lessons also retain their source versions so a change before adding their suggested cards is still detected. Historical tests and lesson transcripts remain records of their original attempts; updates edit the derived flashcards, including their answers and explanations.
+
+## PDFs as sources
+
+PDFs in your vault work wherever notes are AI sources: **+ Note** and **+ Folder** when generating flashcards or a practice test, course folders in **Learn**, **Link a source note**, and **Qard: Teach me this note** on an open PDF. Qard doesn't add an upload step; put the PDF in your vault and choose it like a note. In the note search, PDFs show their `.pdf` extension, so slides and the notes beside them are easy to tell apart.
+
+Qard reads a PDF's text on your device with the PDF reader built into Obsidian, page by page, and gives the AI that text with a `[Page N]` line before each page. Nothing is rendered or uploaded by Qard itself; the text goes to your chosen AI connection like a note's. The PDF file is never changed: lessons only suggest paragraphs for Markdown notes. Claude Code opens PDFs with its own reader instead, which also sees figures, and Codex receives the text of the PDFs a request names. When an API connection searches the vault on its own, it finds PDFs by file name and reads long ones a few pages at a time.
+
+A PDF needs selectable text. Qard explains when one can't be used instead of sending it empty or cut short: a scan without recognised text (OCR), a password-protected file, a file over 100 MB, or more than about 1,000,000 characters of text (use a single chapter instead). Extracted text is kept in memory for recently used PDFs, so checking them for changes doesn't read them again until the file changes.
 
 ## Development
 
@@ -325,7 +333,7 @@ The Spaced Repetition plugin no longer sees converted cards, and its note tags a
 
 Practice tests are a second mode next to flashcards. An AI agent writes an exam-style test from your notes, you answer in text, and the agent marks each answer against a mark scheme. Open **Tests** in the Qard library, or run **Qard: New practice test**. When a specific test is open, click the trash icon in the top bar to move its plan, questions and saved answers to Obsidian’s configured trash and return to the test list. Any running jobs for that test are stopped.
 
-Use **+ Folder** in the new-test composer to attach a whole course. Search for its vault folder and select it once; Qard includes every Markdown note in that folder and its subfolders, shows a note count, and removes duplicates if you also attach notes or overlapping folders. Remove the folder chip to detach it. Folder contents are refreshed when you press **Start**, then saved with the request. PDFs and other non-Markdown files are not attached.
+Use **+ Folder** in the new-test composer to attach a whole course. Search for its vault folder and select it once; Qard includes every Markdown note and PDF in that folder and its subfolders, shows a note count, and removes duplicates if you also attach notes or overlapping folders. Remove the folder chip to detach it. Folder contents are refreshed when you press **Start**, then saved with the request. Images and other files are not attached.
 
 1. **Describe the test.** Type what it should cover. Optionally tick **Flashcards** and choose decks, or add specific notes. With no sources, the agent finds the relevant notes itself.
 2. **Check the plan** (optional, on by default). The agent drafts a short plan: a goal, the sources it will use and why, and sections with their question mix and marks. You can remove sources or ask for changes, then choose **Generate test**. Untick **Plan first** to skip straight to the test.
@@ -356,7 +364,7 @@ Learn is a third mode next to flashcards and tests. It keeps a record of what yo
 
 ### The mastery file
 
-**Map a course** asks the writer to read a course folder and list its objectives: the specific things you need to be able to explain or do, and which objectives each one builds on. It uses your study profile to mark ones you've already struggled with, and adds topics from the course outline that no note covers yet as **not covered yet**. Nothing is saved until you accept the list. Qard then writes `<Course> Mastery.md` in that folder: a normal note with a table, one row per objective (state, due date, needs, notes, evidence). You can edit it freely: change a state or date, add or remove rows, change what an objective needs, or add your own columns. Qard only rewrites the table's rows.
+**Map a course** asks the writer to read a course folder, including its PDFs, and list its objectives: the specific things you need to be able to explain or do, and which objectives each one builds on. It uses your study profile to mark ones you've already struggled with, and adds topics from the course outline that no note covers yet as **not covered yet**. Nothing is saved until you accept the list. Qard then writes `<Course> Mastery.md` in that folder: a normal note with a table, one row per objective (state, due date, needs, notes, evidence). You can edit it freely: change a state or date, add or remove rows, change what an objective needs, or add your own columns. Qard only rewrites the table's rows.
 
 ### The course map
 
@@ -398,7 +406,7 @@ A **check** is one to three new questions on one objective, marked straight away
 
 ### Lessons
 
-Choose **Teach** on an objective, or run **Qard: Teach me this note**.
+Choose **Teach** on an objective, or run **Qard: Teach me this note** (it also works on an open PDF).
 
 1. **Probe.** A few quick questions on what the lesson depends on, skipping anything the mastery file already shows you know.
 2. **Plan.** The tutor marks the probe and proposes where to start, with a short plan and a map of the steps from what you know to the goal. Ask for changes, or choose **Start lesson**.
@@ -460,9 +468,9 @@ In **Settings → Qard → AI connections**, set up the tools and keys Qard may 
 
 | Connection | Notes |
 |---|---|
-| **Claude Code** | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`). Editing, shell and web tools are denied. Desktop only. |
-| **Codex** | Runs `codex exec` with a read-only sandbox. Desktop only. |
-| **Anthropic API** | Calls the Claude API directly. The model reads notes only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
+| **Claude Code** | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`), and opens PDFs with its own reader. Editing, shell and web tools are denied. Desktop only. |
+| **Codex** | Runs `codex exec` with a read-only sandbox. Codex can't open PDFs, so Qard sends the text of the PDFs a request names. Desktop only. |
+| **Anthropic API** | Calls the Claude API directly. The model reads notes and PDFs only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
 | **OpenRouter** | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile. |
 | **Custom AI** | A local or hosted OpenAI-compatible chat server, including Ollama, LM Studio and oMLX. Uses the same read-only note tools. Requires a model that can follow Qard's JSON formats; note-reading tasks also require tool support. |
 
@@ -526,6 +534,7 @@ Enable voice answers in Qard settings, then choose **Record answer** during stud
 - Nested decks group and study together, but a deck's topics are still a single level. Deck options cover target retention and new cards per day; other preferences are global.
 - Malformed YAML, empty cards and unclosed card code fences are reported and skipped. Nested Qard callouts/list-contained Qard blocks are not supported.
 - Rich media beyond images/math depends on Obsidian’s renderer and installed processors.
+- PDF sources are read as text: scanned PDFs need recognised text (OCR), password-protected PDFs can't be read, and figures are only seen by Claude Code, which opens PDFs itself.
 - Desktop Obsidian was used for application checks. Mobile, arbitrary third-party themes and real microphone hardware require further testing; the build does not use Node/Electron runtime APIs and is not desktop-only.
 
 Licensed under MIT; see [LICENSE](../LICENSE).

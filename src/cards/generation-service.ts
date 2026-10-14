@@ -39,8 +39,9 @@ export const flashcardDestination = (batch: Batch): FlashcardDestination =>
 export const flashcardTopics = (batch: Batch): string[] => [
   ...new Set(batch.cards.map((c) => c.topic ?? flashcardDestination(batch).topic)),
 ];
+const sourceName = (source: string) => source.replace(/\.(?:md|pdf)$/i, '');
 const noteTopic = (source: string) =>
-  source.replace(/\.md$/i, '').split('/').pop()!.replace(/_/g, ' ').trim().slice(0, 200);
+  sourceName(source).split('/').pop()!.replace(/_/g, ' ').trim().slice(0, 200);
 export interface GenerationSnapshot {
   batch?: Batch;
   job?: { kind: 'flashcards'; startedAt: number; error?: string };
@@ -53,6 +54,25 @@ interface DraftStorage {
   write(path: string, text: string): Promise<void>;
 }
 const draftPath = (folder: string) => [folder, 'Flashcard drafts.json'].filter(Boolean).join('/');
+/** On disk, cards share their source's snapshot, so a batch from a long note or PDF stores its text once. */
+type SavedBatch = Batch & { sources?: SourceSnapshot[] };
+function packSources(batch: Batch): SavedBatch {
+  if (!batch.cards.some((c) => c.sourceSnapshots)) {
+    return batch;
+  }
+  const sources = new Map<string, SourceSnapshot>();
+  for (const s of batch.cards.flatMap((c) => c.sourceSnapshots ?? [])) {
+    if (sources.has(s.path) && sources.get(s.path)!.text !== s.text) {
+      return batch;
+    }
+    sources.set(s.path, s);
+  }
+  return {
+    ...batch,
+    sources: [...sources.values()],
+    cards: batch.cards.map(({ sourceSnapshots: _shared, ...card }) => card),
+  };
+}
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** A background writer job with a durable review draft. Only approved cards reach the card writer. */
@@ -92,7 +112,7 @@ export class FlashcardGenerationService {
   private persist() {
     const batch = this.snapshot.batch,
       path = draftPath(batch?.folder ?? safeFolder(this.folder()));
-    const text = JSON.stringify(batch ?? null, null, 2) + '\n';
+    const text = JSON.stringify(batch ? packSources(batch) : null, null, 2) + '\n';
     const next = this.writes.catch(() => {}).then(() => this.storage.write(path, text));
     this.writes = next;
     return next;
@@ -103,7 +123,7 @@ export class FlashcardGenerationService {
       if (!text || this.snapshot.batch || this.disposed) {
         return;
       }
-      const value = JSON.parse(text) as Batch | null;
+      const value = JSON.parse(text) as SavedBatch | null;
       if (!value) {
         return;
       }
@@ -139,6 +159,7 @@ export class FlashcardGenerationService {
       if (value.destinationLocked !== undefined && typeof value.destinationLocked !== 'boolean') {
         throw new Error('Invalid saved destination.');
       }
+      const shared = value.sources === undefined ? undefined : readSourceSnapshots(value.sources);
       for (const card of value.cards) {
         if (card.sourceSnapshots !== undefined) {
           readSourceSnapshots(card.sourceSnapshots);
@@ -153,8 +174,19 @@ export class FlashcardGenerationService {
           });
         }
       }
+      const { sources: _shared, ...saved } = value;
       this.publish({
-        batch: { ...value, request },
+        batch: {
+          ...saved,
+          request,
+          cards: shared
+            ? saved.cards.map((c) =>
+                c.sourceSnapshots
+                  ? c
+                  : { ...c, sourceSnapshots: shared.filter((s) => s.path === c.source) },
+              )
+            : saved.cards,
+        },
         job: value.cards.length
           ? undefined
           : {
@@ -424,7 +456,7 @@ export class FlashcardGenerationService {
       sources.map((source, i) => [
         source,
         names.filter((name) => name === names[i]).length > 1
-          ? source.replace(/\.md$/i, '').replace(/_/g, ' ').slice(-200)
+          ? sourceName(source).replace(/_/g, ' ').slice(-200)
           : names[i]!,
       ]),
     );
