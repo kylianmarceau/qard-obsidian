@@ -118,6 +118,12 @@ export class ItemView extends Component {
           empty(this: HTMLElement) {
             this.replaceChildren();
           },
+          addClass(this: HTMLElement, cls: string) {
+            this.classList.add(cls);
+          },
+          removeClass(this: HTMLElement, cls: string) {
+            this.classList.remove(cls);
+          },
           createDiv(this: HTMLElement, options?: { cls?: string }) {
             const div = document.createElement('div');
             if (options?.cls) div.className = options.cls;
