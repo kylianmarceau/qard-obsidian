@@ -43,6 +43,8 @@ export interface QardSettings {
   defaultMode: StudyMode;
   defaultOrder: CardOrder;
   keyboardHints: boolean;
+  /** Put the current course in the tab and window title, so time trackers can see it. */
+  courseInTitle: boolean;
   /** Single keys used while reviewing cards. */
   studyKeys: StudyKeys;
   autoFocus: boolean;
@@ -91,6 +93,7 @@ export const DEFAULT_SETTINGS: QardSettings = {
   defaultMode: 'all',
   defaultOrder: 'note',
   keyboardHints: true,
+  courseInTitle: true,
   studyKeys: DEFAULT_STUDY_KEYS,
   autoFocus: false,
   audioEnabled: false,
@@ -218,6 +221,7 @@ export function readSettings(raw: unknown): QardSettings {
       : 'all',
     defaultOrder: s.defaultOrder === 'shuffle' ? 'shuffle' : 'note',
     keyboardHints: s.keyboardHints !== false,
+    courseInTitle: s.courseInTitle !== false,
     studyKeys: readStudyKeys(s.studyKeys),
     autoFocus: s.autoFocus === true,
     audioEnabled: s.audioEnabled === true,

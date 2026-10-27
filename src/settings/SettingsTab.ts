@@ -391,6 +391,11 @@ export class QardSettingsTab extends PluginSettingTab {
             'Show keys on study buttons. Change them under Study keys.',
           ],
           [
+            'courseInTitle',
+            'Show current course in the tab title',
+            'The tab and window title show the course you are studying, so time trackers can record it.',
+          ],
+          [
             'autoFocus',
             'Enter focus mode when studying',
             'Study across the full workspace, without relying on OS fullscreen.',

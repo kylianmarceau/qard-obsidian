@@ -36,6 +36,7 @@ export class StudyClock {
   private lastTick?: number;
   private lastInput = -Infinity;
   private pending: StudyLog = {};
+  private listeners = new Set<(view: object, context?: StudyContext) => void>();
   /** focused: the Qard view in front, when Obsidian has focus; undefined otherwise. */
   constructor(
     private now: () => number,
@@ -50,6 +51,16 @@ export class StudyClock {
     } else {
       this.contexts.delete(view);
     }
+    for (const listener of this.listeners) {
+      listener(view, context);
+    }
+  }
+  /** Called with each view's new context, so a view can show it (its tab title). Returns an unsubscribe. */
+  onChange(listener: (view: object, context?: StudyContext) => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
   /** Any keyboard, mouse or scroll input in Obsidian. Pointer moves arrive constantly, so at most once a second. */
   input() {
