@@ -6,6 +6,15 @@ import type { QardServices } from './services';
 import type { UiRequest } from './navigation';
 import type { StudyAction, StudyCommands } from '../review/keyboard';
 export const VIEW_TYPE = 'qard-workspace';
+const TITLE_COURSE_MAX = 40;
+/** "Qard · DS346", or "Qard" with no course; long courses are trimmed so the title stays short. */
+export function qardTitle(course: string | undefined) {
+  const name = course?.trim();
+  if (!name) {
+    return 'Qard';
+  }
+  return `Qard · ${name.length > TITLE_COURSE_MAX ? `${name.slice(0, TITLE_COURSE_MAX - 1).trimEnd()}…` : name}`;
+}
 export class QardView extends ItemView {
   private root?: Root;
   private host?: HTMLElement;
@@ -14,6 +23,10 @@ export class QardView extends ItemView {
   private services?: QardServices;
   private request?: UiRequest;
   private study?: StudyCommands;
+  /** The course on this view's screen, from the study clock. */
+  private course?: string;
+  private title = 'Qard';
+  private unsubscribe: (() => void)[] = [];
   constructor(
     leaf: WorkspaceLeaf,
     private plugin: QardPlugin,
@@ -24,7 +37,22 @@ export class QardView extends ItemView {
     return VIEW_TYPE;
   }
   getDisplayText() {
-    return 'Qard';
+    return this.plugin.reviews.getSnapshot().settings.courseInTitle === false
+      ? 'Qard'
+      : qardTitle(this.course);
+  }
+  /** Redraws the tab and window title when it changes; card-by-card review sets the same course on every card. */
+  private refreshTitle() {
+    const title = this.getDisplayText();
+    if (title === this.title) {
+      return;
+    }
+    this.title = title;
+    // Both are internal: the tab header, then the window title (time trackers read it).
+    const leaf = this.leaf as { updateHeader?: () => void },
+      workspace = this.app?.workspace as { updateTitle?: () => void } | undefined;
+    leaf.updateHeader?.();
+    workspace?.updateTitle?.();
   }
   getIcon() {
     return 'qard';
@@ -56,6 +84,20 @@ export class QardView extends ItemView {
       },
     };
     this.root = createRoot(this.host);
+    this.unsubscribe = [
+      ...(this.plugin.time
+        ? [
+            this.plugin.time.onChange((view, context) => {
+              if (view === this) {
+                this.course = context?.course;
+                this.refreshTitle();
+              }
+            }),
+          ]
+        : []),
+      // The title setting can change while the view is open.
+      this.plugin.reviews.subscribe(() => this.refreshTitle()),
+    ];
     this.render();
   }
   /** Run a study action in this view's card session; false when none is running or it doesn't apply. */
@@ -93,6 +135,10 @@ export class QardView extends ItemView {
   release() {
     this.study = undefined;
     this.plugin.time?.set(this, undefined);
+    this.unsubscribe.forEach((u) => u());
+    this.unsubscribe = [];
+    this.course = undefined;
+    this.refreshTitle();
     this.setFocus(false);
     this.root?.unmount();
     this.root = undefined;
