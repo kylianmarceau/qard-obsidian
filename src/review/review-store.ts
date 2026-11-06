@@ -344,7 +344,11 @@ export class ReviewStore {
       ) {
         states = recomputeMemory(states, data.history, next.desiredRetention, next.fsrsParameters);
       }
-      if (!next.scheduling || !next.burySiblings) {
+      if (
+        (!next.scheduling || !next.burySiblings) &&
+        (next.scheduling !== data.settings.scheduling ||
+          next.burySiblings !== data.settings.burySiblings)
+      ) {
         states = Object.assign(
           Object.create(null) as Record<string, ReviewState>,
           Object.fromEntries(
@@ -356,7 +360,8 @@ export class ReviewStore {
         );
       }
       const sessions =
-        !next.scheduling || next.scheduler !== 'fsrs'
+        (!next.scheduling || next.scheduler !== 'fsrs') &&
+        (next.scheduling !== data.settings.scheduling || next.scheduler !== data.settings.scheduler)
           ? data.sessions.flatMap((session) => {
               if (!session.repeatLearning) {
                 return [session];

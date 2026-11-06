@@ -42,3 +42,70 @@ it('rejects temporary IDs for persistent history', async () => {
   const store = new ReviewStore(async () => {});
   await expect(store.review('volatile:note:1', 3)).rejects.toThrow(/stable/);
 });
+
+it.each([
+  { scheduler: 'fsrs' as const, scheduling: true, burySiblings: true },
+  { scheduler: 'simple' as const, scheduling: true, burySiblings: false },
+  { scheduler: 'fsrs' as const, scheduling: false, burySiblings: true },
+])(
+  'saves and reloads appearance without altering study data under $scheduler/$scheduling',
+  async (options) => {
+    const store = new ReviewStore(async () => {});
+    await store.review('stable', 3, 2000);
+    const data = JSON.parse(JSON.stringify(store.getSnapshot())) as PluginData;
+    Object.assign(data.settings, options);
+    data.settings.deckOptions = { A: { desiredRetention: 0.85, newCardsPerDay: 3 } };
+    data.states.stable!.buriedUntil = 900000;
+    data.sessions = [
+      {
+        id: 'saved',
+        title: 'Saved deck',
+        results: [],
+        cardIds: ['stable'],
+        position: 0,
+        style: 'normal',
+        createdAt: 2000,
+        updatedAt: 2000,
+        repeatLearning: true,
+        learning: [{ cardId: 'stable', due: 3000 }],
+      },
+    ];
+    const restored = new ReviewStore(async () => {});
+    restored.load(data);
+    const before = structuredClone(restored.getSnapshot());
+    await restored.saveSettings({
+      ...before.settings,
+      deckOptions: { A: { ...before.settings.deckOptions.A, icon: 'terminal', color: '#123456' } },
+    });
+    const after = restored.getSnapshot();
+    for (const key of [
+      'states',
+      'history',
+      'sessions',
+      'statistics',
+      'links',
+      'exams',
+      'study',
+      'usage',
+      'timings',
+      'removed',
+    ] as const) {
+      expect(after[key]).toEqual(before[key]);
+    }
+    expect(after.settings.deckOptions.A).toEqual({
+      desiredRetention: 0.85,
+      newCardsPerDay: 3,
+      icon: 'terminal',
+      color: '#123456',
+    });
+    const restarted = new ReviewStore(async () => {});
+    restarted.load(JSON.parse(JSON.stringify(after)));
+    expect(restarted.getSnapshot().settings.deckOptions).toEqual(after.settings.deckOptions);
+    await restarted.saveSettings({
+      ...restarted.getSnapshot().settings,
+      deckOptions: { A: { desiredRetention: 0.85, newCardsPerDay: 3 } },
+    });
+    expect(restarted.getSnapshot().states).toEqual(before.states);
+    expect(restarted.getSnapshot().sessions).toEqual(before.sessions);
+  },
+);

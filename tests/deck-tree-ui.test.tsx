@@ -158,3 +158,152 @@ it('clears a deck’s own options when both fields are emptied', async () => {
   );
   expect(save).toHaveBeenCalledWith({});
 });
+
+const appearanceField = (name: string) =>
+  [...host.querySelectorAll('label')]
+    .find((label) => label.querySelector('span')?.textContent === name)!
+    .querySelector<HTMLInputElement>('input')!;
+const typeAppearance = (name: string, value: string) =>
+  act(() => {
+    const input = appearanceField(name);
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+const action = async (text: string) =>
+  act(async () => {
+    [...host.querySelectorAll('button')]
+      .find((button) => button.textContent === text)!
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+
+it('configures exact-deck appearance in nested/filtered rows and opens options for leaves', async () => {
+  const options = vi.fn();
+  const choices = {
+    'Biology::Cells': { icon: 'terminal', color: '#123456' },
+    'History::Cells': { icon: 'network', color: '#654321' },
+    Biology: { icon: 'atom' },
+  };
+  const all = buildDecks([
+    card('a', 'Biology::Cells'),
+    card('b', 'History::Cells'),
+    card('c', 'Chemistry'),
+  ]);
+  library(true, { decks: all, deckOptions: choices, options });
+  const rows = [...host.querySelectorAll('.qard-deck-row')];
+  expect(
+    rows
+      .filter((row) => row.querySelector('strong')?.textContent === 'Cells')
+      .map((row) => row.querySelector('svg[data-icon]')?.getAttribute('data-icon')),
+  ).toEqual(['terminal', 'network']);
+  await click(button('Deck options for Chemistry'));
+  expect(options).toHaveBeenCalledWith('Chemistry');
+  library(false, { decks: all, deckOptions: choices, options });
+  expect(host.querySelectorAll('.qard-deck-badge [data-icon]')).toHaveLength(2);
+  expect(
+    host.querySelector<HTMLElement>('.qard-deck-badge')?.style.getPropertyValue('--qard-course'),
+  ).toBe('#123456');
+});
+
+it('previews appearance, saves independent resets and preserves scheduling options', async () => {
+  const save = vi.fn(async () => {}),
+    close = vi.fn();
+  const settings = readSettings({
+    deckOptions: {
+      Biology: { desiredRetention: 0.85, newCardsPerDay: 3, icon: 'terminal', color: '#123456' },
+    },
+  });
+  act(() =>
+    root.render(<DeckOptions deck="Biology" settings={settings} save={save} close={close} />),
+  );
+  expect(
+    host.querySelector('.qard-deck-appearance-preview [data-icon]')?.getAttribute('data-icon'),
+  ).toBe('terminal');
+  await typeAppearance('Icon', 'network');
+  await typeAppearance('Color', '#aabbcc');
+  expect(
+    host.querySelector('.qard-deck-appearance-preview [data-icon]')?.getAttribute('data-icon'),
+  ).toBe('network');
+  expect(
+    host
+      .querySelector<HTMLElement>('.qard-deck-appearance-preview .qard-deck-badge')
+      ?.style.getPropertyValue('--qard-course'),
+  ).toBe('#aabbcc');
+  await action('Automatic icon');
+  await action('Save options');
+  expect(save).toHaveBeenCalledWith({
+    Biology: { desiredRetention: 0.85, newCardsPerDay: 3, color: '#aabbcc' },
+  });
+  expect(close).toHaveBeenCalledOnce();
+});
+
+it.each([0.855, 0.851234567890123])(
+  'keeps exact retention %s when only appearance changes',
+  async (desiredRetention) => {
+    const save = vi.fn(async () => {});
+    const settings = readSettings({
+      deckOptions: { Biology: { desiredRetention, newCardsPerDay: 3 } },
+    });
+    act(() =>
+      root.render(<DeckOptions deck="Biology" settings={settings} save={save} close={vi.fn()} />),
+    );
+    expect(appearanceField('Target retention (%)').value).toBe(String(desiredRetention * 100));
+    expect(appearanceField('Target retention (%)').step).toBe('any');
+    await typeAppearance('Icon', 'terminal');
+    await typeAppearance('Color', '#aabbcc');
+    await action('Save options');
+    expect(save).toHaveBeenCalledWith({
+      Biology: { desiredRetention, newCardsPerDay: 3, icon: 'terminal', color: '#aabbcc' },
+    });
+  },
+);
+
+it('rejects new unavailable icons and malformed colors, keeps edits on save failure, and allows retry', async () => {
+  const save = vi.fn(async () => {}),
+    close = vi.fn();
+  act(() =>
+    root.render(
+      <DeckOptions deck="Biology" settings={readSettings({})} save={save} close={close} />,
+    ),
+  );
+  await typeAppearance('Icon', 'missing-icon');
+  await action('Save options');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('available icon');
+  expect(save).not.toHaveBeenCalled();
+  await typeAppearance('Icon', 'terminal');
+  await typeAppearance('Color', '#12');
+  await action('Save options');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('six-digit');
+  await typeAppearance('Color', '#abcdef');
+  save.mockRejectedValueOnce(new Error('disk full'));
+  await action('Save options');
+  expect(host.querySelector('[role=alert]')?.textContent).toContain('Could not save');
+  expect(appearanceField('Icon').value).toBe('terminal');
+  expect(appearanceField('Color').value).toBe('#abcdef');
+  expect(close).not.toHaveBeenCalled();
+  await action('Save options');
+  expect(close).toHaveBeenCalledOnce();
+});
+
+it('retains an unavailable saved icon on color edits and Cancel never saves', async () => {
+  const save = vi.fn(async () => {}),
+    close = vi.fn();
+  act(() =>
+    root.render(
+      <DeckOptions
+        deck="A"
+        settings={readSettings({
+          deckOptions: { A: { icon: 'other-device-icon', color: '#123456' } },
+        })}
+        save={save}
+        close={close}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain('unavailable on this device');
+  await action('Automatic color');
+  await action('Save options');
+  expect(save).toHaveBeenCalledWith({ A: { icon: 'other-device-icon' } });
+  save.mockClear();
+  await action('Cancel');
+  expect(save).not.toHaveBeenCalled();
+});

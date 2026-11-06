@@ -7857,3 +7857,38 @@ div.qard-ask-q {
 .qard-deck-options .qard-actions {
   justify-content: flex-end;
 }
+
+.qard-deck-custom-icon {
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+.qard-deck-custom-icon svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.6px;
+}
+
+.qard-deck-appearance-preview,
+.qard-deck-appearance-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.qard-deck-appearance-preview {
+  font-size: 13px;
+}
+
+.qard-deck-appearance-control label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.qard-deck-appearance-control input[type='color'] {
+  width: 40px;
+  height: 32px;
+  padding: 2px;
+}

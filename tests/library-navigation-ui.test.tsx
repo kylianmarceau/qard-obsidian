@@ -165,3 +165,33 @@ it('hides AI workspaces and buttons while AI features are off, and brings them b
     'Plans',
   ]);
 });
+
+it('updates configured appearance in the library and deck header from saved settings', async () => {
+  await act(async () =>
+    services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      deckOptions: { Networks: { icon: 'terminal', color: '#123456' } },
+    }),
+  );
+  expect(host.querySelector('.qard-deck-row [data-icon]')?.getAttribute('data-icon')).toBe(
+    'terminal',
+  );
+  await act(async () => host.querySelector<HTMLButtonElement>('button.qard-deck')!.click());
+  expect(host.querySelector('.qard-deck-identity [data-icon]')?.getAttribute('data-icon')).toBe(
+    'terminal',
+  );
+  await act(async () =>
+    services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      deckOptions: { Networks: { icon: 'network', color: '#654321' } },
+    }),
+  );
+  expect(host.querySelector('.qard-deck-identity [data-icon]')?.getAttribute('data-icon')).toBe(
+    'network',
+  );
+  expect(
+    host
+      .querySelector<HTMLElement>('.qard-deck-identity .qard-deck-badge')
+      ?.style.getPropertyValue('--qard-course'),
+  ).toBe('#654321');
+});

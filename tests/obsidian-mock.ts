@@ -99,6 +99,13 @@ export class Notice {
   constructor(public message: string) {}
 }
 export const setIcon = () => {};
+export const getIconIds = () => ['terminal', 'network', 'atom', 'database'];
+export function getIcon(id: string): SVGSVGElement | null {
+  if (!getIconIds().includes(id)) return null;
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.setAttribute('data-icon', id);
+  return icon;
+}
 export const Platform = { isDesktopApp: false, isWin: false };
 export const requireApiVersion = () => false;
 export class FileSystemAdapter {}

@@ -257,3 +257,45 @@ it('keeps deck, topic and individual selection consistent while filtering out re
     host.remove();
   }
 });
+
+it('updates study selection badges when deck appearance settings change', async () => {
+  const index = new CardIndex();
+  index.update('Biology.md', '> [!qard]- Question\n> Answer');
+  index.setLoading(false);
+  const reviews = new ReviewStore(async () => {});
+  const services = { index, reviews } as unknown as QardServices;
+  const host = document.createElement('div'),
+    root = createRoot(host);
+  document.body.append(host);
+  try {
+    await act(async () =>
+      root.render(
+        <StudySessionBuilder
+          cards={index.getSnapshot().cards}
+          decks={index.getSnapshot().decks}
+          initial={{ decks: [], topics: [], cards: [] }}
+          services={services}
+          start={vi.fn()}
+          back={vi.fn()}
+        />,
+      ),
+    );
+    await act(async () =>
+      reviews.saveSettings({
+        ...reviews.getSnapshot().settings,
+        deckOptions: { Biology: { icon: 'terminal', color: '#123456' } },
+      }),
+    );
+    expect(host.querySelector('.qard-select-deck [data-icon]')?.getAttribute('data-icon')).toBe(
+      'terminal',
+    );
+    expect(
+      host
+        .querySelector<HTMLElement>('.qard-select-deck .qard-deck-badge')
+        ?.style.getPropertyValue('--qard-course'),
+    ).toBe('#123456');
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

@@ -1,3 +1,4 @@
+import { deckAppearance } from '../decks/deck-options';
 import { failureDays, needsRepair } from '../review/card-repair';
 import { AI_SCREENS, type Screen } from './navigation';
 import { SavedSessions } from '../components/SavedSessions';
@@ -573,6 +574,7 @@ export function QardApp({ services, request }: { services: QardServices; request
           {deckOptions}
           {screen.kind === 'library' && (
             <DeckBrowser
+              deckOptions={reviews.settings.deckOptions}
               hideNavigation
               nested={!search.trim() && !repairOnly}
               studyDecks={(names) => builder({ decks: names, topics: [], cards: [] })}
@@ -630,6 +632,7 @@ export function QardApp({ services, request }: { services: QardServices; request
             (deck ? (
               <>
                 <TopicBrowser
+                  appearance={deckAppearance(reviews.settings, deck.name)}
                   back={library}
                   resume={<SavedSessions services={services} resume={resume} deck={deck.name} />}
                   states={reviews.states}

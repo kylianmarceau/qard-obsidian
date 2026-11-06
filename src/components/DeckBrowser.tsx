@@ -14,6 +14,8 @@ import {
 import type { Deck } from '../cards/card-types';
 import { buildDeckTree, type DeckNode } from '../decks/deck-index';
 import { DeckBadge } from './DeckBadge';
+import { deckAppearance } from '../decks/deck-options';
+import type { QardSettings } from '../settings/settings';
 import { LibraryTabs } from './library/LibraryHeader';
 export function DeckBrowser({
   decks,
@@ -37,7 +39,9 @@ export function DeckBrowser({
   nested = false,
   studyDecks,
   options,
+  deckOptions = {},
 }: {
+  deckOptions?: QardSettings['deckOptions'];
   /** Group decks named `Parent::Child` under their parents. Off while searching or filtering. */
   nested?: boolean;
   studyDecks?: (decks: string[]) => void;
@@ -89,7 +93,7 @@ export function DeckBrowser({
             onClick={() => (deck ? openDeck(deck.name) : toggle(node.name))}
             {...(deck ? {} : { 'aria-expanded': open })}
           >
-            <DeckBadge name={node.label} />
+            <DeckBadge name={node.label} {...deckAppearance({ deckOptions }, node.name)} />
             <span className="qard-deck-name">
               <strong>{nested ? node.label : (deck?.name ?? node.label)}</strong>
               <small>
@@ -101,7 +105,7 @@ export function DeckBrowser({
             </span>
             {deck && <ChevronRight size={17} />}
           </button>
-          {parent && options && (
+          {options && (
             <button
               className="qard-icon-button"
               aria-label={`Deck options for ${node.name}`}

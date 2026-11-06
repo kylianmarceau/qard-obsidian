@@ -15,6 +15,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { DeckBadge } from './DeckBadge';
+import type { DeckOptions } from '../settings/settings';
 import { DeleteItem } from './DeleteItem';
 import { RenameItem } from './RenameItem';
 import type { Deck, QardCard } from '../cards/card-types';
@@ -35,7 +36,9 @@ export function TopicBrowser({
   options,
   resume,
   management,
+  appearance,
 }: {
+  appearance?: Pick<DeckOptions, 'icon' | 'color'>;
   deck: Deck;
   management?: CardManagement;
   states?: Record<string, ReviewState>;
@@ -102,7 +105,7 @@ export function TopicBrowser({
       )}
       <div className="qard-heading qard-deck-heading">
         <div className="qard-deck-identity">
-          <DeckBadge name={deck.name} />
+          <DeckBadge name={deck.name} {...appearance} />
           <div>
             <h1>{deck.name}</h1>
             <p>
