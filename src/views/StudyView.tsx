@@ -988,7 +988,7 @@ export function StudyView({
               onClick={() => void skip(true)}
             >
               <Pause size={14} />
-              Pause card
+              Pause card{saved.settings.keyboardHints && <kbd>{keyLabel(keys.pause)}</kbd>}
             </button>
           </CardRepairActions>
           <span role="status">{busy ? 'Saving…' : ''}</span>

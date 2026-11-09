@@ -81,7 +81,9 @@ async function key(key: string, target = host) {
 }
 async function click(text: string) {
   await act(async () => {
-    const button = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
+    const button = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.trim().startsWith(text),
+    );
     expect(button, host.textContent ?? '').toBeDefined();
     button!.click();
     await services.reviews.flush().catch(() => {});
@@ -296,4 +298,69 @@ it('finds flagged and often-forgotten cards through the library filter and shows
   await act(async () => host.querySelector<HTMLButtonElement>('.qard-question-row')!.click());
   await click('Mark fixed');
   expect(services.reviews.getSnapshot().states.a?.needsFixing).toBeUndefined();
+});
+
+it('switches directly between repair and paused cards, combines search, and opens only the paused subset', async () => {
+  await act(async () => root.render(<QardApp services={services} />));
+  const filter = (label: string) =>
+    [...host.querySelectorAll('button')].find((button) =>
+      button.textContent?.startsWith(`${label} ·`),
+    );
+  expect(filter('Paused')).toBeUndefined();
+  await act(async () => {
+    await services.reviews.setPaused('a', true);
+    await services.reviews.setNeedsFixing('b', true);
+  });
+  const before = services.reviews.getSnapshot();
+  expect(filter('Paused')?.getAttribute('aria-pressed')).toBe('false');
+  await click('Needs fixing · 1');
+  expect(filter('Needs fixing')?.getAttribute('aria-pressed')).toBe('true');
+  await click('Paused · 1');
+  expect(filter('Paused')?.getAttribute('aria-pressed')).toBe('true');
+  expect(filter('Needs fixing')?.getAttribute('aria-pressed')).toBe('false');
+  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('1 cards · 1 topic');
+  await input('input[type="search"]', 'Question b');
+  expect(filter('Paused')?.textContent).toBe('Paused · 1');
+  expect(host.querySelector('.qard-deck')).toBeNull();
+  expect(host.querySelector('.qard-empty')?.textContent).toContain('No paused cards.');
+  await click('Show all cards');
+  expect(host.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('Question b');
+  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('1 cards · 1 topic');
+  await click('Paused · 1');
+  await input('input[type="search"]', '');
+  expect(services.reviews.getSnapshot()).toBe(before);
+  await act(async () => host.querySelector<HTMLButtonElement>('.qard-deck')!.click());
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('.qard-topic-heading button')!.click(),
+  );
+  expect(host.querySelector('.qard-question-list')?.textContent).toContain('Question a');
+  expect(host.querySelector('.qard-question-list')?.textContent).toContain('Paused');
+  expect(host.querySelector('.qard-question-list')?.textContent).not.toContain('Question b');
+});
+
+it('updates the paused filter after resuming the last card and keeps its empty state recoverable', async () => {
+  await services.reviews.setPaused('a', true);
+  const history = services.reviews.getSnapshot().history;
+  await act(async () => root.render(<QardApp services={services} />));
+  await click('Paused · 1');
+  await act(async () => host.querySelector<HTMLButtonElement>('.qard-deck')!.click());
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('.qard-topic-heading button')!.click(),
+  );
+  await act(async () => host.querySelector<HTMLButtonElement>('.qard-question-row')!.click());
+  await click('Resume card');
+  expect(services.reviews.getSnapshot().states.a?.paused).not.toBe(true);
+  expect(services.reviews.getSnapshot().history).toBe(history);
+  await click('Qard');
+  const paused = [...host.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Paused · 0',
+  );
+  expect(paused?.getAttribute('aria-pressed')).toBe('true');
+  expect(host.querySelector('.qard-deck')).toBeNull();
+  expect(host.querySelector('.qard-empty')?.textContent).toContain('No paused cards.');
+  await click('Show all cards');
+  expect(
+    [...host.querySelectorAll('button')].some((button) => button.textContent === 'Paused · 0'),
+  ).toBe(false);
+  expect(host.querySelector('.qard-deck-name small')?.textContent).toBe('2 cards · 1 topic');
 });

@@ -49,3 +49,20 @@ it('reads the AI switch and study keys from saved settings', () => {
     studyKeys: { good: 'g' },
   });
 });
+
+it('pauses with P by default, supports remapping, and preserves legacy P bindings', () => {
+  const defaults = readStudyKeys(undefined);
+  expect(defaults.pause).toBe('p');
+  for (const key of ['p', 'P']) {
+    expect(studyActionFor({ key, code: 'KeyP' }, defaults)).toBe('pause');
+  }
+  const custom = readStudyKeys({ pause: 'x' });
+  expect(studyActionFor({ key: 'x', code: 'KeyX' }, custom)).toBe('pause');
+  expect(studyActionFor({ key: 'p', code: 'KeyP' }, custom)).toBeUndefined();
+  const legacy = readSettings({ studyKeys: { edit: 'p', good: 'g' } }).studyKeys;
+  expect(legacy).toMatchObject({ edit: 'p', good: 'g' });
+  expect(legacy.pause).not.toBe('p');
+  expect(new Set(Object.values(legacy)).size).toBe(Object.keys(defaults).length);
+  expect(readStudyKeys(legacy)).toEqual(legacy);
+  expect(readStudyKeys({ edit: 'p', pause: 'p' })).toEqual(DEFAULT_STUDY_KEYS);
+});

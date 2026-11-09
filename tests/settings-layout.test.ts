@@ -271,7 +271,16 @@ it('remaps a study key by pressing it, swapping a key already in use, and resets
   button.click();
   button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   expect(button.textContent).toBe('U');
+  const pause = row('Pause card').querySelector('button')!;
+  expect(pause.textContent).toBe('P');
+  pause.click();
+  pause.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', bubbles: true }));
+  await vi.waitFor(() => expect(reviews.getSnapshot().settings.studyKeys.pause).toBe('s'));
+  expect(reviews.getSnapshot().settings.studyKeys.skip).toBe('p');
+  expect(row('Skip card').querySelector('button')!.textContent).toBe('P');
   [...row('Study keys').querySelectorAll('button')][1]!.click();
   await vi.waitFor(() => expect(reviews.getSnapshot().settings.studyKeys.good).toBe('3'));
   expect(button.textContent).toBe('3');
+  expect(pause.textContent).toBe('P');
+  expect(reviews.getSnapshot().settings.studyKeys.skip).toBe('s');
 });

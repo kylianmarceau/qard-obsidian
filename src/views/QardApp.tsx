@@ -111,7 +111,9 @@ export function QardApp({ services, request }: { services: QardServices; request
       setScreen({ kind: 'library' });
     }
   }, [request]);
-  const [repairOnly, setRepairOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'repair' | 'paused'>();
+  const repairOnly = statusFilter === 'repair';
+  const pausedOnly = statusFilter === 'paused';
   const repairDays = useMemo(
     () => failureDays(reviews.history, reviews.states),
     [reviews.history, reviews.states],
@@ -119,22 +121,24 @@ export function QardApp({ services, request }: { services: QardServices; request
   const repairCount = index.cards.filter((c) =>
     needsRepair(reviews.states[c.id], repairDays.get(c.id)),
   ).length;
+  const pausedCount = index.cards.filter((c) => reviews.states[c.id]?.paused).length;
   const filtered = useMemo(
     () =>
-      search.trim() || repairOnly
+      search.trim() || statusFilter
         ? buildDecks(
             index.cards.filter(
               (c) =>
                 matchesSearch(c, search) &&
-                (!repairOnly || needsRepair(reviews.states[c.id], repairDays.get(c.id))),
+                (!repairOnly || needsRepair(reviews.states[c.id], repairDays.get(c.id))) &&
+                (!pausedOnly || reviews.states[c.id]?.paused),
             ),
           )
         : index.decks,
-    [index, search, repairOnly, reviews.states, repairDays],
+    [index, search, statusFilter, repairOnly, pausedOnly, reviews.states, repairDays],
   );
   const activeDeck =
     screen.kind === 'deck' ? screen.deck : screen.kind === 'card' ? screen.card.deck : '';
-  const deck = (repairOnly ? filtered : index.decks).find((d) => d.name === activeDeck);
+  const deck = (statusFilter ? filtered : index.decks).find((d) => d.name === activeDeck);
   const generateCards = (draft?: Partial<CardDraft>) =>
     setScreen({ kind: 'generate-cards', draft });
   const library = () => {
@@ -574,7 +578,7 @@ export function QardApp({ services, request }: { services: QardServices; request
           {screen.kind === 'library' && (
             <DeckBrowser
               hideNavigation
-              nested={!search.trim() && !repairOnly}
+              nested={!search.trim() && !statusFilter}
               studyDecks={(names) => builder({ decks: names, topics: [], cards: [] })}
               options={setOptionsFor}
               dueCount={dueCount}
@@ -587,7 +591,12 @@ export function QardApp({ services, request }: { services: QardServices; request
               repairFilter={{
                 active: repairOnly,
                 count: repairCount,
-                toggle: () => setRepairOnly((v) => !v),
+                toggle: () => setStatusFilter((v) => (v === 'repair' ? undefined : 'repair')),
+              }}
+              pausedFilter={{
+                active: pausedOnly,
+                count: pausedCount,
+                toggle: () => setStatusFilter((v) => (v === 'paused' ? undefined : 'paused')),
               }}
               search={search}
               onSearch={setSearch}

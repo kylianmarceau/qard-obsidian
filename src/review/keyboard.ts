@@ -18,10 +18,11 @@ export type StudyKeyAction =
   | 'undo'
   | 'edit'
   | 'skip'
+  | 'pause'
   | 'focus';
 export type StudyKeys = Record<StudyKeyAction, string>;
 /** Everything a study session can do from a key or an Obsidian command. */
-export type StudyAction = StudyKeyAction | 'pause' | 'leave';
+export type StudyAction = StudyKeyAction | 'leave';
 /** Runs a study action; with `checking`, only reports whether it applies right now. */
 export type StudyCommands = (action: StudyAction, checking: boolean) => boolean;
 export const RATING_ACTIONS = ['again', 'hard', 'good', 'easy'] as const;
@@ -34,6 +35,7 @@ export const STUDY_KEY_ACTIONS: { action: StudyKeyAction; name: string }[] = [
   { action: 'undo', name: 'Undo last rating' },
   { action: 'edit', name: 'Edit card' },
   { action: 'skip', name: 'Skip card' },
+  { action: 'pause', name: 'Pause card' },
   { action: 'focus', name: 'Focus mode' },
 ];
 export const DEFAULT_STUDY_KEYS: StudyKeys = {
@@ -45,6 +47,7 @@ export const DEFAULT_STUDY_KEYS: StudyKeys = {
   undo: 'u',
   edit: 'e',
   skip: 's',
+  pause: 'p',
   focus: 'f',
 };
 const NAMED_KEYS = ['Space', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
@@ -68,6 +71,15 @@ export function readStudyKeys(raw: unknown): StudyKeys {
     if (validStudyKey(key)) {
       keys[action] = key;
     }
+  }
+  // Older settings may already use P. Keep those bindings instead of resetting them all.
+  if (
+    value.pause === undefined &&
+    STUDY_KEY_ACTIONS.some(({ action }) => action !== 'pause' && keys[action] === keys.pause)
+  ) {
+    const used = new Set(Object.values(keys));
+    // The duplicated P leaves at least one distinct default key unused.
+    keys.pause = Object.values(DEFAULT_STUDY_KEYS).find((key) => !used.has(key))!;
   }
   return new Set(Object.values(keys)).size === STUDY_KEY_ACTIONS.length
     ? keys

@@ -245,6 +245,7 @@ Order can be deck/note order or shuffle. The session shows progress through the 
 | 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal |
 | U | Undo the last rating in this visit, including from the completion screen |
 | S | Skip the current card for this session |
+| P | Pause the current card until you resume it from its preview |
 | E | Edit the current card and return to its queue position |
 | F | Toggle focus mode |
 | Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
@@ -265,7 +266,7 @@ Every study action is also a command: **Show or hide answer**, **Rate Again/Hard
 
 **Skip** moves past a card for this session without recording a rating or changing its due date. Skips survive saving and resuming, and the completion screen offers **Review skipped cards** for cards that remain active.
 
-**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. The preview also shows when the card is next due and how many times it has been reviewed. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
+**Pause card** skips the current card and keeps it out of future study queues, including All, Due, New, Difficult, cram, exam sessions and lesson warm-ups. Pauses persist across restarts; history and due dates remain unchanged. Paused cards stay visible in the library with a badge. Use the **Paused** filter on Decks to see only paused cards; it works with search and switches directly from **Needs fixing**. Click it again to show all cards. Open the card preview and choose **Resume card** to return it to study; an overdue card is immediately due again. You can also pause from a card preview. The preview also shows when the card is next due and how many times it has been reviewed. Skipped and paused cards never count as completed reviews or toward an exam's daily review target.
 
 Completed normal sessions show a borderless **Recall difficulty** curve for the session's Again, Hard, Good and Easy ratings. Counts, percentages and a median marker summarize your actual ratings, including ratings saved before resuming. Skipped cards are excluded. Cram sessions do not record ratings, so they do not show this chart.
 

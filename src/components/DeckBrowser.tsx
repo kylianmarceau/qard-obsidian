@@ -31,6 +31,7 @@ export function DeckBrowser({
   remove,
   rename,
   repairFilter,
+  pausedFilter,
   hideNavigation = false,
   dueCount = 0,
   viewToday,
@@ -43,6 +44,7 @@ export function DeckBrowser({
   studyDecks?: (decks: string[]) => void;
   options?: (deck: string) => void;
   repairFilter?: { active: boolean; count: number; toggle: () => void };
+  pausedFilter?: { active: boolean; count: number; toggle: () => void };
   decks: Deck[];
   search: string;
   onSearch: (v: string) => void;
@@ -63,6 +65,14 @@ export function DeckBrowser({
   viewToday?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState<string[]>([]);
+  const filters = [
+    ...(repairFilter
+      ? [{ ...repairFilter, label: 'Needs fixing', empty: 'No cards need fixing.' }]
+      : []),
+    ...(pausedFilter ? [{ ...pausedFilter, label: 'Paused', empty: 'No paused cards.' }] : []),
+  ];
+  const activeFilter = filters.find((filter) => filter.active);
+  const visibleFilters = filters.filter((filter) => filter.count > 0 || filter.active);
   const toggle = (name: string) =>
     setCollapsed((old) => (old.includes(name) ? old.filter((n) => n !== name) : [...old, name]));
   const count = (cards: number) => `${cards} ${cards === 1 ? 'card' : 'cards'}`;
@@ -166,7 +176,7 @@ export function DeckBrowser({
           </div>
           {resume}
           <div className="qard-library-toolbar">
-            <span>{search || repairFilter?.active ? 'Matching decks' : 'All decks'}</span>
+            <span>{search || activeFilter ? 'Matching decks' : 'All decks'}</span>
             <label className="qard-search qard-library-search">
               <Search size={17} />
               <input
@@ -178,14 +188,19 @@ export function DeckBrowser({
               />
             </label>
           </div>
-          {repairFilter && (repairFilter.count > 0 || repairFilter.active) && (
-            <button
-              className="qard-repair-filter"
-              aria-pressed={repairFilter.active}
-              onClick={repairFilter.toggle}
-            >
-              Needs fixing · {repairFilter.count}
-            </button>
+          {visibleFilters.length > 0 && (
+            <div className="qard-library-filters">
+              {visibleFilters.map((filter) => (
+                <button
+                  key={filter.label}
+                  className="qard-library-filter"
+                  aria-pressed={filter.active}
+                  onClick={filter.toggle}
+                >
+                  {filter.label} · {filter.count}
+                </button>
+              ))}
+            </div>
           )}
           {loading && (
             <p className="qard-muted" role="status">
@@ -198,14 +213,14 @@ export function DeckBrowser({
           {!loading && !decks.length && (
             <div className="qard-empty">
               <p>
-                {repairFilter?.active
-                  ? 'No cards need fixing.'
+                {activeFilter
+                  ? activeFilter.empty
                   : search
                     ? 'No matching cards.'
                     : 'No cards yet.'}
               </p>
-              {repairFilter?.active ? (
-                <button onClick={repairFilter.toggle}>Show all cards</button>
+              {activeFilter ? (
+                <button onClick={activeFilter.toggle}>Show all cards</button>
               ) : search ? (
                 <button onClick={() => onSearch('')}>Clear search</button>
               ) : (

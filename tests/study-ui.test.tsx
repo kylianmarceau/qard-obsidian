@@ -362,32 +362,50 @@ it('skip reports no review, leaves the schedule unchanged and offers skipped car
   expect(repeat).toHaveBeenCalledWith(cards);
 });
 
-it('pause advances a saved session without rating, and does not offer paused cards for repetition', async () => {
-  const session = await services.reviews.startSession(cards);
-  await act(async () =>
-    root.render(
-      <StudyView
-        cards={cards}
-        session={session}
-        services={services}
-        exit={exit}
-        repeat={vi.fn()}
-      />,
-    ),
-  );
-  await act(async () => {
-    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Pause card')!.click();
-    await services.reviews.flush().catch(() => {});
-  });
-  expect(host.textContent).toContain('Session complete');
-  expect(host.textContent).not.toContain('Review skipped cards');
-  expect(services.reviews.getSnapshot().states.first).toMatchObject({
-    paused: true,
-    reviewCount: 0,
-  });
-  expect(services.reviews.getSnapshot().history).toEqual([]);
-  expect(services.reviews.getSnapshot().sessions).toEqual([]);
-});
+it.each([
+  ['normal', 'click'],
+  ['normal', 'p'],
+  ['cram', 'P'],
+] as const)(
+  '%s pause via %s advances a saved session without rating or offering paused cards again',
+  async (style, input) => {
+    const session = await services.reviews.startSession(cards, style);
+    await act(async () =>
+      root.render(
+        <StudyView
+          cards={cards}
+          style={style}
+          session={session}
+          services={services}
+          exit={exit}
+          repeat={vi.fn()}
+        />,
+      ),
+    );
+    const pause = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.startsWith('Pause card'),
+    )!;
+    expect(pause.querySelector('kbd')?.textContent).toBe('P');
+    if (input === 'click') {
+      await act(async () => {
+        pause.click();
+        await services.reviews.flush().catch(() => {});
+      });
+    } else {
+      await key(input);
+    }
+    expect(host.textContent).toContain(
+      style === 'cram' ? 'Cram session complete' : 'Session complete',
+    );
+    expect(host.textContent).not.toContain('Review skipped cards');
+    expect(services.reviews.getSnapshot().states.first).toMatchObject({
+      paused: true,
+      reviewCount: 0,
+    });
+    expect(services.reviews.getSnapshot().history).toEqual([]);
+    expect(services.reviews.getSnapshot().sessions).toEqual([]);
+  },
+);
 
 it('failed undo keeps the completion screen and failed skip keeps the front card', async () => {
   const write = vi.fn(async () => {});
@@ -495,4 +513,62 @@ it('registers study commands that follow the same rules as the buttons', async (
   await act(async () => root.unmount());
   expect(commands).toBeUndefined();
   root = createRoot(host);
+});
+
+it('remaps Pause and hides its hint when keyboard hints are off', async () => {
+  await services.reviews.saveSettings({
+    ...services.reviews.getSnapshot().settings,
+    studyKeys: { ...services.reviews.getSnapshot().settings.studyKeys, pause: 'x' },
+  });
+  await mount();
+  const pause = () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Pause card'))!;
+  expect(pause().querySelector('kbd')?.textContent).toBe('X');
+  await key('p');
+  expect(services.reviews.getSnapshot().states.first?.paused).not.toBe(true);
+  await act(async () =>
+    services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      keyboardHints: false,
+    }),
+  );
+  expect(pause().querySelector('kbd')).toBeNull();
+  await key('x');
+  expect(services.reviews.getSnapshot().states.first?.paused).toBe(true);
+  expect(services.reviews.getSnapshot().history).toEqual([]);
+});
+
+it('guards Pause while typing, holding keys, using modifiers, inactive or confirming exit', async () => {
+  await mount();
+  const input = document.createElement('input');
+  host.append(input);
+  await key('p', input);
+  for (const option of ['repeat', 'isComposing', 'ctrlKey', 'metaKey', 'altKey']) {
+    await press({ key: 'p', [option]: true });
+  }
+  services.isActive = () => false;
+  await key('p');
+  services.isActive = () => true;
+  await key('Escape');
+  await key('p');
+  expect(services.reviews.getSnapshot().states.first?.paused).not.toBe(true);
+  expect(host.textContent).not.toContain('Session complete');
+  await key('Escape');
+  await key('p');
+  expect(services.reviews.getSnapshot().states.first?.paused).toBe(true);
+});
+
+it('keeps the card on a failed Pause save and allows retry without rating', async () => {
+  const write = vi.fn(async () => {});
+  services.reviews = new ReviewStore(write);
+  await mount();
+  write.mockRejectedValueOnce(new Error('disk full'));
+  await key('p');
+  expect(host.textContent).toContain('disk full');
+  expect(host.textContent).not.toContain('Session complete');
+  expect(services.reviews.getSnapshot().states.first?.paused).not.toBe(true);
+  await key('p');
+  expect(host.textContent).toContain('Session complete');
+  expect(services.reviews.getSnapshot().states.first?.paused).toBe(true);
+  expect(services.reviews.getSnapshot().history).toEqual([]);
 });

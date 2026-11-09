@@ -7136,7 +7136,10 @@ div.qard-ask-q {
   padding: 24px;
 }
 
-.qard-app .qard-repair-filter {
+.qard-app .qard-library-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-block: 8px;
 }
 
@@ -7191,7 +7194,7 @@ div.qard-ask-q {
   flex-shrink: 0;
 }
 
-.qard-app .qard-repair-filter[aria-pressed='true'] {
+.qard-app .qard-library-filter[aria-pressed='true'] {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
 }
