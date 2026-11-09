@@ -389,7 +389,7 @@ export class CodexRunner extends CliRunner {
     // A prompt that holds everything needs no files, PDFs included.
     const attachments =
       this.pdfs && task.vault !== false ? await pdfAttachments(this.pdfs, task.prompt) : '';
-    const last = this.host.tempFile(`qard-codex-${Date.now()}.txt`);
+    const last = this.host.tempFile(`qard-codex-${crypto.randomUUID()}.txt`);
     // --json streams events to stdout, including each turn's token usage; the reply itself is read from the last-message file.
     const args = [
       'exec',
