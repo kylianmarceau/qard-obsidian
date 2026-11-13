@@ -23,13 +23,27 @@ export interface TestDefaults {
 }
 
 /** How to write multiple-choice options so they measure knowledge, not test-taking skill. */
-export const MCQ_RULES = `Multiple choice: write the correct answer first, then turn it into each wrong option using a real misconception, in the same form and length. Put no reasoning inside any option; the explanation belongs in the model answer. Never make one option stand out by length, detail or formatting. If the answer can be spotted without knowing the material, rewrite the options. Do not add an "I don't know" option; Qard adds one.`;
-/** A question's goal decides its format: easier goals suit multiple choice, harder ones need typed answers. */
-export const GOAL_RULES = `Each question has a goal, and the goal decides the format:
-- recognise (tell ideas apart): mcq
-- recall (state a fact, name, formula): short
-- explain (why or how): long
-- apply (use it on a new case, calculate, write code): calc, or long for code`;
+export const MCQ_RULES = `Multiple choice: four options with exactly one correct answer; set answer to its zero-based index. Use 1 mark. Derive each wrong option from a real misconception, with comparable form and length. Options may describe a reason when choosing the correct explanation is the task; do not add hints that reveal which is correct. Never make one option stand out by length, detail or formatting. If the answer can be spotted without knowing the material, rewrite the options. Do not add an "I don't know" option; Qard adds one.`;
+/** Goals describe the thinking being assessed, independently of response format. */
+export const GOAL_RULES = `Choose the goal independently of the question's format:
+- recognise: tell ideas apart.
+- recall: retrieve a fact, name or formula.
+- explain: identify or express why or how something works.
+- apply: use knowledge on a new case.
+Choose only formats available in the response schema, selecting the format that best measures the assessed capability. No available format has priority by default or because of its position in a list. Use mcq to discriminate between plausible alternatives or choose a justified outcome; cloze to retrieve unambiguous missing terms or compact factual values; short when the learner must formulate a concise answer in their own words; calc to work through a numerical method; long only for necessary extended reasoning or code. A definition needs only a plain definition, without padding. Do not turn an explanation into a term gap or a code-writing task into answer choices.
+When several available formats fit equally well, give them comparable exposure across the recent questions: prefer an equally suitable format that has been used less often. Consider cloze as a real candidate for suitable retrieval tasks rather than always falling back to short or mcq. Fit takes priority over variety. Do not impose percentages, quotas, a fixed rotation or a required format at a particular position; do not add questions merely to fill a format mix.
+Every question is self-contained and asks one substantive task. Identify what its scenario describes, define unfamiliar terms and state the facts and conditions needed to answer. If an omitted fact could change the correct answer, state it. For predictions, identify what is predicted and include entity, time period or observation availability when they affect the answer. Do not require a fixed list of scenario details or rely on another question or worked example for context. Omit names, numbers, units or timing that cannot affect the answer, along with independent extra subtasks.
+Use 1–2 marks for a written check unless its necessary scope justifies more. Never add requirements to fill a mark budget. Do not ask for a sentence or word count, padding, or visible grading instructions. Score semantic completeness: a concise complete answer earns full marks.`;
+/** Prepared format history, without question or answer contents. */
+export function formatHistory(history: readonly Pick<Question, 'type' | 'goal'>[]) {
+  const recent = history.slice(-12);
+  return recent.length
+    ? `Recent prepared question formats: ${recent
+        .map((question) => `${question.type}${question.goal ? ` (${question.goal})` : ''}`)
+        .join(', ')}.`
+    : 'Recent prepared question formats: none supplied. No format has priority by default.';
+}
+
 const objectivesBlock = (objectives?: string) =>
   objectives?.trim()
     ? `
@@ -59,7 +73,7 @@ Draft a short test plan for the student to approve. Do not write the questions y
 - title: at most eight words.
 - goal: two to four sentences that restate the request precisely, including any emphasis.
 - sources: keep every note the student chose; add others you found, each with a few words of reason. Read enough to be sure they fit.
-- sections: two to four groups of related questions. Each has a one-sentence focus, the question mix (short answer, long answer, calculation, multiple choice) and its marks.
+- sections: two to four groups of related questions. Each has a one-sentence focus, the question mix (short answer, long answer, calculation, multiple choice) and its marks. Choose formats by the assessed capability, with comparable exposure for equally suitable formats rather than quotas or fixed positions.
 - Aim for about ${d.questions} questions unless the request says otherwise. Estimate minutes realistically.
 Keep it brief: this is a plan, not the test.`;
 }
@@ -74,10 +88,10 @@ export function generatePrompt(input: { request: TestRequest; plan?: TestPlan },
     : requestBlock(input.request);
   return `${basis}${profileBlock(d.profile)}${objectivesBlock(d.objectives)}
 Question types:
-- short: one to three sentences. 1–3 marks.
-- long: an explanation or comparison. 4–6 marks.
+- short: a concise answer, usually 1–2 marks.
+- long: an explanation or comparison only when the task needs it; marks reflect necessary claims, not length.
 - calc: a worked calculation with fresh numbers. The student may write LaTeX.
-- mcq: four options with exactly one correct; set answer to its index. Usually 1 mark.
+- mcq: four options with exactly one correct; set answer to its index. 1 mark.
 ${GOAL_RULES}
 ${MCQ_RULES}
 Rules:
@@ -90,7 +104,7 @@ ${input.plan ? "Follow the plan's sections, focus and mix." : `Use two to four s
 }
 
 /** What the student answered: their text, or for multiple choice the option they picked. */
-function studentAnswer(q: Question, a: AnswerState | undefined) {
+export function studentAnswer(q: Question, a: AnswerState | undefined) {
   if (a?.unknown) {
     return '(the student said they did not know)';
   }
@@ -109,12 +123,15 @@ ${q.rubric.map((r, i) => `${i + 1}. (${r.marks}) ${r.point}`).join('\n')}
 ${q.options?.length ? `<options>\n${q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}${i === q.answer ? ' (correct)' : ''}`).join('\n')}\n</options>\n` : ''}${q.source ? `<source>${q.source.path}${q.source.heading ? ` › ${q.source.heading}` : ''}</source>\n` : ''}<student_answer confidence="${a?.confidence ?? 'unstated'}">${studentAnswer(q, a)}</student_answer>
 </question>`;
 }
-export const MARKING = `Mark strictly against each rubric. awarded[i] is true only when the answer clearly makes point i; score is the sum of the awarded points' marks. A blank answer scores 0.
+/** Grading and annotation rules shared by Practice Tests and Learn. */
+export const MARKING = `Assess semantic completeness against each rubric claim independently. awarded[i] is true when the answer explicitly states point i or unambiguously expresses it in equivalent words; score is the sum of the existing awarded points' marks. Accept valid alternative solutions and terminology. A concise complete answer earns full marks. Never demand the model answer's wording or length, invent unasked requirements, or add partial points to fill a mark budget. A blank answer scores 0. A correct prediction alone does not show a requested explanation.
+If the question allows another reasonable reading and the answer is correct under it, award the rubric points that reading satisfies and say in feedback that the question was ambiguous.
 Annotate the answer the way a teacher marks a script:
 - quote: text copied exactly from the student's answer (one to twelve words).
-- kind: correct (earned a point), wrong (factually incorrect), vague (the right idea, stated imprecisely), insight (a good point beyond the rubric).
-- For every rubric point not awarded, add a "missing" annotation. Its quote is the exact answer text after which the point belongs, or "" for the end. Its note says what was needed.
-- Notes are one or two specific sentences addressed to the student ("you").
+- kind: correct (earned a point), wrong (an explicit claim contradicts the mechanism), missing (a requested claim is absent), vague (wording leaves the claim genuinely uncertain), or insight (a correct extra idea).
+- Add a missing annotation only for an omitted requested claim. Its quote is the exact answer text after which the point belongs, or "" for the end. Its note says what was needed. Do not also label the same contradicted claim as missing or describe one omission as multiple independent mistakes.
+- Notes are one or two specific sentences addressed to the student ("you"). Explain what was demonstrated before identifying the remaining gap.
+Confidence does not change factual correctness. Ignore language errors unless they change technical meaning.
 mistake is the main reason marks were lost: misconception, careless, imprecise, incomplete, or none. feedback is one sentence.
 You may read the source notes to check facts.`;
 export function markPrompt(test: PracticeTest, attempt: Attempt, ids: string[]) {

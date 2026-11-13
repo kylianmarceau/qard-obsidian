@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto';
 import { act } from 'preact/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { Component } from 'obsidian';
 import { LearnService } from '../src/learn/learn-service';
+import { checkPromptFingerprint } from '../src/learn/step-review';
 import { type LearnStorage } from '../src/learn/learn-contracts';
 import { newMasteryNote } from '../src/learn/mastery';
 import { readSettings } from '../src/settings/settings';
@@ -51,7 +53,10 @@ const nav = {
   lesson: vi.fn(),
   studyDue: vi.fn(),
 } satisfies LearnNav;
-beforeEach(() => {
+beforeAll(() => {
+  vi.stubGlobal('crypto', webcrypto);
+});
+beforeEach(async () => {
   HTMLDialogElement.prototype.showModal = function () {
     this.setAttribute('open', '');
   };
@@ -84,6 +89,8 @@ beforeEach(() => {
         objective: 'params',
         title: 'Parameter counts',
         goal: 'explain',
+        questionPolicy: 1,
+        promptFingerprint: await checkPromptFingerprint(),
         questions: [
           q('c1', {
             type: 'mcq',
@@ -92,7 +99,7 @@ beforeEach(() => {
             options: ['VK', 'K+KV'],
             answer: 1,
           }),
-          q('c2'),
+          q('c2', { goal: 'explain' }),
         ],
         answers: {},
         marks: {},
@@ -187,8 +194,16 @@ it('a check: answer, "I don\'t know" disables the input, submit marks and moves 
   await act(async () => {
     root.render(<CheckView services={services} nav={nav} path={CHECK} />);
   });
-  await tick();
-  await tick();
+  await vi.waitFor(async () => {
+    await tick();
+    expect(host.textContent).toContain('Retention check');
+  });
+  expect(host.textContent).toContain('Your result decides what to revisit');
+  expect(host.textContent).toContain('Choose an answer');
+  expect(host.textContent).toContain('Write an answer');
+  expect(host.textContent).not.toContain('Why this format?');
+  expect(host.querySelector('.qard-format-help')).toBeNull();
+  expect(host.textContent).not.toContain('2 marks');
   const submit = () => buttons('Submit')[0]!;
   expect(submit().disabled).toBe(true);
   await click(buttons('K+KV').find((b) => b.getAttribute('role') === 'radio'));
@@ -254,6 +269,8 @@ it('a lesson plan is shown for approval before teaching starts', async () => {
     'What your answers showStart from pLSA. You know the $\\theta_i \\sim \\mathrm{Dir}(\\alpha)$ step.',
   );
   expect(host.textContent).toContain('Dirichlet draws');
+  expect(host.textContent).toContain('Finishing records teaching evidence');
+  expect(host.textContent).not.toContain('Finishing marks it as taught');
   await click(buttons('Start lesson')[0]);
   await tick();
   expect(host.textContent).toContain('Writing this step…');
@@ -307,6 +324,38 @@ async function openRecap(
   await tick();
   return { path, create };
 }
+
+it.each(['taught', 'right once', 'mastered'] as const)(
+  'lesson completion describes the saved %s progress without assuming a first retention check',
+  async (state) => {
+    files.set(
+      MASTERY,
+      newMasteryNote('DS346', [
+        {
+          id: 'params',
+          title: 'Parameter counts',
+          state,
+          due: '2000-01-01',
+          notes: [],
+          needs: [],
+          evidence: ['Earlier retention evidence'],
+          cells: {},
+        },
+      ]),
+    );
+    const savedMastery = files.get(MASTERY);
+    await openRecap({ mastery: MASTERY, objective: 'params' });
+    const outcome = host.querySelector('.qard-check-outcome')!;
+    expect(outcome.textContent).toContain(
+      state === 'right once' ? 'Right once' : state === 'mastered' ? 'Mastered' : 'Taught',
+    );
+    expect(host.textContent).not.toContain('Lesson finished: taught');
+    expect(host.textContent).not.toContain('First retention check');
+    expect(outcome.textContent).toContain('Retention check');
+    expect(host.textContent).not.toContain('retention still to check');
+    expect(files.get(MASTERY)).toBe(savedMastery);
+  },
+);
 
 it('recap cards use the selected source note fixed topic without changing the shared destination', async () => {
   const selected = 'Notes/Generics.md',
@@ -585,4 +634,133 @@ it('selected check deletion returns to Learn', async () => {
   expect(files.has(CHECK)).toBe(false);
   expect(files.has(MASTERY)).toBe(true);
   expect(deleted).toHaveBeenCalledOnce();
+});
+
+it('explains diagnostic consequences and renders the persisted note before answering', async () => {
+  const path = 'Qard/Lessons/diagnostic.json';
+  files.set(
+    path,
+    JSON.stringify({
+      version: 1,
+      createdAt: 1,
+      topic: 'Recall',
+      notes: [],
+      current: 0,
+      steps: [],
+      state: [],
+      probe: {
+        questions: [q('p1')],
+        answers: {},
+        note: 'These questions check **prerequisite recall**.',
+      },
+    }),
+  );
+  await act(async () => root.render(<LessonView services={services} nav={nav} path={path} />));
+  await tick();
+  await tick();
+  expect(host.textContent).toContain('Diagnostic');
+  expect(host.textContent).toContain('update evidence about prerequisites');
+  expect(host.textContent).toContain('prerequisite recall');
+  expect(host.textContent).toContain('do not establish mastery');
+  expect(host.textContent).not.toContain('2 marks');
+  expect(host.querySelector('.qard-rubric-row')).toBeNull();
+});
+
+it.each([true, false])(
+  'distinguishes a prediction from an immediate check (checkFirst=%s)',
+  async (checkFirst) => {
+    const path = 'Qard/Lessons/step.json';
+    files.set(
+      path,
+      JSON.stringify({
+        version: 1,
+        createdAt: 1,
+        topic: 'Recall',
+        notes: [],
+        current: 0,
+        accepted: true,
+        map: {
+          title: 'Recall',
+          plan: '',
+          mermaid: '',
+          steps: [{ title: 'One', why: 'Learn the idea.' }],
+        },
+        steps: [
+          {
+            title: 'One',
+            explain: 'The explanation is here.',
+            connect: 'Connection.',
+            checkFirst,
+            check: q('s1', { source: { path: 'Notes/Recall.md', heading: 'Retrieval' } }),
+            misconceptions: [],
+          },
+        ],
+        state: [{ asks: [] }],
+      }),
+    );
+    await act(async () => root.render(<LessonView services={services} nav={nav} path={path} />));
+    await tick();
+    await tick();
+    expect(host.textContent).toContain(
+      checkFirst ? 'Prediction before the explanation' : 'Check after the explanation',
+    );
+    expect(host.textContent).toContain('guides feedback');
+    expect(host.textContent).toContain('Finishing records teaching evidence');
+    expect(host.textContent).not.toContain('Finishing the lesson marks it as taught');
+    expect(host.textContent?.includes('The explanation is here.')).toBe(!checkFirst);
+    expect(host.textContent).not.toContain('2 marks');
+    expect(host.querySelector('.qard-rubric-row')).toBeNull();
+    if (!checkFirst) {
+      await click(buttons('Read source: Recall')[0]);
+      expect(services.app.workspace.openLinkText).toHaveBeenCalledWith(
+        'Notes/Recall.md#Retrieval',
+        path,
+        false,
+      );
+    } else {
+      expect(buttons('Read source: Recall')).toHaveLength(0);
+    }
+  },
+);
+
+it('hides cached questions while preparing a check and offers retry after a failed review', async () => {
+  await services.learn.loadCheck(CHECK);
+  const cached = services.learn.checkAt(CHECK)!;
+  cached.promptFingerprint = undefined;
+  let reject!: (error: Error) => void;
+  const load = vi.spyOn(services.learn, 'loadCheck').mockImplementationOnce(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  await act(async () => root.render(<CheckView services={services} nav={nav} path={CHECK} />));
+  await tick();
+  expect(host.textContent).toContain('Preparing check');
+  expect(host.textContent).not.toContain('Prompt c2');
+  expect(host.querySelector('textarea')).toBeNull();
+  await act(async () => {
+    reject(new Error('Review unavailable'));
+  });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('Review unavailable');
+  expect(host.textContent).not.toContain('Prompt c2');
+  load.mockImplementationOnce(async () => {
+    cached.questions = [
+      q('reviewed', {
+        prompt: 'Reviewed replacement question',
+      }) as (typeof cached.questions)[number],
+    ];
+    cached.promptFingerprint = await checkPromptFingerprint();
+    return cached;
+  });
+  await click(buttons('Retry check')[0]);
+  await tick();
+  await tick();
+  expect(load).toHaveBeenCalledTimes(2);
+  await vi.waitFor(async () => {
+    await tick();
+    expect(host.textContent).toContain('Reviewed replacement question');
+  });
+  expect(host.textContent).not.toContain('Prompt c2');
+  load.mockRestore();
 });

@@ -1,4 +1,10 @@
 import { formatLessonNote } from './lesson-note';
+import {
+  checkPromptFingerprint,
+  writeReviewedLearning,
+  writeReviewedQuestions,
+  writeReviewedStep,
+} from './step-review';
 import { insertUnderHeading } from './note-edits';
 import { summarise, scoreQuestion } from './learning-evidence';
 import type {
@@ -72,8 +78,6 @@ import {
   readObjectives,
   readProbe,
   readProbeMap,
-  readQuestions,
-  readStep,
   readTutorMark,
   stepSchema,
   tutorMarkSchema,
@@ -106,6 +110,7 @@ import type {
 } from './learn-types';
 
 const LESSONS_PER_DAY = 3;
+const QUESTION_POLICY = 1;
 /** Lesson steps are written this many at a time, so the whole lesson is ready soon after the plan. */
 const STEP_WRITERS = 3;
 const SOURCE_BUDGET = 60_000;
@@ -117,13 +122,14 @@ const safeName = (text: string) =>
     .trim()
     .slice(0, 60) || 'Lesson';
 /** Identifies a plan, so steps written for an older version of it are not reused. */
-const planKey = (map: { title: string; steps: { title: string }[] }) =>
-  JSON.stringify([map.title, map.steps.map((s) => s.title)]);
+const planKey = (map: NonNullable<Lesson['map']>) =>
+  JSON.stringify([map.title, map.plan, map.steps.map((s) => [s.title, s.why])]);
 
 export class LearnService {
   private listeners = new Set<() => void>();
   private snapshot: LearnSnapshot = { revision: 0, jobs: {} };
   private checks = new Map<string, CheckRecord>();
+  private preparingChecks = new Map<string, Promise<string | undefined>>();
   private lessons = new Map<string, Lesson>();
   private proposals = new Map<string, CourseProposal>();
   private updates = new Map<string, CourseUpdate>();
@@ -320,7 +326,11 @@ export class LearnService {
   }
   async removeCheck(path: string) {
     this.ownFile(path, 'Checks');
-    const c = await this.loadCheck(path);
+    const text = this.checks.has(path) ? null : await this.storage.read(path);
+    const c = this.checks.get(path) ?? (text ? (JSON.parse(text) as CheckRecord) : undefined);
+    if (!c) {
+      throw new Error('This check no longer exists.');
+    }
     this.stopTargets([`${c.mastery}#${c.objective}`]);
     await this.removePaths([path]);
   }
@@ -934,6 +944,51 @@ export class LearnService {
     }
     return paths.map((p) => this.checks.get(p)).filter((c): c is CheckRecord => !!c);
   }
+  /** Prepared formats are optional context, not evidence that the learner understands them. */
+  private async recentQuestions(mastery?: string, omitLesson?: string) {
+    const summaries = await this.listLessons();
+    const records = summaries
+      .filter((summary) => summary.path !== omitLesson && (!mastery || summary.mastery === mastery))
+      .flatMap((summary) => {
+        const lesson = this.lessons.get(summary.path);
+        if (!lesson || this.isRemoved(summary.path)) {
+          return [];
+        }
+        return [
+          {
+            createdAt: Number.isFinite(lesson.createdAt) ? lesson.createdAt : 0,
+            questions: [
+              ...(Array.isArray(lesson.probe?.questions) ? lesson.probe.questions : []),
+              ...(Array.isArray(lesson.steps)
+                ? lesson.steps.flatMap((step) => (step?.check ? [step.check] : []))
+                : []),
+            ],
+          },
+        ];
+      });
+    records.push(
+      ...(await this.loadChecks())
+        .filter((record) => !mastery || record.mastery === mastery)
+        .map((record) => ({
+          createdAt: Number.isFinite(record.createdAt) ? record.createdAt : 0,
+          questions: Array.isArray(record.questions) ? record.questions : [],
+        })),
+    );
+    return records
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .flatMap((record) => record.questions)
+      .filter(
+        (question) =>
+          question &&
+          typeof question === 'object' &&
+          ['short', 'long', 'mcq', 'calc', 'cloze'].includes(question.type),
+      )
+      .slice(-12)
+      .map(({ type, goal }) => ({
+        type,
+        goal: ['recognise', 'recall', 'explain', 'apply'].includes(goal ?? '') ? goal : undefined,
+      }));
+  }
   checkAt(path: string) {
     return this.checks.get(path);
   }
@@ -949,7 +1004,36 @@ export class LearnService {
       this.checks.set(path, JSON.parse(text) as CheckRecord);
       this.publish();
     }
-    return this.checks.get(path)!;
+    const record = this.checks.get(path)!;
+    if (
+      record.finishedAt !== undefined ||
+      Object.keys(record.answers).length ||
+      Object.keys(record.marks).length
+    ) {
+      return record;
+    }
+    const m = await this.course(record.mastery);
+    const objective = m.objectives.find((o) => o.id === record.objective);
+    const fingerprint = await checkPromptFingerprint();
+    if (this.isRemoved(path)) {
+      throw new Error('This check was deleted.');
+    }
+    const latest = this.checks.get(path)!;
+    if (objective && this.stale(latest, objective, fingerprint)) {
+      await this.ensureCheck(record.mastery, record.objective);
+      if (this.isRemoved(path)) {
+        throw new Error('This check was deleted.');
+      }
+      const refreshed = this.checks.get(path)!;
+      if (refreshed === latest && this.stale(refreshed, objective, fingerprint)) {
+        throw new Error(
+          this.job(`${record.mastery}#${record.objective}`, 'check-write')?.error ??
+            'This check could not be updated. Try again.',
+        );
+      }
+      return refreshed;
+    }
+    return latest;
   }
   private pathOf(record: CheckRecord) {
     return [...this.checks.entries()].find(([, c]) => c === record)?.[0];
@@ -960,16 +1044,23 @@ export class LearnService {
       .sort((a, b) => b.createdAt - a.createdAt)[0];
     return found && this.pathOf(found);
   }
-  /** A check written before its notes changed is rewritten, as long as nothing has been answered. */
-  private stale(record: CheckRecord, o: Objective) {
-    if (Object.keys(record.answers).length) {
+  /** Refresh changed instructions or notes only while the check is untouched. */
+  private stale(record: CheckRecord, o: Objective, fingerprint: string) {
+    if (
+      Object.keys(record.answers).length ||
+      Object.keys(record.marks).length ||
+      record.finishedAt !== undefined
+    ) {
       return false;
     }
-    return o.notes.some((n) => {
-      const path = this.storage.resolve(n, record.mastery);
-      const t = path && this.storage.modified(path);
-      return !!t && t > record.createdAt;
-    });
+    return (
+      record.promptFingerprint !== fingerprint ||
+      o.notes.some((n) => {
+        const path = this.storage.resolve(n, record.mastery);
+        const t = path && this.storage.modified(path);
+        return !!t && t > record.createdAt;
+      })
+    );
   }
   /** Writes the next check for an objective ahead of time, unless one is already waiting. */
   ensureCheck(mastery: string, objective: string): Promise<string | undefined> {
@@ -977,25 +1068,52 @@ export class LearnService {
     if (!aiOn(this.settings())) {
       return Promise.resolve(undefined);
     }
-    return this.track(`${mastery}#${objective}`, 'check-write', '', async (signal) => {
+    const target = `${mastery}#${objective}`;
+    const pending = this.preparingChecks.get(target);
+    if (pending) {
+      return pending;
+    }
+    const preparing = this.track(target, 'check-write', '', async (signal) => {
       const m = await this.course(mastery),
         o = m.objectives.find((x) => x.id === objective);
       if (!o) {
         throw new Error(`No objective "${objective}" in ${m.course}.`);
       }
+      const fingerprint = await checkPromptFingerprint();
       const existing = await this.pendingCheck(mastery, objective);
-      if (existing && !this.stale(this.checks.get(existing)!, o)) {
+      if (existing && !this.stale(this.checks.get(existing)!, o, fingerprint)) {
         return existing;
       }
       const goal = goalFor(o.state),
         previous = (await this.loadChecks()).filter(
           (c) => c.mastery === mastery && c.objective === objective && c.finishedAt,
         );
-      const written = await runValidated(
+      const paths = o.notes
+        .map((note) => this.storage.resolve(note, mastery))
+        .filter((path): path is string => !!path);
+      const sources = await this.sources(paths);
+      const written = await writeReviewedQuestions(
         this.activeRunner('writer', signal),
-        { signal, prompt: checkPrompt(m, o, goal, previous), schema: questionsSchema },
-        readQuestions,
+        this.activeRunner('marker', signal),
+        {
+          signal,
+          prompt:
+            checkPrompt(m, o, goal, previous, await this.recentQuestions(mastery)) +
+            (sources ? `\n<source_text>\n${sources}\n</source_text>` : ''),
+          schema: questionsSchema,
+        },
       );
+      const latestCourse = await this.course(mastery);
+      if (signal.aborted || this.isRemoved(mastery) || (existing && this.isRemoved(existing))) {
+        throw new Error(CANCELLED);
+      }
+      if (!latestCourse.objectives.some((item) => item.id === objective)) {
+        throw new Error('This objective no longer exists.');
+      }
+      // A learner may have started this check while its replacement was being reviewed.
+      if (existing && !this.stale(this.checks.get(existing)!, o, fingerprint)) {
+        return existing;
+      }
       const record: CheckRecord = {
         version: 1,
         createdAt: this.now(),
@@ -1004,19 +1122,37 @@ export class LearnService {
         objective,
         title: o.title,
         goal,
-        questions: written.slice(0, 3).map((q) => ({ ...q, objective, goal: q.goal ?? goal })),
+        questionPolicy: QUESTION_POLICY,
+        promptFingerprint: fingerprint,
+        questions: written.slice(0, 2).map((q) => ({
+          ...q,
+          objective,
+          goal: q.goal ?? goal,
+        })),
         answers: {},
         marks: {},
         status: 'ready',
       };
-      const path =
-        existing ?? `${this.root()}/Checks/${safeName(m.course)}/${this.today()} ${objective}.json`;
-      this.removed.delete(path);
+      const base = `${this.root()}/Checks/${safeName(m.course)}/${this.today()} ${objective}`;
+      let path = existing ?? `${base}.json`,
+        suffix = 2;
+      while (
+        !existing &&
+        (this.storage.exists(path) || this.checks.has(path) || this.isRemoved(path))
+      ) {
+        path = `${base} ${suffix++}.json`;
+      }
       this.checks.set(path, record);
       await this.save(path, record);
       this.publish();
       return path;
+    }).finally(() => {
+      if (this.preparingChecks.get(target) === preparing) {
+        this.preparingChecks.delete(target);
+      }
     });
+    this.preparingChecks.set(target, preparing);
+    return preparing;
   }
   answerCheck(path: string, id: string, patch: Partial<AnswerState>) {
     const record = this.checks.get(path);
@@ -1347,22 +1483,26 @@ export class LearnService {
     return this.track(path, 'probe', '', async (signal) => {
       const lesson = this.lesson(path),
         { m, o, sources } = await this.context(lesson);
-      const result = await runValidated(
-        this.activeRunner('tutor', signal),
+      const result = await writeReviewedLearning(
+        this.activeRunner('writer', signal),
+        this.activeRunner('marker', signal),
         {
           signal,
-          prompt: probePrompt(lesson, m, o, sources),
+          prompt: probePrompt(lesson, m, o, sources, await this.recentQuestions(lesson.mastery)),
           schema: probeSchema,
           effort: 'low',
-          vault: !sources,
         },
         readProbe,
       );
       const questions = result.questions.slice(0, 4).map((q) => ({
         ...q,
         objective: m?.objectives.some((x) => x.id === q.objective) ? q.objective : undefined,
+        goal: q.goal ?? 'explain',
       }));
-      await this.setLesson(path, { ...this.lesson(path), probe: { questions, answers: {} } });
+      await this.setLesson(path, {
+        ...this.lesson(path),
+        probe: { questions, answers: {}, note: result.note },
+      });
       if (!questions.length) {
         void this.submitProbe(path);
       }
@@ -1484,7 +1624,17 @@ export class LearnService {
       return;
     }
     const plan = planKey(lesson.map);
-    if (lesson.stepsFor !== plan || lesson.steps.length !== lesson.map.steps.length) {
+    const legacyPlan = JSON.stringify([lesson.map.title, lesson.map.steps.map((s) => s.title)]);
+    const started = lesson.state.some(
+      (state) => state.answer || state.mark || state.retry || state.asks.length,
+    );
+    if (
+      started &&
+      (lesson.stepsFor === legacyPlan || !lesson.stepsFor) &&
+      lesson.steps.length === lesson.map.steps.length
+    ) {
+      await this.setLesson(path, { ...lesson, stepsFor: plan });
+    } else if (lesson.stepsFor !== plan || lesson.steps.length !== lesson.map.steps.length) {
       const count = lesson.map.steps.length;
       await this.setLesson(path, {
         ...lesson,
@@ -1523,10 +1673,24 @@ export class LearnService {
             return;
           }
           busy.add(`${plan}#${index}`);
-          const step = await runValidated(
+          const history = await this.recentQuestions(lesson.mastery, path);
+          const current = this.lesson(path);
+          if (current.stepsFor !== plan) {
+            continue;
+          }
+          const prepared = [
+            ...(current.probe?.questions ?? []),
+            ...current.steps.flatMap((step) => (step ? [step.check] : [])),
+          ];
+          const step = await writeReviewedStep(
             this.activeRunner('writer', signal),
-            { signal, prompt: stepPrompt(lesson, lesson.map, index), schema: stepSchema },
-            readStep,
+            this.activeRunner('marker', signal),
+            {
+              signal,
+              prompt: stepPrompt(current, current.map!, index, [...history, ...prepared]),
+              schema: stepSchema,
+            },
+            await this.sources(lesson.notes),
           );
           const latest = this.lesson(path);
           if (latest.stepsFor !== plan) {
@@ -1538,7 +1702,12 @@ export class LearnService {
               i === index
                 ? {
                     ...step,
-                    check: { ...step.check, id: `k${index + 1}`, objective: latest.objective },
+                    check: {
+                      ...step.check,
+                      id: `k${index + 1}`,
+                      objective: latest.objective,
+                      goal: step.check.goal ?? 'explain',
+                    },
                   }
                 : s,
             ),

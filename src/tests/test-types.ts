@@ -10,7 +10,7 @@ export type Mistake =
   | 'incomplete'
   | 'unknown'
   | 'none';
-/** What a question is for; the format follows from it. */
+/** What a question assesses, independently of its response format. */
 export type Goal = 'recognise' | 'recall' | 'explain' | 'apply';
 
 export interface TestPlan {

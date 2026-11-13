@@ -27,6 +27,9 @@ export interface AgentRunner {
 export const SCHEMA_INSTRUCTION = (schema: Schema) =>
   `Reply with only one JSON object matching this JSON Schema. No prose and no code fences.\n<schema>\n${JSON.stringify(schema)}\n</schema>`;
 
+export const validationRepairPrompt = (error: string, reply: unknown) =>
+  `Your previous reply was rejected: ${error}\nPrevious reply:\n${JSON.stringify(reply).slice(0, 20000)}\nReturn a corrected reply.`;
+
 /** Agents sometimes wrap JSON in prose or fences; take the outermost object. */
 export function extractJson(text: string): unknown {
   const trimmed = text.trim();
@@ -76,7 +79,7 @@ export async function runValidated<T>(
     }
     const again = await runner.run({
       ...task,
-      prompt: `${task.prompt}\n\nYour previous reply was rejected: ${(error as Error).message}\nPrevious reply:\n${JSON.stringify(first).slice(0, 20000)}\nReturn a corrected reply.`,
+      prompt: `${task.prompt}\n\n${validationRepairPrompt((error as Error).message, first)}`,
     });
     return read(again);
   }
