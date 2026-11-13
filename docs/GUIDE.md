@@ -105,6 +105,7 @@ The `-` makes the callout collapsed in ordinary notes. Qard also accepts `[!qard
 
 - `qard-deck` names a **logical deck**. Every note with the exact same deck name contributes to the same deck, regardless of its folder. Names are case-sensitive.
 - Without `qard-deck`, a note’s filename (without `.md`) becomes its deck name. Choose **Settings → Qard → Files and folders → Deck names → Folder path (nested decks)** to name such notes after their folder instead: `Courses/Networks/tcp.md` joins the deck `Courses::Networks`. Notes at the vault root keep their own name, and `qard-deck` and moved cards always take precedence. Changing this setting regroups cards into different decks; review history stays with each card.
+- **Deck options** also configures a deck's icon and color. Open the options button beside any deck, choose an icon from the searchable visual picker and a color with the native chooser or a six-digit hex value. The preview updates before saving. **Automatic icon** and **Automatic color** independently restore Qard's defaults. Appearance applies only to that deck, including grouping parents, and appears in the library, deck header, study picker and exam picker. It is saved in Qard settings, not read from notes. An icon unavailable on another device falls back to the automatic icon without losing the saved choice.
 - `::` nests decks. `Biology::Cells` appears under **Biology** in the library, which is also how nested Anki decks arrive on import. A parent does not need cards of its own. Expand or collapse a parent with its arrow, or click it to open its page, and choose **Study all** to open the study builder with the parent and every deck beneath it selected. Searching or filtering shows the flat list with full names.
 - **Subdecks inside a deck.** Inside a deck, choose **New subdeck** to split its topics into sections, such as `ASD`, `FP` and `TOA` within `Advanced Programming`. Type the subdeck's name: topics whose names start with it as a whole word (`ASD 03 — Agile`, not `ASDF`) are ticked for you, and you can tick or untick any topic by hand. Choosing an existing subdeck's name adds the topics to it. The topics keep their names, cards, review history and source notes; only their deck becomes `Advanced Programming::ASD`. When every card a note names its deck for is moving, Qard changes the note's `qard-deck`; otherwise the moving cards get a location comment, as with **Move…**. Exam plans that covered the moved topics keep covering them. Subdecks appear above the deck's own topics: open one, or use its play button to study it. A deck's **Study** button includes its subdecks, and a subdeck's back button returns to its parent.
 - The closest preceding heading, at any level, becomes the topic. Nested headings replace the topic rather than building a hierarchy. ATX (`# Heading`) and setext headings work; headings inside fenced code are ignored.
@@ -229,26 +230,26 @@ After completing a batch, choose **Continue studying** to start the next part of
 
 **Type answers before revealing** in **Settings → Qard → Study experience** adds an optional scratch field during flashcard review. It defaults off and is controlled only from settings. Type what you remember, reveal with the button or **Ctrl/⌘ + Enter**, compare your text with the answer, then choose your own rating. Typing never calls AI or automatically grades an answer. Text stays only in the current visit and clears on the next card or restart; regular Enter supports multiline answers.
 
-| Mode | Includes |
-| --- | --- |
-| **All cards** | Every selected card, regardless of scheduling, due date or review history |
-| Due cards | Unreviewed cards and reviewed cards whose due date has arrived |
-| New cards | Cards with no recorded reviews |
-| Difficult cards | Cards whose last rating was Again or Hard |
+| Mode            | Includes                                                                  |
+| --------------- | ------------------------------------------------------------------------- |
+| **All cards**   | Every selected card, regardless of scheduling, due date or review history |
+| Due cards       | Unreviewed cards and reviewed cards whose due date has arrived            |
+| New cards       | Cards with no recorded reviews                                            |
+| Difficult cards | Cards whose last rating was Again or Hard                                 |
 
 **Session** offers **Normal session** and **Cram mode**. A normal session reveals the answer, then asks for Again/Hard/Good/Easy. In Cram mode, press Space to reveal the answer and Space again to move to the next question; use the Reveal answer and Next card buttons on touch devices. Cram sessions run through the selected cards once, offer **Cram again** at the end, and never record ratings, alter schedules or count as reviews in Statistics. Cards receive stable IDs when needed to save the session position. The All/Due/New/Difficult filters and ordering are available in both styles. Tests, lessons and checks keep their existing behaviour.
 
 Order can be deck/note order or shuffle. The session shows progress through the selected cards. Normal sessions with FSRS also keep a learning queue: cards rated Again return when their actual scheduled interval arrives. Hard, Good and Easy finish that card for the current sitting while preserving its FSRS schedule. Ready learning cards appear between questions without interrupting the current answer. When only future learning cards remain, Qard shows the next return time. Keep the session open to continue automatically, choose **Save and leave** to resume later, or **Finish session** to end the queue while preserving all ratings and scheduled due dates. Learning queues survive a restart and resolve the latest card content. Undo restores the queue as well as the rating; skipping or pausing a returning card removes it from this session. Progress counts distinct cards, while the summary also reports repeated reviews. Exam sessions, cram, simple scheduling and scheduling-off study keep their single-pass behavior. The summary offers an explicit **Review difficult cards** action. Normal and cram sessions automatically save their card order and next position. Use **Save and leave**, or close Qard, then choose **Resume** under **Continue studying** on the Decks screen (also shown inside the relevant deck). Sessions survive an Obsidian restart. Completed ratings and the next position save together; a failed save keeps you on the same card. Resuming uses the current Markdown and skips missing, paused, deferred or ambiguous remaining cards with a notice. Discarding a session removes only its saved queue, and completed sessions are removed automatically. Answers start hidden when you resume. Cram sessions assign stable card IDs when needed so their position can survive note edits; they still do not record ratings or change schedules.
 
-| Key | Action |
-| --- | --- |
-| Space | Normal: reveal/hide answer. Cram: reveal/next card |
-| 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal |
-| U | Undo the last rating in this visit, including from the completion screen |
-| S | Skip the current card for this session |
-| E | Edit the current card and return to its queue position |
-| F | Toggle focus mode |
-| Escape | Exit focus; otherwise show/cancel the leave-session confirmation |
+| Key           | Action                                                                   |
+| ------------- | ------------------------------------------------------------------------ |
+| Space         | Normal: reveal/hide answer. Cram: reveal/next card                       |
+| 1 / 2 / 3 / 4 | Again / Hard / Good / Easy, after reveal                                 |
+| U             | Undo the last rating in this visit, including from the completion screen |
+| S             | Skip the current card for this session                                   |
+| E             | Edit the current card and return to its queue position                   |
+| F             | Toggle focus mode                                                        |
+| Escape        | Exit focus; otherwise show/cancel the leave-session confirmation         |
 
 Change any of these keys, except Escape, under **Settings → Qard → Study keys**: choose **Customise**, click an action and press the key you want. A key already used by another action is swapped with it, and **Reset to defaults** restores the table above. The rating keys also work by their position on the keyboard, so 1–4 rate on AZERTY layouts without Shift. Keyboard hints on the study buttons show your keys.
 
@@ -423,16 +424,16 @@ The mastery file records when the course was last mapped (`qard-mapped`). When n
 
 Every mode reads the mastery file before writing anything, and adds evidence after:
 
-| State | Meaning | What happens next |
-|---|---|---|
-| New | No evidence yet | Teach it when you're ready |
-| Gap | Couldn't answer | A lesson is suggested |
-| Misconception | Wrong while sure | A lesson is suggested |
-| Taught | A lesson covered it | A check in 3 days |
-| Shaky | Right but guessing, or partly right | A check in 2–3 days |
-| Right once | One correct check or test | A harder check in a week |
-| Mastered | Right again, at least 2 days later | Cards keep it fresh |
-| Slipping | Mastered, but its cards are lapsing | A check today |
+| State         | Meaning                             | What happens next          |
+| ------------- | ----------------------------------- | -------------------------- |
+| New           | No evidence yet                     | Teach it when you're ready |
+| Gap           | Couldn't answer                     | A lesson is suggested      |
+| Misconception | Wrong while sure                    | A lesson is suggested      |
+| Taught        | A lesson covered it                 | A check in 3 days          |
+| Shaky         | Right but guessing, or partly right | A check in 2–3 days        |
+| Right once    | One correct check or test           | A harder check in a week   |
+| Mastered      | Right again, at least 2 days later  | Cards keep it fresh        |
+| Slipping      | Mastered, but its cards are lapsing | A check today              |
 
 The rules: answering correctly straight after a lesson doesn't count, so a lesson moves an objective to **taught** at most. Mastery needs two correct answers at least two days apart, the second at a harder goal (explain, then apply). A wrong answer you were sure of is a misconception; **I don't know** is a gap. Passing a flashcard never promotes an objective, but two lapses on a card made for a mastered objective mark it as slipping.
 
@@ -459,7 +460,7 @@ Lessons follow the vault's rule for visuals: use one only when you would underst
 - **Figures already in your notes** are reused: the writer copies the note's embed and caption.
 - **Anything else** (a distribution with specific parameters, a curve, a geometric picture, a data structure with real values) goes to the **Illustrator** as a brief. It is drawn in the background while you work through earlier steps.
 
-The illustrator replies with either a matplotlib script or an SVG. Qard runs scripts itself with Python 3 on this computer. On macOS, the script runs under `sandbox-exec`, with no network access and writes allowed only to Qard's temporary folder. Qard sets the style and saves the figure, removes anything from the SVG that isn't drawing (scripts, event handlers, links to other files), and saves it to `assets/<subject>/descriptive-name.svg`. That folder can be changed in **Settings → Qard → Lessons and checks**. The lesson and its note show the figure with an italic *Figure:* caption. If a figure fails, the error goes back to the illustrator once.
+The illustrator replies with either a matplotlib script or an SVG. Qard runs scripts itself with Python 3 on this computer. On macOS, the script runs under `sandbox-exec`, with no network access and writes allowed only to Qard's temporary folder. Qard sets the style and saves the figure, removes anything from the SVG that isn't drawing (scripts, event handlers, links to other files), and saves it to `assets/<subject>/descriptive-name.svg`. That folder can be changed in **Settings → Qard → Lessons and checks**. The lesson and its note show the figure with an italic _Figure:_ caption. If a figure fails, the error goes back to the illustrator once.
 
 **Draw this** asks for a figure on any step or answer; **Redraw…** takes a note on what to change. Without Python (or on mobile), the illustrator writes the SVG by hand.
 
@@ -489,6 +490,7 @@ Choose **Statistics** in the workspace header or run **Qard: Show study statisti
 - **Memory estimates:** expand this section when using FSRS to see predicted recall, median stability and cards below the retention target. Stability is the number of days until predicted recall falls to 90%, independently of the selected target. These are model estimates, separate from rating-based recall. Paused cards and cards awaiting a content check are excluded; approximate estimates from imported schedules or incomplete histories are labelled.
 
 Daily and per-card rating totals are saved locally without the 10,000-event limit. Existing saved rating events are migrated when the plugin loads. Older reviews removed by the previous limit cannot be recovered; the page identifies incomplete history. Imported schedules affect collection counts without inventing reviews. Actual Anki rating events are included when review data is kept. Deleted cards remain in activity totals; duplicate card IDs are excluded from deck counts until fixed. Expand **About this data** for these details on the page.
+
 ## Study time
 
 Qard records how long you actively study, by course and activity: cards, lessons, checks, practice tests, course maps and the library. Time counts only while a Qard tab is in front, Obsidian has focus, and you've typed, clicked or scrolled in the last two minutes. Card reviews count towards the card's deck, or towards the course a deck is named after (a `DS346 A1` deck counts towards DS346).
@@ -505,13 +507,13 @@ Cost appears only where the provider reports it: OpenRouter, and Claude Code, wh
 
 In **Settings → Qard → AI connections**, set up the tools and keys Qard may use:
 
-| Connection | Notes |
-|---|---|
-| **Claude Code** | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`), and opens PDFs with its own reader. Editing, shell and web tools are denied. Desktop only. |
-| **Codex** | Runs `codex exec` with a read-only sandbox. Codex can't open PDFs, so Qard sends the text of the PDFs a request names. Desktop only. |
+| Connection        | Notes                                                                                                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Claude Code**   | Runs `claude -p` on this computer with your existing login. It may only read the vault (`Read`, `Grep` and `Glob`), and opens PDFs with its own reader. Editing, shell and web tools are denied. Desktop only.                     |
+| **Codex**         | Runs `codex exec` with a read-only sandbox. Codex can't open PDFs, so Qard sends the text of the PDFs a request names. Desktop only.                                                                                               |
 | **Anthropic API** | Calls the Claude API directly. The model reads notes and PDFs only through three read-only tools (list, search, read) and never sees the tests folder. Works on mobile. Opus and Sonnet requests use server-side refusal fallback. |
-| **OpenRouter** | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile. |
-| **Custom AI** | A local or hosted OpenAI-compatible chat server, including Ollama, LM Studio and oMLX. Uses the same read-only note tools. Requires a model that can follow Qard's JSON formats; note-reading tasks also require tool support. |
+| **OpenRouter**    | Any OpenRouter model that can use tools, through the same three read-only tools. Works on mobile.                                                                                                                                  |
+| **Custom AI**     | A local or hosted OpenAI-compatible chat server, including Ollama, LM Studio and oMLX. Uses the same read-only note tools. Requires a model that can follow Qard's JSON formats; note-reading tasks also require tool support.     |
 
 API keys are kept in Obsidian's secure storage (Obsidian 1.11.4+), not in your vault or plugin data.
 
@@ -531,12 +533,12 @@ With a locally hosted, downloaded model, Qard's requests go to that local server
 
 Then, under **AI roles**, choose a connection and model for each job:
 
-| Role | Does | Default |
-|---|---|---|
-| **Tutor** | Replies live in lessons, marks checks, answers questions. Should be fast. | Claude Code with Haiku |
-| **Writer** | Maps courses, and writes tests, checks and lesson steps. Should be your best model. | Claude Code's default model |
-| **Marker** | Marks practice tests in the background. | Claude Code's default model |
-| **Illustrator** | Draws figures for lessons. Should be a strong model. | The writer's connection and model |
+| Role            | Does                                                                                | Default                           |
+| --------------- | ----------------------------------------------------------------------------------- | --------------------------------- |
+| **Tutor**       | Replies live in lessons, marks checks, answers questions. Should be fast.           | Claude Code with Haiku            |
+| **Writer**      | Maps courses, and writes tests, checks and lesson steps. Should be your best model. | Claude Code's default model       |
+| **Marker**      | Marks practice tests in the background.                                             | Claude Code's default model       |
+| **Illustrator** | Draws figures for lessons. Should be a strong model.                                | The writer's connection and model |
 
 Each Claude Code or Codex call starts a new process, which adds a few seconds. For the most responsive tutor, use an API key or OpenRouter with a fast model.
 

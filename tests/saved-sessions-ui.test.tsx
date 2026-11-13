@@ -186,6 +186,6 @@ it('starts Due study with learning repeats and resumes a queue after every origi
   await key('4');
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('3 / 3');
-  expect(host.textContent).toContain('4 reviews, including learning repeats');
+  expect(host.textContent).toContain('4 reviews, including repeats');
   expect(services.reviews.getSnapshot().sessions).toEqual([]);
 });

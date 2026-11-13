@@ -102,8 +102,8 @@ it('carries deck options and exam plans across a rename', async () => {
   await store.saveSettings({
     ...DEFAULT_SETTINGS,
     deckOptions: {
-      Bio: { newCardsPerDay: 5 },
-      'Bio::Cells': { newCardsPerDay: 2 },
+      Bio: { newCardsPerDay: 5, icon: 'terminal', color: '#123456' },
+      'Bio::Cells': { newCardsPerDay: 2, icon: 'network', color: '#abcdef' },
       Other: { newCardsPerDay: 1 },
     },
   });
@@ -118,8 +118,8 @@ it('carries deck options and exam plans across a rename', async () => {
   });
   await store.renameGroup({ deck: 'Bio', to: 'Biology' });
   expect(store.getSnapshot().settings.deckOptions).toEqual({
-    Biology: { newCardsPerDay: 5 },
-    'Biology::Cells': { newCardsPerDay: 2 },
+    Biology: { newCardsPerDay: 5, icon: 'terminal', color: '#123456' },
+    'Biology::Cells': { newCardsPerDay: 2, icon: 'network', color: '#abcdef' },
     Other: { newCardsPerDay: 1 },
   });
   await store.renameGroup({ deck: 'Biology', topic: 'Intro', to: 'Overview' });

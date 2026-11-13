@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { Info } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentProvider, AgentRole } from '../../agents/runner';
 import { defaultModel } from '../../agents/create-runner';
@@ -19,7 +20,17 @@ const CONNECTIONS: Record<string, string> = {
 };
 
 /** A quiet "Tutor · Claude Code · haiku" tag showing who is working on something. Hidden when turned off in settings. */
-export function AgentLabel({ services, role }: { services: QardServices; role: AgentRole }) {
+export function AgentLabel({
+  services,
+  role,
+  info = false,
+  compact = false,
+}: {
+  services: QardServices;
+  role: AgentRole;
+  info?: boolean;
+  compact?: boolean;
+}) {
   // Subscribe to a plain string of just the fields shown, so an unchanged value never causes a re-render loop.
   const key = useSyncExternalStore(services.reviews.subscribe ?? noSubscription, () => {
     const s = services.reviews.getSnapshot().settings;
@@ -32,6 +43,24 @@ export function AgentLabel({ services, role }: { services: QardServices; role: A
   }
   const [provider = '', model = ''] = key.split('\u0000');
   const name = model.trim() || defaultModel(provider as AgentProvider, role) || 'default model';
+  const description = `${CONNECTIONS[provider] ?? provider} · ${name}`;
+  if (compact) {
+    return (
+      <span className="qard-jobs-role">
+        <span className="qard-agent-info" title={description} aria-label={description}>
+          <Info size={14} aria-hidden="true" />
+        </span>
+        {ROLES[role]}
+      </span>
+    );
+  }
+  if (info) {
+    return (
+      <span className="qard-agent-info" title={description} aria-label={description}>
+        <Info size={14} aria-hidden="true" />
+      </span>
+    );
+  }
   return (
     <span
       className="qard-agent"

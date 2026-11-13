@@ -31,8 +31,10 @@ export interface LearnSettings {
   folder: string;
   figures: string;
 }
-/** Overrides for one deck and, unless they set their own, the decks nested under it. */
+/** Scheduling overrides may cover subdecks; appearance belongs only to this deck. */
 export interface DeckOptions {
+  icon?: string;
+  color?: string;
   desiredRetention?: number;
   /** Daily new-card limit for this deck and its subdecks together; absent means no deck limit. */
   newCardsPerDay?: number;
@@ -187,6 +189,15 @@ function readLearnSettings(raw: unknown): LearnSettings {
     figures: typeof l.figures === 'string' && l.figures.trim() ? l.figures : d.figures,
   };
 }
+/** Keep registered IDs portable across devices with different icon registries. */
+export const readDeckIcon = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^[a-z0-9_.:/-]{1,100}$/i.test(value.trim())
+    ? value.trim()
+    : undefined;
+export const readDeckColor = (value: unknown): string | undefined =>
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim())
+    ? value.trim().toLowerCase()
+    : undefined;
 function readDeckOptions(raw: unknown): Record<string, DeckOptions> {
   const result: Record<string, DeckOptions> = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -194,7 +205,11 @@ function readDeckOptions(raw: unknown): Record<string, DeckOptions> {
   }
   for (const [name, value] of Object.entries(raw as Record<string, unknown>).slice(0, 2000)) {
     const o = value && typeof value === 'object' ? (value as DeckOptions) : {};
+    const icon = readDeckIcon(o.icon),
+      color = readDeckColor(o.color);
     const options: DeckOptions = {
+      ...(icon ? { icon } : {}),
+      ...(color ? { color } : {}),
       ...(typeof o.desiredRetention === 'number' &&
       o.desiredRetention >= 0.7 &&
       o.desiredRetention <= 0.97

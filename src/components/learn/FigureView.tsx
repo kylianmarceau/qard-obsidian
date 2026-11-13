@@ -6,6 +6,8 @@ import { Markdown } from '../Markdown';
 import { JobError, Waiting } from '../common/FeedbackStatus';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { JobControls } from '../jobs/JobControls';
+import { useTick } from '../jobs/RunningJobs';
+import { timeLeft } from '../../jobs/job-clock';
 
 type Job = { kind: string; startedAt?: number; error?: string } | undefined;
 const running = (job: Job) => !!job && !job.error;
@@ -33,13 +35,30 @@ export function FigureView({
 }) {
   const [editing, setEditing] = useState(false),
     [change, setChange] = useState('');
-  if (running(job)) {
+  const now = useTick(running(job));
+  if (job && running(job)) {
+    const elapsedSeconds =
+      job.startedAt === undefined
+        ? undefined
+        : Math.max(0, Math.round((now - job.startedAt) / 1000));
+    const elapsed =
+      elapsedSeconds === undefined
+        ? 'Running'
+        : `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')} elapsed`;
+    const left = timeLeft(services.jobs?.estimate(job.kind), job.startedAt, now);
     return (
       <div className="qard-figure is-drawing">
-        <Waiting text={figure ? 'Redrawing the figure…' : 'Drawing a figure…'}>
-          <AgentLabel services={services} role="illustrator" />
-        </Waiting>
-        <JobControls services={services} job={job} cancel={cancel} />
+        <div className="qard-jobs-meta qard-figure-meta">
+          <AgentLabel services={services} role="illustrator" compact />
+          <span className="qard-jobs-time">
+            {elapsed}
+            {left ? ` · ${left}` : ''}
+          </span>
+        </div>
+        <div className="qard-figure-status">
+          <Waiting text={figure ? 'Redrawing the figure…' : 'Drawing a figure…'} />
+          <JobControls services={services} job={job} cancel={cancel} compact />
+        </div>
       </div>
     );
   }
@@ -65,12 +84,18 @@ export function FigureView({
                 value={change}
                 onChange={(e) => setChange(e.target.value)}
               />
-              <button type="submit" className="qard-text-button">
-                Redraw
-              </button>
-              <button type="button" className="qard-text-button" onClick={() => setEditing(false)}>
-                Cancel
-              </button>
+              <div className="qard-figure-redraw-actions">
+                <button type="submit" className="qard-text-button">
+                  Redraw
+                </button>
+                <button
+                  type="button"
+                  className="qard-text-button"
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           ) : (
             <div className="qard-figure-tools">

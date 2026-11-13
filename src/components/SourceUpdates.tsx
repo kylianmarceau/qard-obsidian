@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronRight, RefreshCw, Square } from 'lucide-react';
 import type { SourceChange, SourceSyncService } from '../cards/source-sync-service';
 import type { QardServices } from '../views/services';
 import { InlineMarkdown, Markdown } from './Markdown';
@@ -17,13 +17,15 @@ export function SourceUpdatesRow({
     return null;
   }
   return (
-    <button className="qard-resume" onClick={open}>
-      <span className="qard-muted">Source updates</span>
-      <strong>
-        {state.error
-          ? 'Check source tracking'
-          : `${state.changes.length} ${state.changes.length === 1 ? 'card may' : 'cards may'} need updating`}
-      </strong>
+    <button className="qard-resume qard-row-update" onClick={open}>
+      <span className="qard-resume-copy">
+        <span className="qard-muted qard-resume-label">Source updates</span>
+        <strong className="qard-resume-title">
+          {state.error
+            ? 'Check source tracking'
+            : `${state.changes.length} ${state.changes.length === 1 ? 'card may' : 'cards may'} need updating`}
+        </strong>
+      </span>
       <span className="qard-muted">Review changes</span>
       <ChevronRight size={16} />
     </button>
@@ -203,7 +205,14 @@ export function SourceUpdates({ services, back }: { services: QardServices; back
                     </button>
                   )}
                   {state.busy.includes(current.card.id) && (
-                    <button onClick={() => service.cancel(current.card.id)}>Cancel</button>
+                    <button
+                      className="qard-icon-button qard-jobs-cancel"
+                      aria-label="Cancel suggestion"
+                      title="Cancel suggestion"
+                      onClick={() => service.cancel(current.card.id)}
+                    >
+                      <Square size={14} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                    </button>
                   )}
                   <button
                     disabled={state.busy.includes(current.card.id) || current.card.duplicateId}
@@ -335,6 +344,9 @@ function BatchUpdates({
           </span>
           {progress.label !== 'Keeping cards' && (
             <button
+              className="qard-icon-button qard-jobs-cancel"
+              aria-label="Stop updating cards"
+              title="Stop updating cards"
               onClick={() => {
                 stopped.current = true;
                 if (current.current) {
@@ -342,7 +354,7 @@ function BatchUpdates({
                 }
               }}
             >
-              Stop
+              <Square size={14} fill="currentColor" strokeWidth={0} aria-hidden="true" />
             </button>
           )}
         </div>

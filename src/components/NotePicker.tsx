@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import type { TFile } from 'obsidian';
 import { isPdf } from '../vault-access';
@@ -23,6 +23,34 @@ export function NotePicker({
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState('');
+  const scope = useRef<HTMLDivElement>(null),
+    trigger = useRef<HTMLButtonElement>(null),
+    popover = useRef<HTMLDivElement>(null),
+    restoreFocus = useRef(false);
+  useEffect(() => {
+    const doc = trigger.current!.ownerDocument;
+    const movedOutside = (event: Event) => {
+      if (
+        (event.type === 'pointerdown' || event.target !== doc.body) &&
+        !scope.current?.contains(event.target as Node)
+      ) {
+        restoreFocus.current = false;
+      }
+    };
+    doc.addEventListener('focusin', movedOutside);
+    doc.addEventListener('pointerdown', movedOutside);
+    return () => {
+      restoreFocus.current = false;
+      doc.removeEventListener('focusin', movedOutside);
+      doc.removeEventListener('pointerdown', movedOutside);
+    };
+  }, []);
+  useEffect(() => {
+    if (!open && !disabled && !busy && restoreFocus.current) {
+      restoreFocus.current = false;
+      trigger.current?.focus();
+    }
+  }, [open, disabled, busy]);
   const q = query.toLowerCase().trim();
   const matches = open
     ? notes()
@@ -31,18 +59,27 @@ export function NotePicker({
         .slice(0, 6)
     : [];
   async function pick(path: string) {
-    if (await choose(path)) {
+    if (disabled || busy || !popover.current) {
+      return;
+    }
+    const current = popover.current;
+    restoreFocus.current = current.contains(current.ownerDocument.activeElement);
+    if ((await choose(path)) && popover.current === current) {
       setOpen(false);
       setQuery('');
+    } else {
+      restoreFocus.current = false;
     }
   }
   return (
-    <div className="qard-source-search">
+    <div ref={scope} className="qard-source-search">
       <button
+        ref={trigger}
         className="qard-source-add"
         aria-expanded={open}
         disabled={disabled}
         onClick={() => {
+          restoreFocus.current = false;
           setOpen(!open);
           setQuery('');
         }}
@@ -51,7 +88,18 @@ export function NotePicker({
         {label}
       </button>
       {open && (
-        <div className="qard-popover">
+        <div
+          ref={popover}
+          className="qard-popover"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              restoreFocus.current = true;
+              setOpen(false);
+            }
+          }}
+        >
           <input
             type="search"
             autoFocus
@@ -61,10 +109,7 @@ export function NotePicker({
             disabled={busy}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation();
-                setOpen(false);
-              } else if (e.key === 'Enter' && matches[0] && !busy) {
+              if (e.key === 'Enter' && matches[0] && !busy) {
                 void pick(matches[0].path);
               }
             }}

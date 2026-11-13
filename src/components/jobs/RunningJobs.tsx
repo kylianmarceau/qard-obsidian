@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Square } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { TestNav } from '../../views/navigation';
 import type { LearnNav } from '../../views/navigation';
 import { overdue, roleOf, timeLeft } from '../../jobs/job-clock';
-import { AgentLabel } from './AgentLabel';
 import { LoadingIndicator } from '../common/LoadingIndicator';
 import { InlineMarkdown } from '../Markdown';
 import type { GenerationSnapshot } from '../../cards/generation-service';
+import { AgentLabel } from './AgentLabel';
 
 export interface RunningJob {
   key: string;
@@ -169,6 +169,10 @@ export function RunningJobs({
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const now = useTick(open && jobs.length > 0);
+  const showAgent = useSyncExternalStore(
+    services.reviews.subscribe ?? noSubscribe,
+    () => services.reviews.getSnapshot().settings.showAgent,
+  );
   useEffect(() => {
     if (!open) {
       return;
@@ -218,39 +222,57 @@ export function RunningJobs({
             {jobs.map((j) => {
               const estimate = services.jobs?.estimate(j.kind),
                 left = timeLeft(estimate, j.startedAt, now),
-                stuck = overdue(estimate, j.startedAt, now);
+                stuck = overdue(estimate, j.startedAt, now),
+                role = roleOf(j.kind);
               return (
                 <div
                   key={j.key}
                   role="listitem"
                   className={`qard-jobs-row${stuck ? ' is-stuck' : ''}`}
                 >
-                  <button
-                    className="qard-jobs-item"
-                    onClick={() => {
-                      setOpen(false);
-                      j.open();
-                    }}
-                  >
-                    <strong>{j.label}</strong>
-                    {j.detail && (
-                      <span className="qard-jobs-detail">
-                        <InlineMarkdown text={j.detail} path={''} services={services} />
+                  <div className="qard-jobs-meta">
+                    {showAgent && (
+                      <span className="qard-jobs-role">
+                        <AgentLabel services={services} role={role} info />
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
                       </span>
                     )}
-                    <AgentLabel services={services} role={roleOf(j.kind)} />
-                  </button>
-                  <div className="qard-jobs-meta">
-                    <span className={stuck ? 'qard-jobs-stuck' : 'qard-muted'}>
-                      {j.startedAt ? `${clock(now - j.startedAt)} elapsed` : 'Running'}
-                      {left ? ` · ${left}` : ''}
+                    <span
+                      className={
+                        stuck ? 'qard-jobs-time qard-jobs-stuck' : 'qard-jobs-time qard-muted'
+                      }
+                      title={`${j.startedAt ? `${clock(now - j.startedAt)} elapsed` : 'Running'}${left ? ` · ${left}` : ''}`}
+                    >
+                      {j.startedAt ? clock(now - j.startedAt) : 'Running'}
+                      {left
+                        ? ` · ${left
+                            .replace(/^about /, '~')
+                            .replace(/ min/g, 'm')
+                            .replace(/ sec/g, 's')}`
+                        : ''}
                     </span>
+                  </div>
+                  <div className="qard-jobs-row-head">
                     <button
-                      className="qard-text-button qard-jobs-cancel"
+                      className="qard-jobs-item"
+                      onClick={() => {
+                        setOpen(false);
+                        j.open();
+                      }}
+                    >
+                      <strong>{j.label}</strong>
+                      {j.detail && (
+                        <span className="qard-jobs-detail">
+                          <InlineMarkdown text={j.detail} path={''} services={services} />
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      className="qard-icon-button qard-jobs-cancel"
                       aria-label={`Cancel ${j.label.toLowerCase()}`}
                       onClick={j.cancel}
                     >
-                      Cancel
+                      <Square size={14} fill="currentColor" strokeWidth={0} aria-hidden="true" />
                     </button>
                   </div>
                 </div>

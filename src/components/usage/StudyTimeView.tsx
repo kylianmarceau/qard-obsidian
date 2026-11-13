@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
 import type { QardServices } from '../../views/services';
 import { ACTIVITIES, duration, studyReport } from '../../time/study-time';
 import { addDays, isoDay } from '../../learn/mastery';
@@ -18,6 +18,7 @@ const short = (seconds: number) => {
 /** Time spent studying in Qard: a daily chart by activity, and a breakdown by course. */
 export function StudyTimeView({ services }: { services: QardServices }) {
   const data = useSyncExternalStore(services.reviews.subscribe, services.reviews.getSnapshot);
+  const tabsId = useId();
   const [range, setRange] = useState<Range>('week'),
     [confirm, setConfirm] = useState(false),
     [courses, setCourses] = useState<string[]>([]);
@@ -64,150 +65,193 @@ export function StudyTimeView({ services }: { services: QardServices }) {
             Time you spend actively studying in Qard, by course and activity.
           </p>
         </div>
-        <div className="qard-segmented" role="tablist">
-          {RANGES.map((r) => (
+        <div
+          className="qard-segmented qard-time-period"
+          role="tablist"
+          aria-label="Study time period"
+        >
+          {RANGES.map((r, index) => (
             <button
               key={r.id}
               role="tab"
+              id={`${tabsId}-${r.id}`}
+              aria-controls={`${tabsId}-panel`}
               aria-selected={range === r.id}
+              tabIndex={range === r.id ? 0 : -1}
               onClick={() => setRange(r.id)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === 'ArrowRight'
+                    ? (index + 1) % RANGES.length
+                    : event.key === 'ArrowLeft'
+                      ? (index - 1 + RANGES.length) % RANGES.length
+                      : event.key === 'Home'
+                        ? 0
+                        : event.key === 'End'
+                          ? RANGES.length - 1
+                          : undefined;
+                if (next === undefined) {
+                  return;
+                }
+                event.preventDefault();
+                setRange(RANGES[next]!.id);
+                const controls =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                    '[role="tab"]',
+                  );
+                controls?.[next]?.focus();
+              }}
             >
               {r.label}
             </button>
           ))}
         </div>
       </div>
-      {empty ? (
-        <div className="qard-empty">
-          <p>No study time {range === 'all' ? 'yet' : 'in this period'}.</p>
-          <p className="qard-muted">
-            Time is recorded from the moment this version of Qard is installed.
-          </p>
-        </div>
-      ) : (
-        <>
-          <section className="qard-usage-summary">
-            <div className="qard-usage-total">
-              <strong>{duration(report.total)}</strong>
-              <span className="qard-muted">
-                {range === 'today'
-                  ? 'today'
-                  : range === 'all'
-                    ? 'in total'
-                    : `in the last ${days} days`}
-                {days && days > 1 ? ` · ${duration(report.total / days)} a day on average` : ''}
-              </span>
-            </div>
-            <dl className="qard-usage-stats">
-              {report.byActivity.map((r) => (
-                <div key={r.label}>
-                  <dt>{r.label}</dt>
-                  <dd>{duration(r.total)}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-          {bars.length > 0 && (
-            <section className="qard-usage-chart" aria-label="Study time per day">
-              {bars.map((b) => {
-                const total = b.row?.total ?? 0;
-                return (
-                  <div
-                    key={b.day}
-                    className="qard-usage-day"
-                    title={`${b.day}: ${duration(total)}${
-                      b.row
-                        ? ` (${used
-                            .filter((a) => b.row!.byActivity[a.id])
-                            .map((a) => `${a.label} ${duration(b.row!.byActivity[a.id]!)}`)
-                            .join(', ')})`
-                        : ''
-                    }`}
-                  >
-                    <div className="qard-usage-bar">
-                      {b.row &&
-                        used.map((a) =>
-                          b.row!.byActivity[a.id] ? (
-                            <span
-                              key={a.id}
-                              className={`is-${a.id}`}
-                              style={{ height: `${(b.row!.byActivity[a.id]! / peak) * 100}%` }}
-                            />
-                          ) : null,
-                        )}
-                    </div>
-                    <small>{b.day.slice(8)}</small>
-                  </div>
-                );
-              })}
-            </section>
-          )}
-          {bars.length > 0 && (
-            <div className="qard-usage-legend">
-              {used.map((a) => (
-                <span key={a.id} className={`is-${a.id}`}>
-                  <i />
-                  {a.label}
-                </span>
-              ))}
-            </div>
-          )}
-          <section>
-            <div className="qard-label">By course</div>
-            <table className="qard-usage-table">
-              <thead>
-                <tr>
-                  <th />
-                  <th>Total</th>
-                  {used.map((a) => (
-                    <th key={a.id}>{a.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {report.byCourse.map((r) => (
-                  <tr key={r.label}>
-                    <td>
-                      <strong>{r.label}</strong>
-                    </td>
-                    <td>{short(r.total)}</td>
-                    {used.map((a) => (
-                      <td key={a.id}>{r.byActivity[a.id] ? short(r.byActivity[a.id]!) : '—'}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        </>
-      )}
-      <p className="qard-muted qard-small">
-        Time counts while Qard is the tab in front, Obsidian has focus, and you've typed, clicked or
-        scrolled in the last 2 minutes. Card reviews count towards their deck, or the course a deck
-        is named after. Kept for a year in Qard's plugin data, on this device only.
-      </p>
-      {!empty &&
-        (confirm ? (
-          <p className="qard-small">
-            Clear all recorded study time?{' '}
-            <button
-              className="qard-text-button"
-              onClick={() => {
-                void services.reviews.resetStudy();
-                setConfirm(false);
-              }}
-            >
-              Clear
-            </button>
-            <button className="qard-text-button" onClick={() => setConfirm(false)}>
-              Cancel
-            </button>
-          </p>
+      <div
+        className="qard-usage-panel"
+        role="tabpanel"
+        id={`${tabsId}-panel`}
+        aria-labelledby={`${tabsId}-${range}`}
+        tabIndex={0}
+      >
+        {empty ? (
+          <div className="qard-empty">
+            <p>No study time {range === 'all' ? 'yet' : 'in this period'}.</p>
+            <p className="qard-muted">
+              Time is recorded from the moment this version of Qard is installed.
+            </p>
+          </div>
         ) : (
-          <button className="qard-text-button qard-small" onClick={() => setConfirm(true)}>
-            Clear study time
-          </button>
-        ))}
+          <>
+            <section className="qard-usage-summary">
+              <div className="qard-usage-total">
+                <strong>{duration(report.total)}</strong>
+                <span className="qard-muted">
+                  {range === 'today'
+                    ? 'today'
+                    : range === 'all'
+                      ? 'in total'
+                      : `in the last ${days} days`}
+                  {days && days > 1 ? ` · ${duration(report.total / days)} a day on average` : ''}
+                </span>
+              </div>
+              <dl className="qard-usage-stats">
+                {report.byActivity.map((r) => (
+                  <div key={r.label}>
+                    <dt>{r.label}</dt>
+                    <dd>{duration(r.total)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+            {bars.length > 0 && (
+              <section className="qard-usage-chart" aria-label="Study time per day">
+                {bars.map((b) => {
+                  const total = b.row?.total ?? 0;
+                  return (
+                    <div
+                      key={b.day}
+                      className="qard-usage-day"
+                      title={`${b.day}: ${duration(total)}${
+                        b.row
+                          ? ` (${used
+                              .filter((a) => b.row!.byActivity[a.id])
+                              .map((a) => `${a.label} ${duration(b.row!.byActivity[a.id]!)}`)
+                              .join(', ')})`
+                          : ''
+                      }`}
+                    >
+                      <div className="qard-usage-bar">
+                        {b.row &&
+                          used.map((a) =>
+                            b.row!.byActivity[a.id] ? (
+                              <span
+                                key={a.id}
+                                className={`is-${a.id}`}
+                                style={{ height: `${(b.row!.byActivity[a.id]! / peak) * 100}%` }}
+                              />
+                            ) : null,
+                          )}
+                      </div>
+                      <small>{b.day.slice(8)}</small>
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+            {bars.length > 0 && (
+              <div className="qard-usage-legend">
+                {used.map((a) => (
+                  <span key={a.id} className={`is-${a.id}`}>
+                    <i />
+                    {a.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            <section>
+              <div className="qard-label">By course</div>
+              <div className="qard-table-scroll">
+                <table className="qard-usage-table">
+                  <thead>
+                    <tr>
+                      <th />
+                      <th>Total</th>
+                      {used.map((a) => (
+                        <th key={a.id}>{a.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.byCourse.map((r) => (
+                      <tr key={r.label}>
+                        <td>
+                          <strong>{r.label}</strong>
+                        </td>
+                        <td>{short(r.total)}</td>
+                        {used.map((a) => (
+                          <td key={a.id}>
+                            {r.byActivity[a.id] ? short(r.byActivity[a.id]!) : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+        <p className="qard-muted qard-small">
+          Time counts while Qard is the tab in front, Obsidian has focus, and you've typed, clicked
+          or scrolled in the last 2 minutes. Card reviews count towards their deck, or the course a
+          deck is named after. Kept for a year in Qard's plugin data, on this device only.
+        </p>
+        {!empty &&
+          (confirm ? (
+            <div className="qard-confirmation qard-small">
+              <span>Clear all recorded study time?</span>
+              <div className="qard-actions">
+                <button
+                  className="qard-text-button"
+                  onClick={() => {
+                    void services.reviews.resetStudy();
+                    setConfirm(false);
+                  }}
+                >
+                  Clear
+                </button>
+                <button className="qard-text-button" onClick={() => setConfirm(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="qard-text-button qard-small" onClick={() => setConfirm(true)}>
+              Clear study time
+            </button>
+          ))}
+      </div>
     </div>
   );
 }

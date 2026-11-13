@@ -1,7 +1,7 @@
 import { plural } from '../common/labels';
 import { DeleteLearnItem } from './DeleteLearnItem';
-import { useEffect, useState } from 'react';
-import { ChevronRight, FileText, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChartColumn, ChevronRight, Clock, FileText, Plus } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Mastery } from '../../learn/mastery';
 import { InlineMarkdown } from '../Markdown';
@@ -68,17 +68,22 @@ export function LearnBrowser({
         description="Build understanding one topic at a time, with lessons and checks."
       >
         {nav.usage && (
-          <button className="qard-text-button" onClick={nav.usage}>
-            Usage
+          <button className="qard-icon-button" aria-label="Usage" title="Usage" onClick={nav.usage}>
+            <ChartColumn size={16} />
           </button>
         )}
         {nav.time && (
-          <button className="qard-text-button" onClick={nav.time}>
-            Study time
+          <button
+            className="qard-icon-button"
+            aria-label="Study time"
+            title="Study time"
+            onClick={nav.time}
+          >
+            <Clock size={16} />
           </button>
         )}
         <button onClick={nav.today}>Today</button>
-        <button className="qard-primary" onClick={() => nav.mapCourse()}>
+        <button className="qard-primary qard-learn-map-action" onClick={() => nav.mapCourse()}>
           <Plus size={16} />
           Map a course
         </button>
@@ -88,93 +93,99 @@ export function LearnBrowser({
           Loading courses…
         </p>
       )}
-      {pending?.mapping.map((f) => (
-        <div key={f} className="qard-resume is-static">
-          <Waiting text={`Mapping ${f.split('/').pop()}…`}>
-            <AgentLabel services={services} role="writer" />
-          </Waiting>
-          <DeleteLearnItem services={services} kind="mapping" path={f} />
-        </div>
-      ))}
-      {pending?.failed.map((f) => (
-        <div key={f.kind + f.target} className="qard-error" role="alert">
-          <span>
-            {f.kind === 'map' ? 'Mapping' : 'Updating'}{' '}
-            {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}
-          </span>
+      <div className="qard-row-stack qard-learn-rows">
+        {pending?.mapping.map((f) => (
+          <div key={f} className="qard-resume is-static">
+            <Waiting text={`Mapping ${f.split('/').pop()}…`}>
+              <AgentLabel services={services} role="writer" />
+            </Waiting>
+            <DeleteLearnItem services={services} kind="mapping" path={f} />
+          </div>
+        ))}
+        {pending?.failed.map((f) => (
+          <div key={f.kind + f.target} className="qard-error" role="alert">
+            <span>
+              {f.kind === 'map' ? 'Mapping' : 'Updating'}{' '}
+              {f.target.split('/').pop()!.replace(/\.md$/, '')} failed: {f.error}
+            </span>
+            <button
+              className="qard-text-button"
+              onClick={() =>
+                void (f.kind === 'map'
+                  ? services.learn.mapCourse(f.target, f.request)
+                  : services.learn.updateCourse(f.target, f.request))
+              }
+            >
+              Try again
+            </button>
+            <button
+              className="qard-text-button"
+              onClick={() => void services.learn.dismissFailure(f.kind, f.target)}
+            >
+              Dismiss
+            </button>
+            {f.kind === 'map' && (
+              <DeleteLearnItem services={services} kind="mapping" path={f.target} />
+            )}
+          </div>
+        ))}
+        {pending?.proposals.map((p) => (
+          <div key={p.folder} className="qard-deletable-row qard-summary-row qard-row-update">
+            <button className="qard-resume" onClick={() => nav.mapCourse(p.folder)}>
+              <span className="qard-resume-copy">
+                <span className="qard-muted qard-resume-label">Ready to review</span>
+                <strong className="qard-resume-title">
+                  {p.course} · {plural(p.objectives.length, 'objective')}
+                </strong>
+              </span>
+            </button>
+            <DeleteLearnItem services={services} kind="mapping" path={p.folder} />
+            <ChevronRight size={16} aria-hidden="true" />
+          </div>
+        ))}
+        {pending?.updates.map((u) => (
           <button
-            className="qard-text-button"
-            onClick={() =>
-              void (f.kind === 'map'
-                ? services.learn.mapCourse(f.target, f.request)
-                : services.learn.updateCourse(f.target, f.request))
-            }
+            key={u.mastery}
+            className="qard-resume qard-row-update"
+            onClick={() => nav.course(u.mastery)}
           >
-            Try again
-          </button>
-          <button
-            className="qard-text-button"
-            onClick={() => void services.learn.dismissFailure(f.kind, f.target)}
-          >
-            Dismiss
-          </button>
-          {f.kind === 'map' && (
-            <DeleteLearnItem services={services} kind="mapping" path={f.target} />
-          )}
-        </div>
-      ))}
-      {pending?.proposals.map((p) => (
-        <div key={p.folder} className="qard-deletable-row">
-          <button className="qard-resume" onClick={() => nav.mapCourse(p.folder)}>
-            <span className="qard-muted">Ready to review</span>
-            <strong>
-              {p.course} · {plural(p.objectives.length, 'objective')}
-            </strong>
+            <span className="qard-resume-copy">
+              <span className="qard-muted qard-resume-label">Update ready</span>
+              <strong className="qard-resume-title">{u.course}</strong>
+            </span>
             <ChevronRight size={16} />
           </button>
-          <DeleteLearnItem services={services} kind="mapping" path={p.folder} />
+        ))}
+        {open.map((l) => (
+          <div key={l.path} className="qard-deletable-row qard-summary-row qard-row-lesson">
+            <button className="qard-resume" onClick={() => nav.lesson(l.path)}>
+              <ResumeLessonCopy lesson={l} services={services} />
+            </button>
+            <DeleteLearnItem services={services} kind="lesson" path={l.path} />
+            <ChevronRight size={16} aria-hidden="true" />
+          </div>
+        ))}
+        <div className="qard-deck-list">
+          {courses?.map((c) => {
+            const mastered = c.objectives.filter((o) => o.state === 'mastered').length,
+              due = c.objectives.filter((o) => o.state !== 'new' && o.due && o.due <= day).length;
+            return (
+              <div key={c.path} className="qard-deletable-row qard-summary-row qard-row-course">
+                <button className="qard-deck qard-test-row" onClick={() => nav.course(c.path)}>
+                  <span className="qard-deck-name">
+                    <strong>{c.course}</strong>
+                    <small>
+                      {mastered} of {plural(c.objectives.length, 'objective')} mastered
+                    </small>
+                  </span>
+                  <span className="qard-test-status">{due ? `${due} due` : ''}</span>
+                </button>
+                <DeleteLearnItem services={services} kind="course" path={c.path} />
+                <ChevronRight size={16} aria-hidden="true" />
+              </div>
+            );
+          })}
         </div>
-      ))}
-      {pending?.updates.map((u) => (
-        <button key={u.mastery} className="qard-resume" onClick={() => nav.course(u.mastery)}>
-          <span className="qard-muted">Update ready</span>
-          <strong>{u.course}</strong>
-          <ChevronRight size={16} />
-        </button>
-      ))}
-      {open.map((l) => (
-        <div key={l.path} className="qard-deletable-row">
-          <button className="qard-resume" onClick={() => nav.lesson(l.path)}>
-            <span className="qard-muted">Continue lesson</span>
-            <strong>
-              <InlineMarkdown text={l.title} path={l.path} services={services} />
-            </strong>
-            {l.course && <span className="qard-muted">{l.course}</span>}
-            <ChevronRight size={16} />
-          </button>
-          <DeleteLearnItem services={services} kind="lesson" path={l.path} />
-        </div>
-      ))}
-      <div className="qard-deck-list">
-        {courses?.map((c) => {
-          const mastered = c.objectives.filter((o) => o.state === 'mastered').length,
-            due = c.objectives.filter((o) => o.state !== 'new' && o.due && o.due <= day).length;
-          return (
-            <div key={c.path} className="qard-deletable-row">
-              <button className="qard-deck qard-test-row" onClick={() => nav.course(c.path)}>
-                <span className="qard-deck-name">
-                  <strong>{c.course}</strong>
-                  <small>
-                    {mastered} of {plural(c.objectives.length, 'objective')} mastered
-                  </small>
-                </span>
-                <span className="qard-test-status">{due ? `${due} due` : ''}</span>
-                <ChevronRight size={17} />
-              </button>
-              <DeleteLearnItem services={services} kind="course" path={c.path} />
-            </div>
-          );
-        })}
       </div>
       {courses && !courses.length && (
         <div className="qard-empty">
@@ -189,20 +200,76 @@ export function LearnBrowser({
       {recent.length > 0 && (
         <section className="qard-learn-recent">
           <div className="qard-label">Recent lessons</div>
-          {recent.map((l) => (
-            <div key={l.path} className="qard-deletable-row">
-              <button className="qard-doc-row qard-row-button" onClick={() => nav.lesson(l.path)}>
-                <FileText size={14} />
-                <span>
-                  <InlineMarkdown text={l.title} path={l.path} services={services} />
-                </span>
-                <span className="qard-muted">{new Date(l.created).toLocaleDateString()}</span>
-              </button>
-              <DeleteLearnItem services={services} kind="lesson" path={l.path} />
-            </div>
-          ))}
+          <div className="qard-doc-rows">
+            {recent.map((l) => (
+              <div key={l.path} className="qard-deletable-row qard-doc-item">
+                <button className="qard-doc-row qard-row-button" onClick={() => nav.lesson(l.path)}>
+                  <FileText size={14} />
+                  <span>
+                    <InlineMarkdown text={l.title} path={l.path} services={services} />
+                  </span>
+                  <span className="qard-muted">{new Date(l.created).toLocaleDateString()}</span>
+                </button>
+                <DeleteLearnItem services={services} kind="lesson" path={l.path} />
+              </div>
+            ))}
+          </div>
         </section>
       )}
     </>
+  );
+}
+
+/** Keep course context beside a short title, while long titles retain the full row. */
+function ResumeLessonCopy({ lesson, services }: { lesson: LessonSummary; services: QardServices }) {
+  const copy = useRef<HTMLSpanElement>(null);
+  const [inline, setInline] = useState(false);
+  useEffect(() => {
+    const element = copy.current;
+    if (!element || !lesson.course) {
+      setInline(false);
+      return;
+    }
+    const label = element.querySelector<HTMLElement>('.qard-resume-label .qard-resume-intrinsic')!,
+      title = element.querySelector<HTMLElement>('.qard-resume-title .qard-resume-intrinsic')!,
+      context = element.querySelector<HTMLElement>('.qard-resume-context .qard-resume-intrinsic')!;
+    const measure = () => {
+      const width = element.getBoundingClientRect().width;
+      const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
+      const main = Math.max(
+        label.scrollWidth,
+        label.getBoundingClientRect().width,
+        title.scrollWidth,
+        title.getBoundingClientRect().width,
+      );
+      const contextWidth = Math.max(context.scrollWidth, context.getBoundingClientRect().width);
+      setInline(width > 0 && main + contextWidth + gap <= width);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    for (const target of [element, label, title, context]) {
+      observer.observe(target);
+    }
+    return () => observer.disconnect();
+  }, [lesson.title, lesson.course, lesson.path]);
+  return (
+    <span ref={copy} className={`qard-resume-copy${inline ? ' is-inline' : ''}`}>
+      <span className="qard-muted qard-resume-label">
+        <span className="qard-resume-intrinsic">Continue lesson</span>
+      </span>
+      {lesson.course && (
+        <span className="qard-muted qard-resume-context">
+          <span className="qard-resume-intrinsic">{lesson.course}</span>
+        </span>
+      )}
+      <strong className="qard-resume-title">
+        <span className="qard-resume-intrinsic">
+          <InlineMarkdown text={lesson.title} path={lesson.path} services={services} />
+        </span>
+      </strong>
+    </span>
   );
 }

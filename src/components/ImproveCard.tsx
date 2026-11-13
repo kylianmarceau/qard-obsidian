@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Square } from 'lucide-react';
 import type { QardCard } from '../cards/card-types';
 import { readCardFormat } from '../cards/card-format';
 import type { ImprovementKind, ImprovedCard } from '../cards/improvement-schema';
@@ -112,13 +113,20 @@ export function ImproveCard({
       <div className="qard-heading">
         <h2>Improve this card</h2>
         <button
+          className={busy ? 'qard-icon-button qard-jobs-cancel' : undefined}
+          aria-label={busy ? 'Cancel improvement' : undefined}
+          title={busy ? 'Cancel improvement' : undefined}
           disabled={!!draft?.applying}
           onClick={() => {
             service.cancel(card.id);
             close();
           }}
         >
-          {busy ? 'Cancel' : 'Close'}
+          {busy ? (
+            <Square size={14} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+          ) : (
+            'Close'
+          )}
         </button>
       </div>
       <p className="qard-muted qard-small">

@@ -66,7 +66,11 @@ export function LibraryHeader({
   ...navigation
 }: LibraryNavigation & { title: string; description?: string; children: ReactNode }) {
   return (
-    <header className="qard-library-header">
+    <header
+      className={
+        'qard-library-header' + (navigation.active === 'learn' ? ' qard-learn-header' : '')
+      }
+    >
       <LibraryTabs {...navigation} />
       <div className="qard-heading qard-library-heading">
         <div>

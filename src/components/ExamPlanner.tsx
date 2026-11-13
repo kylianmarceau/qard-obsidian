@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { CalendarDays, ChevronDown, Plus } from 'lucide-react';
+import { CalendarDays, ChevronDown, Info, Plus } from 'lucide-react';
 import { examProgress, localDay, type ExamPlan } from '../exams/exam-plan';
 import { dayDistance, examTone } from '../exams/exam-calendar';
 import { LibraryHeader } from './library/LibraryHeader';
 import { ExamEditor } from './exams/ExamEditor';
 import { ExamCalendar } from './exams/ExamCalendar';
+import { plural } from './common/labels';
 import type { QardCard } from '../cards/card-types';
 import type { QardServices } from '../views/services';
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export function ExamPlanner({
   services,
   start,
@@ -172,7 +173,7 @@ export function ExamPlanner({
                     <span>{examDate.toLocaleDateString(undefined, { month: 'short' })}</span>
                     <strong>{examDate.getDate()}</strong>
                   </div>
-                  <div>
+                  <div className="qard-exam-plan-title">
                     <h2>{plan.name}</h2>
                     <p>
                       {days < 0
@@ -190,6 +191,15 @@ export function ExamPlanner({
                       })}
                     </p>
                   </div>
+                  <span className="qard-exam-readiness">
+                    {p.expired
+                      ? 'Revision period ended'
+                      : !p.isStudyDay
+                        ? 'Rest day'
+                        : p.queue.length
+                          ? `${plural(p.queue.length, 'card')} ready today`
+                          : 'Complete for today'}
+                  </span>
                 </header>
                 <div className="qard-exam-coverage">
                   <div>
@@ -203,20 +213,6 @@ export function ExamPlanner({
                     value={p.covered}
                     aria-label={`${plan.name} coverage`}
                   />
-                </div>
-                <div className="qard-exam-status">
-                  <span>
-                    {p.studyDays} study {p.studyDays === 1 ? 'day' : 'days'} left
-                  </span>
-                  <span>
-                    {p.expired
-                      ? 'Revision period ended'
-                      : !p.isStudyDay
-                        ? 'Rest day'
-                        : p.queue.length
-                          ? `${p.queue.length} cards ready today`
-                          : 'Complete for today'}
-                  </span>
                 </div>
                 {p.shortfall > 0 && (
                   <p className="qard-exam-warning" role="status">
@@ -248,28 +244,46 @@ export function ExamPlanner({
                         )
                       }
                     >
-                      Create practice test
+                      Create test
                     </button>
                   )}
                 </div>
                 <button
                   className="qard-exam-details-toggle"
+                  aria-label="Plan details"
                   aria-expanded={expanded === plan.id}
                   onClick={() => setExpanded(expanded === plan.id ? '' : plan.id)}
                 >
-                  Plan details
+                  <span className="qard-exam-details-label">
+                    <span
+                      className="qard-exam-info"
+                      title="Coverage counts cards reviewed since this plan began. It includes due reviews."
+                      aria-label="Coverage counts cards reviewed since this plan began. It includes due reviews."
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </span>
+                    Plan details
+                  </span>
                   <ChevronDown size={14} />
                 </button>
                 {expanded === plan.id && (
                   <div className="qard-exam-details">
                     <dl>
-                      <div>
+                      <div className="qard-exam-study-days">
                         <dt>Study days</dt>
                         <dd>
-                          {[1, 2, 3, 4, 5, 6, 0]
-                            .filter((day) => plan.weekdays.includes(day))
-                            .map((day) => DAYS[day])
-                            .join(', ')}
+                          <span className="qard-exam-weekdays">
+                            {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                              <span
+                                key={day}
+                                className={plan.weekdays.includes(day) ? 'is-selected' : undefined}
+                                title={`${DAYS[day]}: ${plan.weekdays.includes(day) ? 'Study day' : 'Rest day'}`}
+                                aria-label={`${DAYS[day]}: ${plan.weekdays.includes(day) ? 'Study day' : 'Rest day'}`}
+                              >
+                                {DAYS[day]!.charAt(0)}
+                              </span>
+                            ))}
+                          </span>
                         </dd>
                       </div>
                       <div>
@@ -281,9 +295,6 @@ export function ExamPlanner({
                         <dd>{p.doneToday} reviews completed</dd>
                       </div>
                     </dl>
-                    <p className="qard-muted">
-                      Coverage counts cards reviewed since this plan began. It includes due reviews.
-                    </p>
                     <div className="qard-actions">
                       <button disabled={!!busy} onClick={() => setEditing(plan)}>
                         Edit plan

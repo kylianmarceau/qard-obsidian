@@ -183,6 +183,13 @@ it('takes a test: answers autosave and a section can be submitted', async () => 
   });
   await tick();
   await tick();
+  const radios = [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+  await act(async () => {
+    radios[1]!.focus();
+    radios[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  });
+  expect(radios[0]!.getAttribute('aria-checked')).toBe('true');
+  expect(document.activeElement).toBe(radios[0]);
   await click(buttons('Viterbi').find((b) => b.getAttribute('role') === 'radio'));
   await click(buttons('Sure')[0]);
   expect(services.tests.get('Qard/Tests/t')?.attempt?.answers).toMatchObject({
@@ -195,6 +202,11 @@ it('takes a test: answers autosave and a section can be submitted', async () => 
     await services.tests.flush();
   });
   expect(JSON.parse(files['Qard/Tests/t/attempt.json']!).marks.q2.score).toBe(1);
+  expect(radios.every((radio) => radio.disabled && radio.tabIndex === -1)).toBe(true);
+  await act(async () => {
+    radios[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+  });
+  expect(services.tests.get('Qard/Tests/t')?.attempt?.answers.q2?.choice).toBe(1);
 });
 
 it('deletes a selected test with one click and returns to the test list', async () => {

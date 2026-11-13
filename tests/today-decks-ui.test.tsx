@@ -251,6 +251,96 @@ it('keeps due checks separate from deck review actions', async () => {
   expect(host.querySelectorAll('.qard-today-deck')).toHaveLength(2);
 });
 
+it('groups checks and lessons by course identity without repeating labels in rows', async () => {
+  const item = {
+    mastery: 'Networks.md',
+    course: 'Networks',
+    due: '2026-10-10',
+    state: 'taught' as const,
+  };
+  const check = (
+    objective: string,
+    title: string,
+    mastery = item.mastery,
+    course = item.course,
+  ) => ({
+    ...item,
+    mastery,
+    course,
+    objective,
+    title,
+    check: `${objective}.json`,
+  });
+  const listLessons = vi.fn(async () => []);
+  const startLesson = vi.fn(async () => 'DNS lesson.json');
+  Object.assign(services.learn, { listLessons, startLesson });
+  vi.spyOn(services.learn, 'todayList').mockResolvedValue({
+    cards: 3,
+    moreLessons: 1,
+    checks: [
+      check('tcp', 'Reliable delivery'),
+      check('cells', 'Cell division', 'Biology.md', 'Biology'),
+      check('routing', 'Routing tables'),
+      check('duplicate-name', 'Another course', 'Other networks.md'),
+    ],
+    lessons: [
+      { ...item, objective: 'dns', title: 'Name resolution' },
+      {
+        ...item,
+        mastery: 'Biology.md',
+        course: 'Biology',
+        objective: 'dna',
+        title: 'DNA replication',
+      },
+      { ...item, objective: 'udp', title: 'Datagram transport' },
+    ],
+  });
+  await mount();
+  const sections = [...host.querySelectorAll('.qard-today > section')];
+  const checks = sections.find((s) => s.querySelector('h2')?.textContent === 'Checks')!;
+  const lessons = sections.find((s) => s.querySelector('h2')?.textContent === 'Lessons')!;
+  const groups = (section: Element) => [...section.querySelectorAll('.qard-learning-group')];
+  expect(groups(checks).map((g) => g.querySelector('h3')?.textContent)).toEqual([
+    'Networks',
+    'Biology',
+    'Networks',
+  ]);
+  expect(
+    groups(checks).map((g) =>
+      [...g.querySelectorAll('.qard-objective-title-text')].map((t) => t.textContent),
+    ),
+  ).toEqual([['Reliable delivery', 'Routing tables'], ['Cell division'], ['Another course']]);
+  expect(groups(lessons).map((g) => g.querySelector('h3')?.textContent)).toEqual([
+    'Networks',
+    'Biology',
+  ]);
+  expect(groups(lessons)[0]!.querySelectorAll('.qard-learning-row')).toHaveLength(2);
+  await click(
+    [...checks.querySelectorAll<HTMLButtonElement>('.qard-learning-row')].find((b) =>
+      b.textContent?.includes('Routing tables'),
+    )!,
+  );
+  expect(nav.check).toHaveBeenCalledWith('routing.json');
+  await click(
+    [...lessons.querySelectorAll<HTMLButtonElement>('.qard-learning-row')].find((b) =>
+      b.textContent?.includes('Name resolution'),
+    )!,
+  );
+  expect(startLesson).toHaveBeenCalledWith({
+    topic: 'Name resolution',
+    notes: [],
+    mastery: 'Networks.md',
+    objective: 'dns',
+  });
+  expect(nav.lesson).toHaveBeenCalledWith('DNS lesson.json');
+  await click(
+    [...lessons.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('1 more objective'),
+    )!,
+  );
+  expect(nav.course).toHaveBeenCalledWith('Networks.md');
+});
+
 it('shows the live due count and opens Today without starting a combined review', async () => {
   const start = vi.spyOn(services.reviews, 'startSession');
   await act(async () => {

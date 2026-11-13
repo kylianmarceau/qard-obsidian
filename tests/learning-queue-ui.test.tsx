@@ -137,7 +137,7 @@ it('waits for real FSRS intervals, returns hidden questions automatically, and c
   await elapsed(600_000);
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('1 / 1');
-  expect(host.textContent).toContain('2 reviews, including learning repeats');
+  expect(host.textContent).toContain('2 reviews, including repeats');
   expect(services.reviews.getSnapshot().sessions).toEqual([]);
 });
 

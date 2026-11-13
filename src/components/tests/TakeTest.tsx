@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Flag } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ChevronRight, Flag } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Confidence, Question, SectionStatus } from '../../tests/test-types';
 import { scoreOf } from '../../tests/test-types';
@@ -10,6 +10,7 @@ import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { LoadingIndicator } from '../common/LoadingIndicator';
+import { useCurrentStepScroll } from '../common/useCurrentStepScroll';
 
 const CONFIDENCE: { id: Confidence; label: string }[] = [
   { id: 'sure', label: 'Sure' },
@@ -31,6 +32,7 @@ export function TakeTest({
     attempt = entry?.attempt;
   const [index, setIndex] = useState<number>();
   const hold = useHold();
+  const stepsRef = useCurrentStepScroll(index, !!test && !hold.held);
   const marking = services.reviews.getSnapshot().settings.tests.marking;
   const top = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -105,29 +107,31 @@ export function TakeTest({
   const doneScore = done && scoreOf(test, attempt, done);
   return (
     <div className="qard-test" ref={top}>
-      <div className="qard-test-steps" aria-label="Sections">
+      <div className="qard-test-steps" aria-label="Sections" ref={stepsRef}>
         {test.sections.map((s, i) => {
           const st = attempt?.sections[s.id]?.status ?? 'open';
           return (
-            <button
-              key={s.id}
-              className={
-                i === index
-                  ? 'is-current'
-                  : st === 'marked' && marking === 'section'
-                    ? 'is-done'
-                    : ''
-              }
-              onClick={() => setIndex(i)}
-              aria-current={i === index ? 'step' : undefined}
-            >
-              <InlineMarkdown text={s.title} path={folder} services={services} />
-              {marking === 'section' && st === 'marked'
-                ? ' ✓'
-                : st === 'marking'
-                  ? ' · marking'
-                  : ''}
-            </button>
+            <Fragment key={s.id}>
+              {i > 0 && <ChevronRight size={14} aria-hidden="true" />}
+              <button
+                className={
+                  i === index
+                    ? 'is-current'
+                    : st === 'marked' && marking === 'section'
+                      ? 'is-done'
+                      : ''
+                }
+                onClick={() => setIndex(i)}
+                aria-current={i === index ? 'step' : undefined}
+              >
+                <InlineMarkdown text={s.title} path={folder} services={services} />
+                {marking === 'section' && st === 'marked'
+                  ? ' ✓'
+                  : st === 'marking'
+                    ? ' · marking'
+                    : ''}
+              </button>
+            </Fragment>
           );
         })}
       </div>
@@ -189,9 +193,6 @@ export function TakeTest({
           </button>
         )}
         <span className="qard-spacer" />
-        {!submitted && marking === 'section' && (
-          <span className="qard-muted">Marked in the background, so you can keep going.</span>
-        )}
         {!submitted && !last && (
           <button
             className="qard-primary"
@@ -261,9 +262,36 @@ function QuestionBlock({
               key={i}
               role="radio"
               aria-checked={answer?.choice === i}
+              tabIndex={!locked && !answer?.unknown && (answer?.choice ?? 0) === i ? 0 : -1}
               disabled={locked || !!answer?.unknown}
               className={'qard-option' + (answer?.choice === i ? ' is-on' : '')}
               onClick={() => set({ choice: i })}
+              onKeyDown={(event) => {
+                if (locked || answer?.unknown) {
+                  return;
+                }
+                const count = q.options!.length;
+                const next =
+                  event.key === 'ArrowRight' || event.key === 'ArrowDown'
+                    ? (i + 1) % count
+                    : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+                      ? (i - 1 + count) % count
+                      : event.key === 'Home'
+                        ? 0
+                        : event.key === 'End'
+                          ? count - 1
+                          : undefined;
+                if (next === undefined) {
+                  return;
+                }
+                event.preventDefault();
+                set({ choice: next });
+                const controls =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                    '[role="radio"]',
+                  );
+                controls?.[next]?.focus();
+              }}
             >
               <span className="qard-radio" aria-hidden="true" />
               <Markdown text={o} path={path} services={services} />

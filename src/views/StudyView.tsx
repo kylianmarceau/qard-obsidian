@@ -658,41 +658,36 @@ export function StudyView({
   if (!card) {
     return (
       <div className="qard-summary">
-        <CheckCircle2 size={32} />
-        <h1>{cram ? 'Cram session complete' : 'Session complete'}</h1>
-        <div className="qard-summary-stats">
-          <div>
-            <strong>
-              {cram ? position - skipped.length : new Set(results.map((r) => r.cardId)).size} /{' '}
-              {cards.length}
-            </strong>
-            <span>{cram ? 'cards viewed' : 'cards reviewed'}</span>
+        <header className="qard-summary-header">
+          <div className="qard-summary-title">
+            <CheckCircle2 size={24} aria-hidden="true" />
+            <h1>{cram ? 'Cram session complete' : 'Session complete'}</h1>
           </div>
-          <div>
-            <strong>{Math.max(1, Math.round((Date.now() - start.current) / 60000))} min</strong>
-            <span>this visit</span>
+          <div className="qard-summary-stats">
+            <div>
+              <strong>
+                {cram ? position - skipped.length : new Set(results.map((r) => r.cardId)).size} /{' '}
+                {cards.length}
+              </strong>
+              <span>{cram ? 'cards viewed' : 'cards reviewed'}</span>
+            </div>
+            <div>
+              <strong>{Math.max(1, Math.round((Date.now() - start.current) / 60000))} min</strong>
+              <span>this visit</span>
+            </div>
           </div>
-        </div>
-        {!cram && <SessionDifficultyChart results={results} />}
+        </header>
+        {!cram && <SessionDifficultyChart results={results} skipped={skipped.length} />}
         {!!repairCount && (
           <p className="qard-muted">
             {repairCount} {repairCount === 1 ? 'card needs' : 'cards need'} attention. Find them
             with the Needs fixing filter in your library.
           </p>
         )}
-        {!cram && results.length > new Set(results.map((r) => r.cardId)).size && (
-          <p className="qard-muted">{results.length} reviews, including learning repeats</p>
-        )}
         {!!deferred.length && (
           <p className="qard-muted">
             {deferred.length} related {deferred.length === 1 ? 'card deferred' : 'cards deferred'}{' '}
             until tomorrow · available in cram
-          </p>
-        )}
-        {!!skipped.length && (
-          <p className="qard-muted">
-            {skipped.length} {skipped.length === 1 ? 'card skipped' : 'cards skipped'} · not counted
-            as reviews
           </p>
         )}
         <div className="qard-actions">
@@ -731,7 +726,7 @@ export function StudyView({
               onClick={() => void repeatSaved(activeCards.filter((c) => skipped.includes(c.id)))}
             >
               <RotateCcw size={16} />
-              Review skipped cards
+              Review skipped
             </button>
           )}
           {cram && (
@@ -753,7 +748,7 @@ export function StudyView({
               }
             >
               <RotateCcw size={16} />
-              Review difficult cards
+              Review difficult
             </button>
           )}
           <button className="qard-primary" disabled={busy} onClick={exit}>

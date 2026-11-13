@@ -199,7 +199,7 @@ it('allows cancellation and retry and preserves the request when editing it', as
       .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   });
   await tick();
-  await click(button('Cancel'));
+  await click(host.querySelector('button[aria-label="Cancel"]')!);
   expect(host.textContent).toContain('Cancelled.');
   expect(button('Try again')).toBeTruthy();
   await click(button('Edit request'));

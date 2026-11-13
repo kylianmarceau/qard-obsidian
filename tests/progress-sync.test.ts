@@ -156,10 +156,18 @@ it('adds study time recorded on both devices', async () => {
 
 it('keeps the newer settings change', async () => {
   const { laptopDisk, phoneDisk, laptop, phone } = await pair();
-  await phone.store.saveSettings({ ...phone.data().settings, desiredRetention: 0.85 });
+  await phone.store.saveSettings({
+    ...phone.data().settings,
+    desiredRetention: 0.85,
+    deckOptions: { Biology: { icon: 'terminal', color: '#123456' } },
+  });
   laptopDisk.copyFrom(phoneDisk);
   await laptop.store.syncExternal();
   expect(laptop.data().settings.desiredRetention).toBe(0.85);
+  expect(laptop.data().settings.deckOptions.Biology).toEqual({
+    icon: 'terminal',
+    color: '#123456',
+  });
 });
 
 it('ignores an empty or damaged synced file', async () => {

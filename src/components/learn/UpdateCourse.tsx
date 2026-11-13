@@ -5,7 +5,7 @@ import type { QardServices } from '../../views/services';
 import type { Mastery } from '../../learn/mastery';
 import { InlineMarkdown } from '../Markdown';
 import { Check, JobError } from '../common/FeedbackStatus';
-import { StateChip } from './learning-status';
+import { STATE_LABEL, StateChip } from './learning-status';
 import { useLearn } from './useLearn';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 
@@ -56,6 +56,7 @@ export function UpdateCourse({
   }
   if (update && added && extended) {
     const nothing = !update.added.length && !update.extended.length && !update.outdated.length;
+    const presentStates = [...new Set(update.added.map((objective) => objective.state))];
     return (
       <article className="qard-doc">
         <header>
@@ -74,16 +75,27 @@ export function UpdateCourse({
             {update.added.map((o) => (
               <button
                 key={o.id}
-                className="qard-doc-row qard-row-button"
+                className="qard-doc-row qard-row-button qard-learning-row"
                 aria-pressed={added.includes(o.id)}
                 onClick={() => toggle(added, setAdded, o.id)}
               >
-                <Check on={added.includes(o.id)} />
-                <span>
-                  <InlineMarkdown text={o.title} path={path} services={services} />
+                <span className="qard-objective-title">
+                  <span className="qard-objective-status">
+                    <span className="qard-objective-status-size" aria-hidden="true">
+                      {presentStates.map((state) => (
+                        <span key={state}>{STATE_LABEL[state]}</span>
+                      ))}
+                    </span>
+                    <StateChip state={o.state} />
+                  </span>
+                  <span className="qard-objective-title-text">
+                    <InlineMarkdown text={o.title} path={path} services={services} />
+                  </span>
                 </span>
-                <span className="qard-muted">{o.notes.slice(0, 2).join(', ')}</span>
-                <StateChip state={o.state} />
+                <span className="qard-muted qard-learning-row-meta">
+                  {o.notes.slice(0, 2).join(', ')}
+                </span>
+                <Check on={added.includes(o.id)} />
               </button>
             ))}
           </section>

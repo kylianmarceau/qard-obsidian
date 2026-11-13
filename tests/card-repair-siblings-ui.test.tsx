@@ -223,11 +223,13 @@ it('separates sibling clozes in a saved due queue, restores them on undo, and ex
   expect(host.textContent).toContain('1 related card deferred until tomorrow');
   expect(services.reviews.getSnapshot().history).toHaveLength(1);
   await key('u');
-  expect(host.textContent).toContain('TCP');
+  expect(host.querySelector('.qard-study-front')?.textContent).toBe('**[…]** is reliable.');
   expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
+  expect(host.querySelector('.qard-study-back')?.textContent).toBe('');
   expect(services.reviews.getSnapshot().states.c2).toBeUndefined();
   expect(services.reviews.getSnapshot().sessions[0]?.position).toBe(0);
   await key(' ');
+  expect(host.querySelector('.qard-study-back')?.textContent).toBe('TCP is reliable.');
   await key('1');
   expect(host.textContent).toContain('Learning cards return soon');
   await act(async () => {

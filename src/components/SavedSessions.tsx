@@ -47,13 +47,13 @@ export function SavedSessions({
     <section className="qard-saved-sessions" aria-label="Saved flashcard sessions">
       <h2>Continue studying</h2>
       {sessions.map((s) => (
-        <div key={s.id} className="qard-saved-session">
+        <div key={s.id} className="qard-saved-session qard-row-study">
           <div className="qard-saved-session-row">
-            <div className="qard-saved-session-copy">
-              <strong className="qard-saved-session-title">
+            <div className="qard-saved-session-copy qard-resume-copy">
+              <strong className="qard-saved-session-title qard-resume-title">
                 <InlineMarkdown text={s.title} path="" services={services} />
               </strong>
-              <span className="qard-saved-session-progress">
+              <span className="qard-saved-session-progress qard-resume-label">
                 {s.style === 'cram' ? 'Cram · ' : ''}
                 {s.style === 'cram' ? s.position : completedReviewCount(s, saved.states)} of{' '}
                 {s.cardIds.length} completed
@@ -64,11 +64,15 @@ export function SavedSessions({
             <div className="qard-saved-session-actions">
               <button
                 className="qard-primary"
+                aria-label={`Resume saved session: ${s.title}`}
+                title="Resume saved session"
                 disabled={!!busy || index.loading}
                 onClick={() => void run(s.id)}
               >
                 <Play size={14} />
-                {busy === s.id ? 'Opening…' : 'Resume'}
+                <span className="qard-saved-session-resume-label">
+                  {busy === s.id ? 'Opening…' : 'Resume'}
+                </span>
               </button>
               <button
                 className="qard-saved-session-discard"

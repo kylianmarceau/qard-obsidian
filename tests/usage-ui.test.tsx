@@ -74,8 +74,12 @@ it('shows totals, a daily chart and breakdowns, and can clear the history', asyn
   await click(buttons('All time')[0]);
   expect(host.querySelector('.qard-usage-total')?.textContent).toContain('3 runs');
   await click(buttons('Clear usage history')[0]);
+  await click(buttons('Cancel')[0]);
+  expect(resetUsage).not.toHaveBeenCalled();
+  expect(host.querySelector('.qard-usage-total')?.textContent).toContain('3 runs');
+  await click(buttons('Clear usage history')[0]);
   await click(buttons('Clear')[0]);
-  expect(resetUsage).toHaveBeenCalled();
+  expect(resetUsage).toHaveBeenCalledTimes(1);
   expect(compact(999)).toBe('999');
   expect(compact(1234)).toBe('1.2k');
   expect(compact(3_400_000)).toBe('3.4M');

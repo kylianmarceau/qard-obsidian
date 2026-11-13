@@ -1,6 +1,6 @@
 import type { SourceSnapshot } from '../../cards/source-sync-types';
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ChevronRight, Copy, Check as CheckIcon } from 'lucide-react';
+import { ChevronRight, Copy, Check as CheckIcon, Square } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { AgentRole } from '../../agents/runner';
 import { Markdown } from '../Markdown';
@@ -113,124 +113,131 @@ export function AskThread({
           )}
         </div>
       )}
-      <div className="qard-ask-list">
-        {items.map((item, i) =>
-          isOpen(i) ? (
-            <div key={i} className="qard-ask-item is-open">
-              <button
-                className="qard-ask-q"
-                aria-expanded="true"
-                onClick={() => setOpen({ ...open, [i]: false })}
-              >
-                {item.q}
-              </button>
-              <div className="qard-ask-a">
-                <Markdown text={item.a} path={path} services={services} />
-                {figure?.(i).body}
-                <div className="qard-ask-tools">
-                  <AgentLabel services={services} role={role} />
-                  <span className="qard-spacer" />
-                  {figure?.(i).action}
-                  {card &&
-                    (added.has(i) ? (
-                      <span className="is-full qard-small">
-                        <CheckIcon size={13} /> Card added
-                      </span>
-                    ) : (
-                      <button
-                        className="qard-text-button"
-                        onClick={() => setEditing(editing === i ? undefined : i)}
-                      >
-                        Make card
-                      </button>
-                    ))}
-                  <button
-                    className="qard-text-button"
-                    aria-label="Select answer to copy"
-                    aria-expanded={selecting === i}
-                    onClick={() => setSelecting(selecting === i ? undefined : i)}
-                  >
-                    <Copy size={13} />
-                    Select answer
-                  </button>
+      {(items.length > 0 || pending) && (
+        <div className="qard-ask-list">
+          {items.map((item, i) =>
+            isOpen(i) ? (
+              <div key={i} className="qard-ask-item is-open">
+                <button
+                  className="qard-ask-q"
+                  aria-expanded="true"
+                  onClick={() => setOpen({ ...open, [i]: false })}
+                >
+                  {item.q}
+                </button>
+                <div className="qard-ask-a">
+                  <Markdown text={item.a} path={path} services={services} />
+                  {figure?.(i).body}
+                  <div className="qard-ask-tools">
+                    <AgentLabel services={services} role={role} />
+                    <span className="qard-spacer" />
+                    {figure?.(i).action}
+                    {card &&
+                      (added.has(i) ? (
+                        <span className="is-full qard-small">
+                          <CheckIcon size={13} /> Card added
+                        </span>
+                      ) : (
+                        <button
+                          className="qard-text-button"
+                          onClick={() => setEditing(editing === i ? undefined : i)}
+                        >
+                          Make card
+                        </button>
+                      ))}
+                    <button
+                      className="qard-text-button"
+                      aria-label="Select answer to copy"
+                      aria-expanded={selecting === i}
+                      onClick={() => setSelecting(selecting === i ? undefined : i)}
+                    >
+                      <Copy size={13} />
+                      Select answer
+                    </button>
+                  </div>
+                  {selecting === i && <AnswerSelection text={item.a} />}
+                  {card && editing === i && (
+                    <MakeCard
+                      services={services}
+                      item={item}
+                      target={card}
+                      done={(id) => {
+                        setAdded(new Set(added).add(i));
+                        setEditing(undefined);
+                        if (id) {
+                          onCard?.(id);
+                        }
+                      }}
+                      cancel={() => setEditing(undefined)}
+                    />
+                  )}
                 </div>
-                {selecting === i && <AnswerSelection text={item.a} />}
-                {card && editing === i && (
-                  <MakeCard
-                    services={services}
-                    item={item}
-                    target={card}
-                    done={(id) => {
-                      setAdded(new Set(added).add(i));
-                      setEditing(undefined);
-                      if (id) {
-                        onCard?.(id);
-                      }
-                    }}
-                    cancel={() => setEditing(undefined)}
-                  />
+              </div>
+            ) : (
+              <button
+                key={i}
+                className="qard-ask-item is-folded"
+                aria-expanded="false"
+                onClick={() => setOpen({ ...open, [i]: true })}
+              >
+                <ChevronRight size={14} />
+                <span className="qard-ask-fold">
+                  <strong>{item.q}</strong>
+                  <span className="qard-muted">{preview(item.a)}</span>
+                </span>
+              </button>
+            ),
+          )}
+          {pending && (
+            <div className="qard-ask-item is-open">
+              <div className="qard-ask-q">{pending}</div>
+              <div className="qard-ask-a">
+                {error ? (
+                  <div className="qard-error" role="alert">
+                    <span>{error}</span>
+                    <button
+                      className="qard-text-button"
+                      onClick={() => {
+                        dismiss();
+                        send(pending);
+                      }}
+                    >
+                      Try again
+                    </button>
+                    <button
+                      className="qard-text-button"
+                      onClick={() => {
+                        dismiss();
+                        setPending(undefined);
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ) : (
+                  <div className="qard-ask-thinking">
+                    <Waiting text="Thinking…">
+                      <AgentLabel services={services} role={role} />
+                    </Waiting>
+                    {cancel && (
+                      <button
+                        className="qard-icon-button qard-jobs-cancel"
+                        aria-label="Cancel answer"
+                        title="Cancel answer"
+                        onClick={cancel}
+                      >
+                        <Square size={14} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-          ) : (
-            <button
-              key={i}
-              className="qard-ask-item is-folded"
-              aria-expanded="false"
-              onClick={() => setOpen({ ...open, [i]: true })}
-            >
-              <ChevronRight size={14} />
-              <span className="qard-ask-fold">
-                <strong>{item.q}</strong>
-                <span className="qard-muted">{preview(item.a)}</span>
-              </span>
-            </button>
-          ),
-        )}
-        {pending && (
-          <div className="qard-ask-item is-open">
-            <div className="qard-ask-q">{pending}</div>
-            <div className="qard-ask-a">
-              {error ? (
-                <div className="qard-error" role="alert">
-                  <span>{error}</span>
-                  <button
-                    className="qard-text-button"
-                    onClick={() => {
-                      dismiss();
-                      send(pending);
-                    }}
-                  >
-                    Try again
-                  </button>
-                  <button
-                    className="qard-text-button"
-                    onClick={() => {
-                      dismiss();
-                      setPending(undefined);
-                    }}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ) : (
-                <div className="qard-ask-thinking">
-                  <Waiting text="Thinking…">
-                    <AgentLabel services={services} role={role} />
-                  </Waiting>
-                  {cancel && (
-                    <button className="qard-text-button" onClick={cancel}>
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       <form
-        className="qard-ask-input"
+        className="qard-panel-actions qard-ask-input"
         onSubmit={(e) => {
           e.preventDefault();
           send(text);
@@ -245,7 +252,11 @@ export function AskThread({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
         />
-        <button type="submit" className="qard-primary" disabled={busy || !text.trim()}>
+        <button
+          type="submit"
+          className="qard-primary qard-question-action"
+          disabled={busy || !text.trim()}
+        >
           Ask
         </button>
       </form>

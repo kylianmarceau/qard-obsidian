@@ -41,15 +41,25 @@ export function CourseProgress({
       <div
         className="qard-progress-bar"
         role="img"
-        aria-label={counts.map(([s, n]) => `${n} ${STATE_LABEL[s].toLowerCase()}`).join(', ')}
+        aria-label={counts
+          .map(
+            ([s, n]) => `${n} ${STATE_LABEL[s].replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+          )
+          .join(', ')}
       >
         {counts.map(([s, n]) => (
           <span key={s} className={cls(s)} style={{ flexGrow: n / total }} />
         ))}
       </div>
       <div className="qard-progress-legend">
-        {counts.map(([s, n]) => chip(s, `${n} ${STATE_LABEL[s].toLowerCase()}`, cls(s)))}
-        {ready > 0 && chip('ready', `${ready} ready to learn`, 'is-ready')}
+        {counts.map(([s, n]) =>
+          chip(
+            s,
+            `${n} ${STATE_LABEL[s].replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+            cls(s),
+          ),
+        )}
+        {ready > 0 && chip('ready', `${ready} Ready to Learn`, 'is-ready')}
         {filter?.size ? (
           <button className="qard-link" onClick={() => [...filter].forEach((k) => toggle?.(k))}>
             Show all

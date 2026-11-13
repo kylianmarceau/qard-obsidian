@@ -1,8 +1,8 @@
 import { plural } from '../common/labels';
 import { UpdateCourse } from './UpdateCourse';
 import { teach } from './lesson-navigation';
-import { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { ChevronRight, FileText, Info, List, Network } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Mastery, Objective } from '../../learn/mastery';
 import { CourseMap } from './CourseMap';
@@ -28,12 +28,14 @@ export function CourseView({
   objective?: string;
 }) {
   const { revision, job } = useLearn(services);
+  const tabsId = useId();
   const [course, setCourse] = useState<Mastery>(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState<string>();
   const [view, setView] = useState<'map' | 'list'>('map'),
     [filter, setFilter] = useState<Set<string>>(new Set()),
     [updating, setUpdating] = useState(false);
+  const [evidence, setEvidence] = useState<string>();
   const [lessons, setLessons] = useState<LessonSummary[]>([]);
   useEffect(() => {
     let live = true;
@@ -134,6 +136,51 @@ export function CourseView({
       }
       return next;
     });
+  const objectives = course.objectives.filter((o) => !filter.size || filter.has(o.state));
+  const selector = (
+    <div className="qard-segmented qard-course-view" role="tablist" aria-label="Course view">
+      {(['map', 'list'] as const).map((mode, index) => (
+        <button
+          key={mode}
+          role="tab"
+          aria-label={mode === 'map' ? 'Map' : 'List'}
+          id={`${tabsId}-${mode}`}
+          aria-controls={`${tabsId}-panel`}
+          aria-selected={view === mode}
+          tabIndex={view === mode ? 0 : -1}
+          onClick={() => setView(mode)}
+          onKeyDown={(event) => {
+            const next =
+              event.key === 'ArrowRight' || event.key === 'ArrowLeft'
+                ? 1 - index
+                : event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? 1
+                    : undefined;
+            if (next === undefined) {
+              return;
+            }
+            event.preventDefault();
+            setView(next === 0 ? 'map' : 'list');
+            const controls =
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                '[role="tab"]',
+              );
+            controls?.[next]?.focus();
+          }}
+        >
+          {mode === 'map' ? <Network size={16} /> : <List size={16} />}
+          <span className="qard-course-view-label">{mode === 'map' ? 'Map' : 'List'}</span>
+        </button>
+      ))}
+    </div>
+  );
+  const footer = (
+    <footer className="qard-course-footer">
+      <StudyTimeLine services={services} course={course.course} days={30} open={nav.time} />
+    </footer>
+  );
   const mapActions = {
     openLesson: (p: string) => nav.lesson(p),
     teach: (o: Objective) =>
@@ -150,35 +197,33 @@ export function CourseView({
     <article className="qard-course">
       <header className="qard-course-head">
         <div>
-          <span className="qard-muted">Course</span>
           <h1>{course.course}</h1>
-          <StudyTimeLine services={services} course={course.course} days={30} open={nav.time} />
         </div>
-        <div className="qard-actions">
-          <div className="qard-segmented" role="tablist">
-            <button role="tab" aria-selected={view === 'map'} onClick={() => setView('map')}>
-              Map
-            </button>
-            <button role="tab" aria-selected={view === 'list'} onClick={() => setView('list')}>
-              List
+        <div className="qard-course-toolbar">
+          {selector}
+          <div className="qard-actions">
+            <button onClick={() => setUpdating(true)}>Update</button>
+            <button
+              className="qard-icon-button"
+              aria-label="Open file"
+              title="Open file"
+              onClick={() => void services.app.workspace.openLinkText(path, '', true)}
+            >
+              <FileText size={16} />
             </button>
           </div>
-          <button onClick={() => setUpdating(true)}>Update objectives</button>
-          <button
-            className="qard-text-button"
-            onClick={() => void services.app.workspace.openLinkText(path, '', true)}
-          >
-            Open file
-          </button>
         </div>
       </header>
       <CourseProgress course={course} filter={filter} toggle={toggle} />
       {changed.length > 0 && (
-        <button className="qard-resume" onClick={() => setUpdating(true)}>
+        <button className="qard-resume qard-row-update" onClick={() => setUpdating(true)}>
           <span>
             {plural(changed.length, 'note')} added or changed since {course.mapped!.slice(0, 10)}
           </span>
-          <span className="qard-muted">Update objectives</span>
+          <span className="qard-muted">
+            <span className="qard-resume-label-full">Update objectives</span>
+            <span className="qard-resume-label-compact">Update</span>
+          </span>
           <ChevronRight size={16} />
         </button>
       )}
@@ -187,37 +232,67 @@ export function CourseView({
           {error}
         </p>
       )}
-      {view === 'map' ? (
-        <CourseMap
-          services={services}
-          course={course}
-          actions={mapActions}
-          filter={filter}
-          today={day}
-          lessons={lessons}
-          initial={objective}
-        />
-      ) : (
-        <section>
-          {course.objectives
-            .filter((o) => !filter.size || filter.has(o.state))
-            .map((o) => (
+      <div
+        role="tabpanel"
+        id={`${tabsId}-panel`}
+        aria-labelledby={`${tabsId}-${view}`}
+        tabIndex={0}
+      >
+        {view === 'map' ? (
+          <CourseMap
+            services={services}
+            course={course}
+            actions={mapActions}
+            filter={filter}
+            today={day}
+            lessons={lessons}
+            initial={objective}
+            footer={footer}
+          />
+        ) : (
+          <section>
+            {objectives.map((o) => (
               <div key={o.id} className="qard-objective">
-                <div className="qard-objective-main">
-                  <strong>
-                    <InlineMarkdown text={o.title} path={path} services={services} />
-                  </strong>
-                  <small className="qard-muted">{o.evidence.at(-1) ?? 'No evidence yet'}</small>
+                <div className="qard-objective-meta">
+                  <StateChip state={o.state} />
+                  <span className="qard-muted qard-objective-due">
+                    {o.due &&
+                      !['new', 'planned'].includes(o.state) &&
+                      relativeDay(o.due, day).replace(/^./, (first) => first.toUpperCase())}
+                    <button
+                      className="qard-icon-button qard-section-info qard-objective-evidence"
+                      title={o.evidence.at(-1) ?? 'No evidence yet'}
+                      aria-label={`Evidence for ${o.title}`}
+                      aria-expanded={evidence === o.id}
+                      aria-controls={`${tabsId}-evidence-${o.id}`}
+                      onClick={() => setEvidence(evidence === o.id ? undefined : o.id)}
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </button>
+                  </span>
                 </div>
-                <StateChip state={o.state} />
-                <span className="qard-muted qard-objective-due">
-                  {o.due && !['new', 'planned'].includes(o.state) ? relativeDay(o.due, day) : ''}
-                </span>
+                {evidence === o.id && (
+                  <p
+                    className="qard-muted qard-objective-evidence-details"
+                    id={`${tabsId}-evidence-${o.id}`}
+                  >
+                    {o.evidence.at(-1) ?? 'No evidence yet'}
+                  </p>
+                )}
+                <div className="qard-objective-main">
+                  <strong className="qard-objective-title">
+                    <span className="qard-objective-title-text">
+                      <InlineMarkdown text={o.title} path={path} services={services} />
+                    </span>
+                  </strong>
+                </div>
                 {actions(o)}
               </div>
             ))}
-        </section>
-      )}
+          </section>
+        )}
+      </div>
+      {view === 'list' && footer}
       {!course.objectives.length && (
         <p className="qard-muted">
           This mastery file has no objectives table. Open it and add rows, or update the objectives.

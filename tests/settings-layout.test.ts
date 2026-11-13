@@ -124,9 +124,15 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function fixture() {
+function fixture(desiredRetention?: number) {
   vi.spyOn(custom, 'customModels').mockResolvedValue([]);
   const reviews = new ReviewStore(async () => {});
+  if (desiredRetention !== undefined) {
+    reviews.load({
+      ...reviews.getSnapshot(),
+      settings: { ...reviews.getSnapshot().settings, desiredRetention },
+    });
+  }
   const tab = new QardSettingsTab({ app: {}, reviews } as never);
   const scroller = document.body.createDiv();
   tab.containerEl = scroller.createDiv();
@@ -274,4 +280,37 @@ it('remaps a study key by pressing it, swapping a key already in use, and resets
   [...row('Study keys').querySelectorAll('button')][1]!.click();
   await vi.waitFor(() => expect(reviews.getSnapshot().settings.studyKeys.good).toBe('3'));
   expect(button.textContent).toBe('3');
+});
+
+it.each([0.855, 0.851234567890123])(
+  'keeps exact global retention %s while displaying fractional percentages',
+  async (desiredRetention) => {
+    const { row, reviews } = fixture(desiredRetention);
+    const retention = row('Target retention').querySelector('input')!;
+    expect(retention.step).toBe('any');
+    expect(retention.value).toBe(String(desiredRetention * 100));
+    const save = vi.spyOn(reviews, 'saveSettings');
+    retention.dispatchEvent(new Event('change'));
+    await reviews.flush();
+    expect(save).not.toHaveBeenCalled();
+    expect(reviews.getSnapshot().settings.desiredRetention).toBe(desiredRetention);
+    retention.value = '65';
+    retention.dispatchEvent(new Event('change'));
+    expect(retention.value).toBe(String(desiredRetention * 100));
+    expect(save).not.toHaveBeenCalled();
+    retention.value = '85.125';
+    retention.dispatchEvent(new Event('change'));
+    await reviews.flush();
+    expect(reviews.getSnapshot().settings.desiredRetention).toBe(0.85125);
+  },
+);
+
+it('restores the current fractional target after invalid input following a settings sync', async () => {
+  const { row, reviews } = fixture(0.855);
+  const retention = row('Target retention').querySelector('input')!;
+  await reviews.saveSettings({ ...reviews.getSnapshot().settings, desiredRetention: 0.86125 });
+  retention.value = '98';
+  retention.dispatchEvent(new Event('change'));
+  expect(retention.value).toBe('86.125');
+  expect(reviews.getSnapshot().settings.desiredRetention).toBe(0.86125);
 });

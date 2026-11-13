@@ -8,7 +8,7 @@ import { AgentLabel } from '../jobs/AgentLabel';
 import { JobControls } from '../jobs/JobControls';
 import { JobError, Waiting, scoreTone } from '../common/FeedbackStatus';
 import { AnswerInput, MarkedAnswer, answered } from '../common/QuestionAnswer';
-import { StateChip, TutorHint, relativeDay } from './learning-status';
+import { StateChip, relativeDay } from './learning-status';
 import { useLearn } from './useLearn';
 import { type LearnNav } from '../../views/navigation';
 
@@ -143,7 +143,6 @@ export function CheckView({
         ),
       )}
       <JobError job={marking} retry={() => void services.learn.submitCheck(path)} />
-      {busy && <TutorHint services={services} />}
       <div className="qard-test-footer">
         <span className="qard-spacer" />
         {busy ? (

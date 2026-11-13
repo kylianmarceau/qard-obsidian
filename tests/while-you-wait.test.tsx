@@ -164,7 +164,8 @@ it('prefers a due check when there is time, and lets you switch activity', async
     );
   });
   await tick();
-  expect(buttons('Check · Dirichlet draws')[0]?.getAttribute('aria-pressed')).toBe('true');
+  expect(buttons('Check')[0]?.textContent).toBe('Check');
+  expect(buttons('Check')[0]?.getAttribute('aria-pressed')).toBe('true');
   await click(buttons('Cards · 2')[0]);
   expect(host.textContent).toContain('Front other');
 });

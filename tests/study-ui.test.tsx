@@ -2,7 +2,8 @@
 import { act } from 'preact/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { Component } from 'obsidian';
+import { Component, MarkdownRenderer } from 'obsidian';
+import { StudyCard } from '../src/components/StudyCard';
 import { StudyView } from '../src/views/StudyView';
 import { ReviewStore } from '../src/review/review-store';
 import { parseCards } from '../src/cards/parser';
@@ -236,7 +237,7 @@ it('previews FSRS intervals after reveal without rating the card and hides them 
   expect(services.reviews.getSnapshot().states.first!.due).toBeUndefined();
 });
 
-it('crams with Space to reveal and Space to advance, without ratings, histories or schedule changes', async () => {
+it('crams with viewed and skipped cards without rating percentages, histories or schedule changes', async () => {
   const many = parseCards(
     '<!-- qard-id: first -->\n> [!qard]- First question\n> First answer\n\n<!-- qard-id: second -->\n> [!qard]- Second question\n> Second answer\n',
     'a.md',
@@ -262,20 +263,19 @@ it('crams with Space to reveal and Space to advance, without ratings, histories 
   expect(host.textContent).toContain('2 / 2');
   expect(host.querySelector('.qard-study-back')?.getAttribute('aria-hidden')).toBe('true');
   await act(async () =>
-    [...host.querySelectorAll('button')]
-      .find((b) => b.textContent?.startsWith('Reveal answer'))!
-      .click(),
-  );
-  await act(async () =>
-    [...host.querySelectorAll('button')]
-      .find((b) => b.textContent?.startsWith('Next card'))!
-      .click(),
+    [...host.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Skip'))!.click(),
   );
   expect(host.textContent).toContain('Cram session complete');
-  expect(host.textContent).toContain('2 / 2');
+  expect(host.querySelector('.qard-summary-stats')?.textContent).toContain('1 / 2');
+  expect(host.querySelector('.qard-difficulty')).toBeNull();
+  expect(host.textContent).not.toContain('100%');
   expect(host.querySelector('.qard-summary-ratings')).toBeNull();
   expect(review).not.toHaveBeenCalled();
   expect(services.reviews.getSnapshot()).toBe(before);
+  await act(async () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Review skipped')!.click(),
+  );
+  expect(repeat).toHaveBeenCalledWith([many[1]]);
   await act(async () =>
     [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cram again')!.click(),
   );
@@ -351,13 +351,14 @@ it('skip reports no review, leaves the schedule unchanged and offers skipped car
   await key('s');
   expect(host.textContent).toContain('Session complete');
   expect(host.textContent).toContain('0 / 1');
-  expect(host.textContent).toContain('1 card skipped');
-  expect(host.querySelector('.qard-difficulty')).toBeNull();
+  expect(host.querySelector('.qard-difficulty-ratings > div')?.textContent).toBe('Skipped1 100%');
+  expect(host.querySelector('.qard-difficulty-plot')?.getAttribute('aria-label')).toContain(
+    'Skipped: 1',
+  );
+  expect(host.querySelector('.qard-difficulty-marker')).toBeNull();
   expect(services.reviews.getSnapshot()).toBe(before);
   await act(async () =>
-    [...host.querySelectorAll('button')]
-      .find((b) => b.textContent === 'Review skipped cards')!
-      .click(),
+    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Review skipped')!.click(),
   );
   expect(repeat).toHaveBeenCalledWith(cards);
 });
@@ -380,7 +381,7 @@ it('pause advances a saved session without rating, and does not offer paused car
     await services.reviews.flush().catch(() => {});
   });
   expect(host.textContent).toContain('Session complete');
-  expect(host.textContent).not.toContain('Review skipped cards');
+  expect(host.textContent).not.toContain('Review skipped');
   expect(services.reviews.getSnapshot().states.first).toMatchObject({
     paused: true,
     reviewCount: 0,
@@ -495,4 +496,32 @@ it('registers study commands that follow the same rules as the buttons', async (
   await act(async () => root.unmount());
   expect(commands).toBeUndefined();
   root = createRoot(host);
+});
+
+it('renders Mermaid in the visible study face when revealing an answer', async () => {
+  const frontDiagram = '```mermaid\ngraph TD\n A[Question] --> B[Recall]\n```';
+  const backDiagram = '```mermaid\ngraph TD\n A[Answer] --> B[Reason]\n```';
+  const card = { ...cards[0]!, frontMarkdown: frontDiagram, backMarkdown: backDiagram };
+  const rendered: { text: string; visible: boolean }[] = [];
+  vi.spyOn(MarkdownRenderer, 'render').mockImplementation(async (_app, text, el) => {
+    // The renderer measures the DOM immediately, so mounting hidden would give it a zero-width face.
+    rendered.push({
+      text,
+      visible:
+        el.isConnected && el.closest('.qard-study-face')?.getAttribute('aria-hidden') === 'false',
+    });
+  });
+  const show = (revealed: boolean) =>
+    act(async () => root.render(<StudyCard card={card} revealed={revealed} services={services} />));
+
+  await show(false);
+  expect(rendered).toEqual([{ text: frontDiagram, visible: true }]);
+  await show(true);
+  expect(rendered).toEqual([
+    { text: frontDiagram, visible: true },
+    { text: frontDiagram, visible: true },
+    { text: backDiagram, visible: true },
+  ]);
+  await show(false);
+  expect(host.querySelector('.qard-study-back .qard-markdown')).toBeNull();
 });

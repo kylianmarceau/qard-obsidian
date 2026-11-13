@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { ArrowRight, ChevronRight, Info, FileText } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Lesson } from '../../learn/learn-types';
 import type { Objective } from '../../learn/mastery';
@@ -14,9 +14,14 @@ import { useLearn } from './useLearn';
 import { type LearnNav } from '../../views/navigation';
 import { WhileYouWait, useHold, type WaitContext } from '../jobs/WhileYouWait';
 import { JobControls } from '../jobs/JobControls';
+import { JobStatus } from '../jobs/JobStatus';
 import { tidyMermaid } from '../../learn/mermaid';
 import { DrawButton, FigureView } from './FigureView';
 import { firstSentences } from '../../learn/learn-schema';
+import { useCurrentStepScroll } from '../common/useCurrentStepScroll';
+
+const DIAGNOSTIC_HELP =
+  'These diagnostic questions choose where the lesson starts and update evidence about prerequisites. They do not establish mastery of this lesson\'s objective. Choose "I don\'t know" when you cannot answer.';
 
 /** Where the lesson sits: course › topic › objective, each opening the course map at that place. */
 function LessonTrail({
@@ -58,7 +63,7 @@ function LessonTrail({
       </button>
       {objective?.group && (
         <>
-          <span aria-hidden="true">›</span>
+          <ChevronRight size={14} aria-hidden="true" />
           <button className="qard-link" onClick={open}>
             {objective.group}
           </button>
@@ -66,7 +71,7 @@ function LessonTrail({
       )}
       {objective && (
         <>
-          <span aria-hidden="true">›</span>
+          <ChevronRight size={14} aria-hidden="true" />
           <button className="qard-link" onClick={open}>
             {objective.label || objective.title}
           </button>
@@ -219,7 +224,13 @@ function LessonProbe({
             <p className="qard-muted">
               The tutor is checking your notes and what you already know about {lesson.topic}.
             </p>
-            <TutorHint services={services} />
+            <JobControls
+              services={services}
+              job={probing}
+              cancel={() => services.learn.cancel(path, 'probe')}
+              start={() => void services.learn.probe(path)}
+              hint={<TutorHint services={services} />}
+            />
           </>
         )}
       </div>
@@ -236,7 +247,13 @@ function LessonProbe({
               <AgentLabel services={services} role="tutor" />
             </Waiting>
             <p className="qard-muted">Reading your answers to decide where to start.</p>
-            <TutorHint services={services} />
+            <JobControls
+              services={services}
+              job={mapping}
+              cancel={() => services.learn.cancel(path, 'map')}
+              start={() => void services.learn.submitProbe(path)}
+              hint={<TutorHint services={services} />}
+            />
           </>
         )}
       </div>
@@ -246,7 +263,15 @@ function LessonProbe({
     <div className="qard-test">
       <div className="qard-test-heading">
         <div>
-          <span className="qard-muted">Lesson · {lesson.course ?? 'Before we start'}</span>
+          <details>
+            <summary className="qard-muted qard-diagnostic-label" title={DIAGNOSTIC_HELP}>
+              <span className="qard-section-info">
+                <Info size={14} aria-hidden="true" />
+              </span>
+              Diagnostic · {lesson.course ?? 'Before we start'}
+            </summary>
+            <p className="qard-muted qard-small qard-diagnostic-help">{DIAGNOSTIC_HELP}</p>
+          </details>
           <h1>
             <InlineMarkdown
               text={lesson.topic}
@@ -256,10 +281,6 @@ function LessonProbe({
           </h1>
         </div>
       </div>
-      <p className="qard-muted">
-        A few quick questions first, so the lesson starts from what you already know. Say "I don't
-        know" rather than guessing.
-      </p>
       {probe.questions.map((q, i) => (
         <AnswerInput
           key={q.id}
@@ -367,7 +388,7 @@ function LessonMapView({
       </section>
       <JobError job={revising} dismiss={() => services.learn.dismiss(path, 'revise')} />
       <form
-        className="qard-doc-footer"
+        className="qard-doc-footer qard-lesson-plan-actions"
         onSubmit={(e) => {
           e.preventDefault();
           if (change.trim()) {
@@ -376,23 +397,25 @@ function LessonMapView({
           }
         }}
       >
-        <input
-          aria-label="Ask for changes to the plan"
-          placeholder={busy ? 'Revising…' : 'Ask for changes, e.g. skip the proof'}
-          value={change}
-          disabled={busy}
-          onChange={(e) => setChange(e.target.value)}
-        />
-        <button type="submit" className="qard-text-button" disabled={busy || !change.trim()}>
-          Revise
-        </button>
+        <div className="qard-lesson-revise-controls">
+          <input
+            aria-label="Ask for changes to the plan"
+            placeholder={busy ? 'Revising…' : 'Ask for changes, e.g. skip the proof'}
+            value={change}
+            disabled={busy}
+            onChange={(e) => setChange(e.target.value)}
+          />
+          <button type="submit" className="qard-text-button" disabled={busy || !change.trim()}>
+            Revise
+          </button>
+        </div>
         <button
           type="button"
-          className="qard-primary"
+          className="qard-primary qard-lesson-start"
           disabled={busy}
           onClick={() => void services.learn.acceptMap(path)}
         >
-          Start lesson
+          Start
           <ArrowRight size={15} />
         </button>
       </form>
@@ -418,6 +441,7 @@ function LessonSteps({
     step = lesson.steps[index],
     st = lesson.state[index],
     plan = lesson.map!.steps[index];
+  const stepsRef = useCurrentStepScroll(index);
   const writing = job(path, 'steps'),
     tutor = job(path, 'tutor', String(index)),
     retrying = job(path, 'tutor', `${index}-retry`),
@@ -432,18 +456,20 @@ function LessonSteps({
   const explain = step && (!step.checkFirst || !!st?.mark);
   return (
     <div className="qard-test qard-lesson">
-      <div className="qard-test-steps" aria-label="Steps">
+      <div className="qard-test-steps" aria-label="Steps" ref={stepsRef}>
         {lesson.map!.steps.map((s, i) => (
-          <button
-            key={i}
-            className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''}
-            disabled={!lesson.steps[i]}
-            aria-current={i === index ? 'step' : undefined}
-            onClick={() => void services.learn.go(path, i)}
-          >
-            {i + 1}. <InlineMarkdown text={s.title} path={where} services={services} />
-            {lesson.state[i]?.mark ? ' ✓' : ''}
-          </button>
+          <Fragment key={i}>
+            {i > 0 && <ChevronRight size={14} aria-hidden="true" />}
+            <button
+              className={i === index ? 'is-current' : lesson.state[i]?.mark ? 'is-done' : ''}
+              disabled={!lesson.steps[i]}
+              aria-current={i === index ? 'step' : undefined}
+              onClick={() => void services.learn.go(path, i)}
+            >
+              {i + 1}. <InlineMarkdown text={s.title} path={where} services={services} />
+              {lesson.state[i]?.mark ? ' ✓' : ''}
+            </button>
+          </Fragment>
         ))}
       </div>
       <div className="qard-test-heading">
@@ -508,9 +534,6 @@ function LessonSteps({
           )}
           {!st?.mark ? (
             <>
-              {step.checkFirst && (
-                <p className="qard-label">Try this first. Work it out from what you know.</p>
-              )}
               <AnswerInput
                 services={services}
                 question={step.check}
@@ -521,22 +544,17 @@ function LessonSteps({
                 onChange={(patch) => services.learn.answerStep(path, patch)}
               />
               <JobError job={tutor} retry={() => void services.learn.checkStep(path)} />
-              {running(tutor) && <TutorHint services={services} />}
-              <div className="qard-panel-actions">
+              <div className="qard-panel-actions qard-lesson-check-actions">
                 {running(tutor) ? (
-                  <>
-                    <Waiting text="Checking…">
-                      <AgentLabel services={services} role="tutor" />
-                    </Waiting>
-                    <JobControls
-                      services={services}
-                      job={tutor}
-                      cancel={() => services.learn.cancel(path, 'tutor', String(index))}
-                    />
-                  </>
+                  <JobStatus
+                    services={services}
+                    title="Checking…"
+                    job={tutor}
+                    cancel={() => services.learn.cancel(path, 'tutor', String(index))}
+                  />
                 ) : (
                   <button
-                    className="qard-primary"
+                    className="qard-primary qard-question-action"
                     disabled={!answered(step.check, st?.answer)}
                     onClick={() => void services.learn.checkStep(path)}
                   >
@@ -598,16 +616,12 @@ function LessonSteps({
                     />
                     <div className="qard-panel-actions">
                       {running(retrying) ? (
-                        <>
-                          <Waiting text="Checking…">
-                            <AgentLabel services={services} role="tutor" />
-                          </Waiting>
-                          <JobControls
-                            services={services}
-                            job={retrying}
-                            cancel={() => services.learn.cancel(path, 'tutor', `${index}-retry`)}
-                          />
-                        </>
+                        <JobStatus
+                          services={services}
+                          title="Checking…"
+                          job={retrying}
+                          cancel={() => services.learn.cancel(path, 'tutor', `${index}-retry`)}
+                        />
                       ) : (
                         <button type="submit" disabled={!retry.trim()}>
                           Try again
@@ -665,7 +679,7 @@ function LessonSteps({
           />
         </>
       )}
-      <div className="qard-test-footer">
+      <div className="qard-test-footer qard-lesson-navigation">
         {index > 0 && (
           <button
             className="qard-text-button"
@@ -739,20 +753,13 @@ function LessonClose({
         {closing?.error ? (
           <JobError job={closing} retry={() => void services.learn.close(path)} />
         ) : (
-          <>
-            <Waiting text="Wrapping up…">
-              <AgentLabel services={services} role="writer" />
-            </Waiting>
-            <JobControls
-              services={services}
-              job={closing}
-              cancel={() => services.learn.cancel(path, 'close')}
-              start={() => void services.learn.close(path)}
-            />
-            <p className="qard-muted">
-              Saving the lesson, suggesting cards and writing your next check.
-            </p>
-          </>
+          <JobStatus
+            services={services}
+            title="Wrapping up…"
+            job={closing}
+            cancel={() => services.learn.cancel(path, 'close')}
+            start={() => void services.learn.close(path)}
+          />
         )}
       </div>
     );
@@ -792,7 +799,7 @@ function LessonClose({
             <StateChip state={objective.state} />
             <span className="qard-muted">
               {objective.due
-                ? `First check ${relativeDay(objective.due, isoDay(Date.now()))}. Getting it right straight after a lesson doesn't count yet.`
+                ? `First check ${relativeDay(objective.due, isoDay(Date.now()))}.`
                 : ''}
             </span>
           </p>
@@ -815,13 +822,13 @@ function LessonClose({
                 className={'qard-suggestion' + (state === 'skipped' ? ' is-skipped' : '')}
               >
                 <div className="qard-suggestion-body">
+                  <small className="qard-muted">
+                    {target.deck} › {target.topic}
+                  </small>
                   <strong>
                     <Markdown text={c.front} path={where} services={services} />
                   </strong>
                   <Markdown text={c.back} path={where} services={services} />
-                  <small className="qard-muted">
-                    {target.deck} › {target.topic}
-                  </small>
                 </div>
                 <div className="qard-suggestion-actions">
                   {!state ? (
@@ -896,10 +903,12 @@ function LessonClose({
       <div className="qard-doc-footer is-end">
         {close.note && (
           <button
-            className="qard-text-button"
+            className="qard-icon-button"
+            aria-label="Open lesson note"
+            title="Open lesson note"
             onClick={() => void services.app.workspace.openLinkText(close.note!, '', true)}
           >
-            Open lesson note
+            <FileText size={16} aria-hidden="true" />
           </button>
         )}
         {lesson.mastery && <button onClick={() => nav.course(lesson.mastery!)}>Course</button>}

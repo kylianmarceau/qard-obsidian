@@ -343,22 +343,21 @@ export class QardSettingsTab extends PluginSettingTab {
             t.inputEl.type = 'number';
             t.inputEl.min = '70';
             t.inputEl.max = '97';
-            t.inputEl.step = '1';
-            t.setValue(String(Math.round(settings.desiredRetention * 100))).setDisabled(
+            t.inputEl.step = 'any';
+            t.setValue(String(settings.desiredRetention * 100)).setDisabled(
               settings.scheduler !== 'fsrs',
             );
             t.inputEl.addEventListener('change', () => {
               const value = Number(t.getValue());
+              const current = this.qard.reviews.getSnapshot().settings.desiredRetention;
               if (!Number.isFinite(value) || value < 70 || value > 97) {
                 new Notice('Choose a target retention between 70% and 97%.');
-                t.setValue(
-                  String(
-                    Math.round(this.qard.reviews.getSnapshot().settings.desiredRetention * 100),
-                  ),
-                );
+                t.setValue(String(current * 100));
                 return;
               }
-              void save('desiredRetention', value / 100);
+              if (value !== current * 100) {
+                void save('desiredRetention', value / 100);
+              }
             });
           });
         },

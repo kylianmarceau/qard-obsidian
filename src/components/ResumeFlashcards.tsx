@@ -50,9 +50,11 @@ export function ResumeFlashcards({
         .join(' › ')
     : batch.request.prompt || 'From selected notes';
   return (
-    <button className="qard-resume" onClick={open}>
-      <span className="qard-muted">{label}</span>
-      <strong>{title}</strong>
+    <button className="qard-resume qard-row-update" onClick={open}>
+      <span className="qard-resume-copy">
+        <strong className="qard-resume-title">{title}</strong>
+        <span className="qard-muted qard-resume-label">{label}</span>
+      </span>
       <span className="qard-muted">{status}</span>
       <ChevronRight size={16} />
     </button>

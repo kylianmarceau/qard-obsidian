@@ -45,9 +45,9 @@ it('shows drawing progress, the figure with its caption, and redraws with a note
   expect(host.textContent).toBe(' Draw this');
   await show(undefined, { kind: 'figure', startedAt: Date.now() });
   expect(host.textContent).toContain('Drawing a figure…');
-  expect(host.textContent).toContain('Illustrator · Claude Code');
+  expect(host.querySelector('.qard-jobs-role')?.textContent).toBe('Illustrator');
   await act(async () => {
-    [...host.querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
+    host.querySelector<HTMLButtonElement>('[aria-label="Cancel"]')!.click();
   });
   expect(cancel).toHaveBeenCalled();
   await show(figure);

@@ -7,15 +7,13 @@ import type { QardCard } from '../../cards/card-types';
 import type { Rating } from '../../review/scheduler';
 import { scheduler } from '../../review/scheduler';
 import { questions } from '../../tests/test-types';
-import { timeLeft } from '../../jobs/job-clock';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { Waiting } from '../common/FeedbackStatus';
 import { useTestFolder } from '../tests/useTestFolder';
 import { CheckView } from '../learn/CheckView';
-import { useTick } from './RunningJobs';
 import { AgentLabel } from './AgentLabel';
-import { JobControls } from './JobControls';
-import { roleOf } from '../../jobs/job-clock';
+import { JobStatus } from './JobStatus';
+import { useTick } from './RunningJobs';
 
 /**
  * What the wait is for, which decides what is worth doing meanwhile:
@@ -136,7 +134,6 @@ export function WhileYouWait({
   const [options, setOptions] = useState<Options>(),
     [activity, setActivity] = useState<Activity>(),
     [engaged, setEngaged] = useState(false);
-  const left = timeLeft(job ? services.jobs?.estimate(job.kind) : undefined, job?.startedAt, now);
   const contextKey = JSON.stringify(context),
     latest = useRef(context);
   latest.current = context;
@@ -166,7 +163,7 @@ export function WhileYouWait({
   // The default: a due check when there's time for one, then cards, a missed point, or the notes.
   const remaining =
     job?.startedAt && services.jobs?.estimate(job.kind) !== undefined
-      ? services.jobs.estimate(job.kind)! - (Date.now() - job.startedAt)
+      ? services.jobs.estimate(job.kind)! - (now - job.startedAt)
       : undefined;
   const available = useMemo(() => {
     if (!options) {
@@ -174,7 +171,7 @@ export function WhileYouWait({
     }
     const list: { id: Activity; label: string }[] = [];
     if (options.check) {
-      list.push({ id: 'check', label: `Check · ${options.check.title}` });
+      list.push({ id: 'check', label: 'Check' });
     }
     if (options.cards.length) {
       list.push({
@@ -210,50 +207,53 @@ export function WhileYouWait({
 
   return (
     <div className="qard-wait">
-      <div className="qard-wait-status">
-        {ready && engaged ? (
-          <div className="qard-wait-ready" role="status">
-            <CheckIcon size={16} />
-            <strong>{readyLabel}</strong>
-            <span className="qard-spacer" />
-            <button className="qard-primary" onClick={onContinue}>
-              Continue
-              <ArrowRight size={15} />
-            </button>
-          </div>
-        ) : (
-          <div className="qard-wait-head">
-            <div className="qard-wait-heading">
-              <Waiting text={title} />
-              {job && <AgentLabel services={services} role={roleOf(job.kind)} />}
+      <JobStatus
+        services={services}
+        title={title}
+        job={job}
+        cancel={cancel}
+        start={start}
+        hint={hint}
+        ready={ready}
+        heading={
+          ready && engaged ? (
+            <div className="qard-wait-ready" role="status">
+              <CheckIcon size={16} />
+              <strong>{readyLabel}</strong>
+              <span className="qard-spacer" />
+              <button className="qard-primary" onClick={onContinue}>
+                Continue
+                <ArrowRight size={15} />
+              </button>
             </div>
-            {left && <span className="qard-wait-estimate">{left}</span>}
-          </div>
-        )}
+          ) : undefined
+        }
+      >
         {!engaged && (
           <p className="qard-wait-description">
             {detail && <>{detail} </>}You can leave this page. Qard will notify you when it's ready.
           </p>
         )}
-        {!ready && hint}
-        {!ready && <JobControls services={services} job={job} cancel={cancel} start={start} />}
-      </div>
+      </JobStatus>
       {options &&
         (available.length ? (
           <section className="qard-wait-body">
             <div className="qard-wait-tabs">
               <span className="qard-label">While you wait</span>
-              {available.length > 1 &&
-                available.map((a) => (
-                  <button
-                    key={a.id}
-                    className={'qard-chip' + (current === a.id ? ' is-on' : '')}
-                    aria-pressed={current === a.id}
-                    onClick={() => setActivity(a.id)}
-                  >
-                    {a.label}
-                  </button>
-                ))}
+              {available.length > 1 && (
+                <div className="qard-wait-activities">
+                  {available.map((a) => (
+                    <button
+                      key={a.id}
+                      className={'qard-chip' + (current === a.id ? ' is-on' : '')}
+                      aria-pressed={current === a.id}
+                      onClick={() => setActivity(a.id)}
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {current === 'cards' && (
               <MiniReview
@@ -357,8 +357,11 @@ function MiniReview({
   }
   return (
     <div className="qard-wait-card">
-      <div className="qard-muted qard-small">
-        {warmup ? 'Warm-up on what this builds on' : card.deck} · {index + 1} of {cards.length}
+      <div className="qard-muted qard-small qard-wait-card-meta">
+        <span>{warmup ? 'Warm-up on what this builds on' : card.deck}</span>
+        <span className="qard-wait-card-progress">
+          {index + 1} of {cards.length}
+        </span>
       </div>
       <div className="qard-wait-front">
         <Markdown text={card.frontMarkdown} path={card.sourceFile} services={services} />
@@ -432,10 +435,13 @@ function RetryPoint({
   const path = q.source?.path || folder;
   return (
     <div className="qard-wait-card">
-      <div className="qard-muted qard-small">
-        <InlineMarkdown text={test.title} path={folder} services={services} />
-        {' · you scored '}
-        {mark?.score ?? 0}/{q.marks}
+      <div className="qard-muted qard-small qard-wait-card-meta">
+        <span>
+          <InlineMarkdown text={test.title} path={folder} services={services} />
+        </span>
+        <span className="qard-wait-card-progress">
+          you scored {mark?.score ?? 0}/{q.marks}
+        </span>
       </div>
       <div className="qard-wait-front">
         <Markdown text={q.prompt} path={path} services={services} />

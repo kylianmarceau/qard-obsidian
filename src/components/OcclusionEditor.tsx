@@ -1,5 +1,5 @@
-import { useRef, useState, type PointerEvent } from 'react';
-import { ImagePlus, Undo2, Trash2 } from 'lucide-react';
+import { useId, useRef, useState, type PointerEvent } from 'react';
+import { ImagePlus, Plus, Undo2, Trash2 } from 'lucide-react';
 import { IMAGE_EXTENSIONS, type ImageMask, type ImageOcclusion } from '../cards/card-format';
 import { attachImage, imageResource } from '../cards/image-attachment';
 import type { QardServices } from '../views/services';
@@ -30,7 +30,10 @@ export function OcclusionEditor({
 }) {
   const stage = useRef<HTMLDivElement>(null),
     picker = useRef<HTMLInputElement>(null),
+    focusMask = useRef<string | undefined>(undefined),
     gesture = useRef<Gesture | null>(null);
+  const instructions = useId(),
+    imageId = useId();
   const [draft, setDraft] = useState<ImageMask | null>(null),
     [selected, setSelected] = useState<string>(),
     [filter, setFilter] = useState(''),
@@ -150,6 +153,15 @@ export function OcclusionEditor({
     change({ ...value, masks, target: value.target === id ? masks[0]?.id : value.target });
     setSelected(undefined);
   }
+  function addMask() {
+    if (!ready || uploading || value.masks.length >= 100) {
+      return;
+    }
+    const mask = { id: crypto.randomUUID(), x: 0.4, y: 0.4, width: 0.2, height: 0.2 };
+    focusMask.current = mask.id;
+    setSelected(mask.id);
+    change({ ...value, masks: [...value.masks, mask] });
+  }
   const masks = draft
     ? value.masks.some((mask) => mask.id === draft.id)
       ? value.masks.map((mask) => (mask.id === draft.id ? draft : mask))
@@ -158,8 +170,8 @@ export function OcclusionEditor({
   return (
     <div className="qard-occlusion-editor">
       <div className="qard-image-picker">
-        <label>
-          Vault image
+        <label htmlFor={imageId}>Vault image</label>
+        <div className="qard-image-source-controls">
           <input
             type="search"
             aria-label="Find an image"
@@ -168,6 +180,7 @@ export function OcclusionEditor({
             placeholder="Find an attachment…"
           />
           <select
+            id={imageId}
             aria-label="Vault image"
             value={value.image}
             onChange={(e) => {
@@ -190,11 +203,11 @@ export function OcclusionEditor({
               <option value={value.image}>{value.image}</option>
             )}
           </select>
-        </label>
-        <button type="button" disabled={uploading} onClick={() => picker.current?.click()}>
-          <ImagePlus size={16} />
-          {uploading ? 'Adding image…' : 'Add image'}
-        </button>
+          <button type="button" disabled={uploading} onClick={() => picker.current?.click()}>
+            <ImagePlus size={16} />
+            {uploading ? 'Adding image…' : 'Add image'}
+          </button>
+        </div>
         <input
           ref={picker}
           className="qard-attachment-input"
@@ -242,8 +255,15 @@ export function OcclusionEditor({
               masks.map((mask, index) => (
                 <button
                   key={mask.id}
+                  ref={(element) => {
+                    if (element && focusMask.current === mask.id) {
+                      focusMask.current = undefined;
+                      element.focus();
+                    }
+                  }}
                   type="button"
                   aria-label={`Mask ${index + 1}`}
+                  aria-describedby={instructions}
                   aria-pressed={selected === mask.id}
                   className={
                     'qard-image-mask qard-edit-mask' +
@@ -334,62 +354,81 @@ export function OcclusionEditor({
           </div>
         )}
       </div>
-      <div className="qard-format-tools">
-        <span className="qard-muted">
-          {value.masks.length} {value.masks.length === 1 ? 'mask' : 'masks'} · Drag to draw, move,
-          or resize
-        </span>
-        <div className="qard-actions">
+      <div className="qard-mask-toolbar">
+        <div className="qard-mask-actions qard-actions">
           <button
             type="button"
+            disabled={!ready || uploading || value.masks.length >= 100}
+            onClick={addMask}
+          >
+            <Plus size={14} />
+            Add mask
+          </button>
+          <button
+            type="button"
+            aria-label="Undo last mask"
+            title="Undo last mask"
             disabled={!value.masks.length}
             onClick={() => remove(value.masks[value.masks.length - 1]!.id)}
           >
             <Undo2 size={14} />
-            Undo last mask
+            Undo
           </button>
-          <button type="button" disabled={!chosen} onClick={() => chosen && remove(chosen.id)}>
+          <button
+            type="button"
+            aria-label="Remove selected"
+            title="Remove selected"
+            disabled={!chosen}
+            onClick={() => chosen && remove(chosen.id)}
+          >
             <Trash2 size={14} />
-            Remove selected
+            Remove
           </button>
         </div>
+        {chosen && (
+          <div className="qard-mask-size" role="group" aria-label="Selected mask size">
+            {(['width', 'height'] as const).map((dimension) => (
+              <label className="qard-mask-dimension" key={dimension}>
+                <span>{dimension === 'width' ? 'Width' : 'Height'}</span>
+                <input
+                  type="number"
+                  placeholder={dimension === 'width' ? 'Width (%)' : 'Height (%)'}
+                  aria-label={dimension === 'width' ? 'Width (%)' : 'Height (%)'}
+                  title={dimension === 'width' ? 'Width (%)' : 'Height (%)'}
+                  min={0}
+                  max={100}
+                  step="any"
+                  value={Math.round(chosen[dimension] * 1000) / 10}
+                  onChange={(e) => {
+                    const size = e.currentTarget.valueAsNumber / 100;
+                    if (Number.isFinite(size)) {
+                      change({
+                        ...value,
+                        masks: value.masks.map((mask) =>
+                          mask.id === chosen.id
+                            ? {
+                                ...mask,
+                                [dimension]: Math.max(
+                                  0.005,
+                                  Math.min(1 - mask[dimension === 'width' ? 'x' : 'y'], size),
+                                ),
+                              }
+                            : mask,
+                        ),
+                      });
+                    }
+                  }}
+                />
+                <span aria-hidden="true">%</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
-      {chosen && (
-        <div className="qard-mask-size">
-          <span className="qard-muted">Selected mask</span>
-          {(['width', 'height'] as const).map((dimension) => (
-            <label key={dimension}>
-              {dimension === 'width' ? 'Width (%)' : 'Height (%)'}
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step="any"
-                value={Math.round(chosen[dimension] * 1000) / 10}
-                onChange={(e) => {
-                  const size = e.currentTarget.valueAsNumber / 100;
-                  if (Number.isFinite(size)) {
-                    change({
-                      ...value,
-                      masks: value.masks.map((mask) =>
-                        mask.id === chosen.id
-                          ? {
-                              ...mask,
-                              [dimension]: Math.max(
-                                0.005,
-                                Math.min(1 - mask[dimension === 'width' ? 'x' : 'y'], size),
-                              ),
-                            }
-                          : mask,
-                      ),
-                    });
-                  }
-                }}
-              />
-            </label>
-          ))}
-        </div>
-      )}
+      <p id={instructions} className="qard-muted qard-mask-help">
+        {value.masks.length} {value.masks.length === 1 ? 'mask' : 'masks'} · Add a mask or drag to
+        draw. Use arrow keys to move a selected mask and Width or Height to resize.
+      </p>
       {editing && value.target && (
         <label>
           Card's mask

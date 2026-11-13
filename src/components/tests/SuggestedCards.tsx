@@ -91,13 +91,13 @@ export function SuggestedCards({
             className={'qard-suggestion' + (state === 'skipped' ? ' is-skipped' : '')}
           >
             <div className="qard-suggestion-body">
+              <small className="qard-muted">
+                Q{questions(test).indexOf(t.q) + 1} · {t.deck} › {t.topic}
+              </small>
               <strong>
                 <Markdown text={c.front} path={t.q.source?.path || folder} services={services} />
               </strong>
               <Markdown text={c.back} path={t.q.source?.path || folder} services={services} />
-              <small className="qard-muted">
-                Q{questions(test).indexOf(t.q) + 1} · {t.deck} › {t.topic}
-              </small>
             </div>
             <div className="qard-suggestion-actions">
               {!state ? (

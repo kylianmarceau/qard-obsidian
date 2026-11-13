@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { MasteryState } from '../../learn/mastery';
 
@@ -7,11 +8,11 @@ export function TutorHint({ services }: { services: QardServices }) {
   if (provider !== 'claude-code' && provider !== 'codex') {
     return null;
   }
+  const text = `${provider === 'codex' ? 'Codex' : 'Claude Code'} can take 30 seconds or more per reply. For a faster tutor, choose an API connection in Settings → Qard → AI roles.`;
   return (
-    <p className="qard-muted qard-small">
-      {provider === 'codex' ? 'Codex' : 'Claude Code'} can take 30 seconds or more per reply. For a
-      faster tutor, choose an API connection in Settings → Qard → AI roles.
-    </p>
+    <span className="qard-job-info" title={text} aria-label={text}>
+      <Info size={14} aria-hidden="true" />
+    </span>
   );
 }
 

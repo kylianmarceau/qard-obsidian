@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TFile } from 'obsidian';
 import { CardSourceLinks } from '../src/components/CardSourceLinks';
+import { NotePicker } from '../src/components/NotePicker';
 import { parseCards } from '../src/cards/parser';
 import { serializeCard } from '../src/cards/source-patch';
 import { ReviewStore } from '../src/review/review-store';
@@ -88,10 +89,12 @@ it('searches notes as you type, most recent first, and links the chosen note', a
   expect(host.textContent).toContain('No matching notes.');
   await type('tcp');
   expect(items()).toEqual(['tcpNetworks']);
+  host.querySelector<HTMLInputElement>('input[type=search]')!.focus();
   await click(host.querySelector('.qard-popover-item')!);
   expect(capture).toHaveBeenCalledWith(['Networks/tcp.md']);
   expect(track).toHaveBeenCalledWith('tcp', [{ path: 'Networks/tcp.md', text: 'x' }], true);
   expect(host.querySelector('.qard-popover')).toBeNull();
+  expect(document.activeElement).toBe(toggle());
 });
 
 it('leaves out notes already linked and closes with Escape', async () => {
@@ -99,6 +102,7 @@ it('leaves out notes already linked and closes with Escape', async () => {
   expect(host.querySelector('ul')?.textContent).toContain('Networks/udp.md');
   await click(toggle());
   expect(items()).toEqual(['Algorithms', 'tcpNetworks']);
+  host.querySelector<HTMLInputElement>('input[type=search]')!.focus();
   await act(() => {
     host
       .querySelector('input[type=search]')!
@@ -106,4 +110,38 @@ it('leaves out notes already linked and closes with Escape', async () => {
   });
   expect(host.querySelector('.qard-popover')).toBeNull();
   expect(toggle().getAttribute('aria-expanded')).toBe('false');
+  expect(document.activeElement).toBe(toggle());
+});
+
+it('waits until its trigger is enabled before restoring focus after an asynchronous choice', async () => {
+  let resolve!: (success: boolean) => void;
+  let disabled = false;
+  const choose = () => new Promise<boolean>((done) => (resolve = done));
+  const render = () =>
+    root.render(
+      <NotePicker
+        label="Link a note"
+        disabled={disabled}
+        busy={disabled}
+        notes={() => [note('Networks.md', 1)]}
+        choose={choose}
+      />,
+    );
+  act(render);
+  await click(toggle());
+  const search = host.querySelector<HTMLInputElement>('input[type=search]')!;
+  search.focus();
+  await act(async () => {
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    disabled = true;
+    render();
+  });
+  await act(async () => resolve(true));
+  expect(host.querySelector('.qard-popover')).toBeNull();
+  expect(document.activeElement).not.toBe(toggle());
+  await act(async () => {
+    disabled = false;
+    render();
+  });
+  expect(document.activeElement).toBe(toggle());
 });

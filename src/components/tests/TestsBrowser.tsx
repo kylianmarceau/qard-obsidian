@@ -46,10 +46,14 @@ export function ResumeTest({ services, nav }: { services: QardServices; nav: Tes
       : nav.plan(test.folder);
   return (
     <button className="qard-resume" onClick={open}>
-      <span className="qard-muted">{test.status === 'ready' ? 'Start' : 'Continue'}</span>
-      <strong>
-        <InlineMarkdown text={test.title} path={test.folder} services={services} />
-      </strong>
+      <span className="qard-resume-copy">
+        <strong className="qard-resume-title">
+          <InlineMarkdown text={test.title} path={test.folder} services={services} />
+        </strong>
+        <span className="qard-muted qard-resume-label">
+          {test.status === 'ready' ? 'Start' : 'Continue'}
+        </span>
+      </span>
       <span className="qard-muted">{STATUS[test.status]}</span>
       <ChevronRight size={16} />
     </button>
@@ -122,7 +126,11 @@ export function TestsBrowser({
       )}
       <div className="qard-deck-list">
         {tests?.map((t) => (
-          <button key={t.folder} className="qard-deck qard-test-row" onClick={() => open(t)}>
+          <button
+            key={t.folder}
+            className="qard-deck qard-test-row qard-summary-row"
+            onClick={() => open(t)}
+          >
             <span className="qard-deck-name">
               <strong>
                 <InlineMarkdown text={t.title} path={t.folder} services={services} />

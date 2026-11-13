@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pencil } from 'lucide-react';
 
 /** Rename a deck or topic in place. The new name is saved to every note that uses it. */
@@ -8,12 +8,14 @@ export function RenameItem({
   description,
   rename,
   renamed,
+  children,
 }: {
   label: string;
   current: string;
   description: string;
   rename: (name: string) => Promise<void>;
   renamed?: () => void;
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false),
     [name, setName] = useState(current),
@@ -54,7 +56,7 @@ export function RenameItem({
     <div className="qard-delete-item">
       <button
         ref={trigger}
-        className="qard-icon-button"
+        className={children ? 'qard-text-button' : 'qard-icon-button'}
         title={label}
         aria-label={label}
         onClick={() => {
@@ -63,6 +65,7 @@ export function RenameItem({
         }}
       >
         <Pencil size={15} />
+        {children}
       </button>
       {open && (
         <dialog
