@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { getIcon, getIconIds } from 'obsidian';
 import { X } from 'lucide-react';
-import { canonicalDeck, deckLineage } from '../decks/deck-index';
+import { canonicalDeck, deckLineage, deckPath } from '../decks/deck-index';
 import { deckLimits, deckRetention, withDeckOptions } from '../decks/deck-options';
-import type { DeckOptions as Options, QardSettings } from '../settings/settings';
+import {
+  readDeckColor,
+  readDeckIcon,
+  type DeckOptions as Options,
+  type QardSettings,
+} from '../settings/settings';
+import { DeckAppearance } from './DeckAppearance';
 
-/** Target retention and a daily new-card limit for one deck and the decks nested under it. */
+/** Scheduling overrides and independent appearance choices for one deck. */
 export function DeckOptions({
   deck,
+  badgeName,
   settings,
   save,
   close,
 }: {
   deck: string;
+  badgeName?: string;
   settings: QardSettings;
   save: (deckOptions: Record<string, Options>) => Promise<void>;
   close: () => void;
@@ -19,11 +28,28 @@ export function DeckOptions({
   const name = canonicalDeck(deck),
     own = settings.deckOptions[name] ?? {};
   const [target, setTarget] = useState(
-      own.desiredRetention === undefined ? '' : String(Math.round(own.desiredRetention * 100)),
+      own.desiredRetention === undefined ? '' : String(own.desiredRetention * 100),
     ),
+    [targetEdited, setTargetEdited] = useState(false),
     [limit, setLimit] = useState(own.newCardsPerDay ? String(own.newCardsPerDay) : ''),
+    [iconDraft, setIcon] = useState<string>(),
+    [colorDraft, setColor] = useState<string>(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const icon = iconDraft ?? own.icon ?? '',
+    color = colorDraft ?? own.color ?? '';
+  const icons = useMemo(() => getIconIds().sort(), []);
+  const availableIcons = useMemo(() => new Set(icons), [icons]);
+  const iconId = icon.trim();
+  const unavailable = useMemo(
+    () =>
+      !!iconId &&
+      !availableIcons.has(iconId) &&
+      !availableIcons.has(`lucide-${iconId}`) &&
+      // Legacy aliases accepted by getIcon are not all listed in getIconIds.
+      !getIcon(iconId),
+    [availableIcons, iconId],
+  );
   // What applies when this deck sets nothing of its own.
   const parent = deckLineage(name)[1];
   const inherited = deckRetention(settings, parent);
@@ -42,13 +68,28 @@ export function DeckOptions({
       setError('Choose a whole number of new cards from 1 to 10,000, or leave it empty.');
       return;
     }
+    if (icon.trim() && (!readDeckIcon(icon) || (unavailable && icon.trim() !== own.icon))) {
+      setError('Choose an available icon name, or leave it empty for an automatic icon.');
+      return;
+    }
+    if (color.trim() && !readDeckColor(color)) {
+      setError('Enter a six-digit hex color such as #729b88, or leave it empty.');
+      return;
+    }
+    const desiredRetention = targetEdited
+      ? retention === undefined
+        ? undefined
+        : retention / 100
+      : own.desiredRetention;
     setBusy(true);
     setError('');
     try {
       await save(
         withDeckOptions(settings.deckOptions, name, {
-          ...(retention !== undefined ? { desiredRetention: retention / 100 } : {}),
+          ...(desiredRetention !== undefined ? { desiredRetention } : {}),
           ...(perDay !== undefined ? { newCardsPerDay: perDay } : {}),
+          ...(icon.trim() ? { icon: icon.trim() } : {}),
+          ...(color.trim() ? { color: color.trim() } : {}),
         }),
       );
       close();
@@ -61,12 +102,17 @@ export function DeckOptions({
     <section className="qard-deck-options" aria-label={`Deck options for ${name}`}>
       <header>
         <h2>Deck options · {name}</h2>
-        <button className="qard-icon-button" aria-label="Close deck options" onClick={close}>
+        <button
+          className="qard-icon-button"
+          aria-label="Close deck options"
+          disabled={busy}
+          onClick={close}
+        >
           <X size={16} />
         </button>
       </header>
       <p className="qard-muted qard-small">
-        These apply to this deck and the decks nested under it, unless a nested deck sets its own.
+        Scheduling options apply to this deck and its subdecks, unless a subdeck sets its own.
       </p>
       <label>
         <span>Target retention (%)</span>
@@ -74,15 +120,17 @@ export function DeckOptions({
           type="number"
           min={70}
           max={97}
-          step={1}
+          step="any"
           value={target}
           disabled={busy}
-          placeholder={String(Math.round(inherited.value * 100))}
-          onChange={(e) => setTarget(e.target.value)}
+          placeholder={String(inherited.value * 100)}
+          onChange={(e) => {
+            setTarget(e.target.value);
+            setTargetEdited(true);
+          }}
         />
         <small className="qard-muted">
-          Empty uses {Math.round(inherited.value * 100)}% from{' '}
-          {inherited.from ?? 'your Qard settings'}.
+          Empty uses {inherited.value * 100}% from {inherited.from ?? 'your Qard settings'}.
           {settings.scheduler === 'fsrs' ? '' : ' Only the FSRS scheduler uses this.'}
         </small>
       </label>
@@ -108,6 +156,15 @@ export function DeckOptions({
             : ''}
         </small>
       </label>
+      <DeckAppearance
+        name={badgeName ?? deckPath(name).at(-1) ?? name}
+        icon={icon}
+        color={color}
+        unavailable={unavailable}
+        busy={busy}
+        onIcon={setIcon}
+        onColor={setColor}
+      />
       {error && (
         <p className="qard-error" role="alert">
           {error}

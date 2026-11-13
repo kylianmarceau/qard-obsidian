@@ -181,3 +181,29 @@ it('opens the upcoming exam month, shows multiple exams and revision, and naviga
     `${month}-01`,
   ]);
 });
+
+it('updates exam material badges from current deck appearance settings', async () => {
+  await act(async () =>
+    root.render(
+      <ExamPlanner services={services} start={start} resume={resume} test={test} back={vi.fn()} />,
+    ),
+  );
+  await click('New exam');
+  await field('input[placeholder="Biology final"]', 'Biology exam');
+  await field('input[type="date"]', localDay());
+  await click('Continue');
+  await act(async () =>
+    services.reviews.saveSettings({
+      ...services.reviews.getSnapshot().settings,
+      deckOptions: { biology: { icon: 'terminal', color: '#123456' } },
+    }),
+  );
+  expect(host.querySelector('.qard-exam-material [data-icon]')?.getAttribute('data-icon')).toBe(
+    'terminal',
+  );
+  expect(
+    host
+      .querySelector<HTMLElement>('.qard-exam-material .qard-deck-badge')
+      ?.style.getPropertyValue('--qard-course'),
+  ).toBe('#123456');
+});

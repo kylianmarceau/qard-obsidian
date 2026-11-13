@@ -1,3 +1,4 @@
+import { deckAppearance } from '../../decks/deck-options';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, ArrowRight, Check, ChevronDown } from 'lucide-react';
 import { examProgress, localDay, validDay, type ExamPlan } from '../../exams/exam-plan';
@@ -194,7 +195,10 @@ export function ExamEditor({
                           checked={selection.decks.includes(deck.name)}
                           onChange={() => toggle('decks', deck.name)}
                         />
-                        <DeckBadge name={deck.name} />
+                        <DeckBadge
+                          name={deck.name}
+                          {...deckAppearance(saved.settings, deck.name)}
+                        />
                         <span>
                           <strong>{deck.name}</strong>
                           <small>

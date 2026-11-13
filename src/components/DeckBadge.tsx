@@ -1,3 +1,6 @@
+import { getIcon } from 'obsidian';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { readDeckColor } from '../settings/settings';
 import {
   Atom,
   BrainCircuit,
@@ -34,7 +37,17 @@ const SUBJECTS: [RegExp, LucideIcon][] = [
 ];
 
 /** Subject cues with a stable colour; unfamiliar names fall back to a monogram. */
-export function DeckBadge({ name }: { name: string }) {
+export function DeckBadge({ name, icon, color }: { name: string; icon?: string; color?: string }) {
+  const custom = useMemo(() => (icon ? getIcon(icon) : null), [icon]);
+  const host = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const element = host.current;
+    if (element && custom) {
+      element.replaceChildren(custom);
+      return () => element.replaceChildren();
+    }
+  }, [custom]);
+  const chosenColor = readDeckColor(color);
   const Icon = SUBJECTS.find(([pattern]) => pattern.test(name))?.[1];
   const words = name.match(/[\p{L}\p{N}]+/gu) ?? ['?'];
   const first = words[0] ?? '?';
@@ -51,8 +64,18 @@ export function DeckBadge({ name }: { name: string }) {
   const tone =
     Array.from(name).reduce((hash, letter) => (hash * 31 + letter.codePointAt(0)!) >>> 0, 0) % 6;
   return (
-    <span className={`qard-deck-badge qard-tone-${tone}`} aria-hidden="true">
-      {Icon ? <Icon size={23} strokeWidth={1.6} /> : <span>{initials}</span>}
+    <span
+      className={`qard-deck-badge qard-tone-${tone}`}
+      aria-hidden="true"
+      style={chosenColor ? ({ '--qard-course': chosenColor } as CSSProperties) : undefined}
+    >
+      {custom ? (
+        <span key="custom" className="qard-deck-custom-icon" ref={host} />
+      ) : Icon ? (
+        <Icon size={23} strokeWidth={1.6} />
+      ) : (
+        <span key="initials">{initials}</span>
+      )}
     </span>
   );
 }

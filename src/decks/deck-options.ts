@@ -1,5 +1,10 @@
 import { retention } from '../review/fsrs-scheduler';
-import type { DeckOptions, QardSettings } from '../settings/settings';
+import {
+  readDeckColor,
+  readDeckIcon,
+  type DeckOptions,
+  type QardSettings,
+} from '../settings/settings';
 import { canonicalDeck, deckLineage } from './deck-index';
 
 type Options = Pick<QardSettings, 'deckOptions' | 'desiredRetention'>;
@@ -25,6 +30,14 @@ export function deckLimits(
 }
 export const hasDeckLimits = (settings: Pick<QardSettings, 'deckOptions'>) =>
   Object.values(settings.deckOptions).some((options) => !!options.newCardsPerDay);
+/** Appearance is exact-deck-only, unlike scheduling overrides. */
+export function deckAppearance(
+  settings: Pick<QardSettings, 'deckOptions'>,
+  deck: string,
+): Pick<DeckOptions, 'icon' | 'color'> {
+  const { icon, color } = settings.deckOptions[canonicalDeck(deck)] ?? {};
+  return { icon, color };
+}
 /** Returns the options map with this deck's entry replaced, or removed when nothing is set. */
 export function withDeckOptions(
   all: Record<string, DeckOptions>,
@@ -32,7 +45,11 @@ export function withDeckOptions(
   options: DeckOptions,
 ): Record<string, DeckOptions> {
   const { [canonicalDeck(deck)]: _old, ...rest } = all;
+  const icon = readDeckIcon(options.icon),
+    color = readDeckColor(options.color);
   const next: DeckOptions = {
+    ...(icon ? { icon } : {}),
+    ...(color ? { color } : {}),
     ...(options.desiredRetention !== undefined
       ? { desiredRetention: retention(options.desiredRetention) }
       : {}),

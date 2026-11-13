@@ -246,3 +246,40 @@ it('combines a deck’s target retention with personal FSRS parameters', async (
   );
   expect(alone.fsrs!.stability).not.toBe(expected.fsrs!.stability);
 });
+
+it('normalizes portable appearance independently of scheduling and rejects malformed persisted values', () => {
+  const s = settings({
+    A: { icon: ' terminal ', color: ' #AABBCC ', desiredRetention: 0.85 },
+    B: { icon: 'future-registered-icon', color: 'red' },
+    C: { icon: '<svg onload=alert(1)>', color: '#123456' },
+    D: { icon: 'x'.repeat(101), color: 'url(https://example.com)' },
+  });
+  expect(s.deckOptions).toEqual({
+    A: { icon: 'terminal', color: '#aabbcc', desiredRetention: 0.85 },
+    B: { icon: 'future-registered-icon' },
+    C: { color: '#123456' },
+  });
+  expect(readSettings(s).deckOptions).toEqual(s.deckOptions);
+  expect(limitsNewCards(settings({ A: { icon: 'terminal', color: '#123456' } }))).toBe(false);
+  const all = withDeckOptions({}, ' A :: B ', {
+    icon: 'terminal',
+    color: '#123456',
+    newCardsPerDay: 5,
+  });
+  expect(withDeckOptions(all, 'A::B', { newCardsPerDay: 5 })).toEqual({
+    'A::B': { newCardsPerDay: 5 },
+  });
+  expect(withDeckOptions(all, 'A::B', { icon: 'terminal' })).toEqual({
+    'A::B': { icon: 'terminal' },
+  });
+  expect(withDeckOptions(all, 'A::B', {})).toEqual({});
+});
+
+it.each(['ri_terminal', 'pack:terminal', 'pack.terminal', 'pack/terminal'])(
+  'keeps portable icon-pack ID %s through save and reload',
+  (icon) => {
+    const choices = withDeckOptions({}, ' A :: B ', { icon });
+    expect(choices).toEqual({ 'A::B': { icon } });
+    expect(readSettings({ deckOptions: choices }).deckOptions).toEqual(choices);
+  },
+);

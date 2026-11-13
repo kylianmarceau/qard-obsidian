@@ -1,3 +1,4 @@
+import { deckAppearance } from '../decks/deck-options';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { ArrowLeft, Play, Pause, ChevronRight } from 'lucide-react';
 import { DeckBadge } from './DeckBadge';
@@ -165,7 +166,7 @@ export function StudySessionBuilder({
                     onChange={() => toggle(deck.cards)}
                     label={deck.name}
                   />
-                  <DeckBadge name={deck.name} />
+                  <DeckBadge name={deck.name} {...deckAppearance(saved.settings, deck.name)} />
                   <span className="qard-selection-copy">
                     <strong>{deck.name}</strong>
                     <small>
