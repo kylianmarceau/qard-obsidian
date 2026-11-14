@@ -586,3 +586,85 @@ it('selected check deletion returns to Learn', async () => {
   expect(files.has(MASTERY)).toBe(true);
   expect(deleted).toHaveBeenCalledOnce();
 });
+
+it('shows graded lesson blanks without offering a free-text retry', async () => {
+  const path = 'Qard/Lessons/cloze.json';
+  files.set(
+    path,
+    JSON.stringify({
+      version: 1,
+      createdAt: 1,
+      topic: 'Recall',
+      notes: [],
+      current: 0,
+      accepted: true,
+      map: {
+        title: 'Recall',
+        plan: '',
+        mermaid: '',
+        steps: [{ title: 'One', why: 'Recall the term.' }],
+      },
+      steps: [
+        {
+          title: 'One',
+          explain: 'Use dynamic programming.',
+          connect: '',
+          checkFirst: false,
+          check: q('gap', {
+            type: 'cloze',
+            prompt: 'Use {{method}}.',
+            marks: 1,
+            blanks: [{ id: 'method' }],
+            rubric: [{ point: 'method', marks: 1 }],
+          }),
+          misconceptions: [],
+        },
+      ],
+      state: [
+        {
+          asks: [],
+          answer: { blanks: { method: 'sum' } },
+          mark: {
+            score: 0,
+            awarded: [false],
+            feedback: 'Review the term.',
+            mistake: 'misconception',
+            annotations: [],
+          },
+        },
+      ],
+    }),
+  );
+  await act(async () => root.render(<LessonView services={services} nav={nav} path={path} />));
+  await tick();
+  await tick();
+  expect(host.textContent).toContain('sum — Incorrect');
+  expect(host.querySelectorAll('.qard-rubric-row')).toHaveLength(1);
+  expect(host.textContent).toContain('Mark scheme');
+  expect(host.querySelector('textarea[aria-label="Second try"]')).toBeNull();
+});
+
+it('shows filled answers instead of raw slots in a completed retention check', async () => {
+  const record = JSON.parse(files.get(CHECK)!);
+  record.questions = [
+    q('gap', {
+      type: 'cloze',
+      prompt: 'Use {{method}}.',
+      marks: 1,
+      blanks: [{ id: 'method' }],
+      rubric: [{ point: 'method', marks: 1 }],
+    }),
+  ];
+  record.answers = { gap: { blanks: { method: 'DP' } } };
+  record.marks = {
+    gap: { score: 1, awarded: [true], annotations: [], feedback: 'Correct.', mistake: 'none' },
+  };
+  record.finishedAt = 2;
+  record.status = 'marked';
+  files.set(CHECK, JSON.stringify(record));
+  await act(async () => root.render(<CheckView services={services} nav={nav} path={CHECK} />));
+  await tick();
+  await tick();
+  expect(host.textContent).toContain('Use DP.');
+  expect(host.textContent).not.toContain('{{method}}');
+});

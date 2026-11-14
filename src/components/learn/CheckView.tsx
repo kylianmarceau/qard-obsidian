@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
+import { answerText } from '../../tests/test-types';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { JobControls } from '../jobs/JobControls';
@@ -119,7 +120,11 @@ export function CheckView({
               <span>Question {i + 1}</span>
             </div>
             <div className="qard-q-prompt">
-              <Markdown text={q.prompt} path={record.mastery} services={services} />
+              <Markdown
+                text={q.type === 'cloze' ? answerText(q, record.answers[q.id]) : q.prompt}
+                path={record.mastery}
+                services={services}
+              />
             </div>
             <MarkedAnswer
               services={services}

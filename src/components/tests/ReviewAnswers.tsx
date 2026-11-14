@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { QardServices } from '../../views/services';
 import type { Question } from '../../tests/test-types';
-import { questions, sectionOf } from '../../tests/test-types';
+import { answerText, questions, sectionOf } from '../../tests/test-types';
+import { ClozePrompt } from '../common/QuestionAnswer';
 import { AnswerFeedback, MarkScheme } from '../common/AnswerFeedback';
 import { ignoresStudyKey } from '../../review/keyboard';
 import { InlineMarkdown, Markdown } from '../Markdown';
@@ -110,7 +111,9 @@ export function ReviewAnswers({
                     <span className="qard-muted">{all.indexOf(x) + 1}</span>
                     <span className="qard-rail-title">
                       <InlineMarkdown
-                        text={firstLine(x.prompt)}
+                        text={firstLine(
+                          x.type === 'cloze' ? answerText(x, attempt.answers[x.id]) : x.prompt,
+                        )}
                         path={folder}
                         services={services}
                       />
@@ -227,7 +230,19 @@ function QuestionReview({
             <InlineMarkdown text={section.title} path={path} services={services} />
           </span>
           <div className="qard-review-prompt">
-            <Markdown text={q.prompt} path={path} services={services} />
+            {q.type === 'cloze' ? (
+              <ClozePrompt
+                services={services}
+                question={q}
+                answer={answer}
+                mark={mark}
+                path={path}
+                label="Your answer"
+                locked
+              />
+            ) : (
+              <Markdown text={q.prompt} path={path} services={services} />
+            )}
           </div>
           {mark.feedback && (
             <p className="qard-review-summary">
@@ -257,19 +272,23 @@ function QuestionReview({
             </div>
           ))}
         </section>
-      ) : (
+      ) : q.type !== 'cloze' ? (
         <AnswerFeedback services={services} answer={answer} mark={mark} path={path} />
-      )}
+      ) : null}
 
       <MarkScheme services={services} question={q} mark={mark} path={path} />
 
       <section className="qard-review-actions" aria-label="Review actions">
         <div className="qard-action-group">
-          {lost && !review?.retry && panel !== 'retry' && panel !== 'model' && (
-            <button className="qard-primary" onClick={() => toggle('retry')}>
-              Try again
-            </button>
-          )}
+          {q.type !== 'cloze' &&
+            lost &&
+            !review?.retry &&
+            panel !== 'retry' &&
+            panel !== 'model' && (
+              <button className="qard-primary" onClick={() => toggle('retry')}>
+                Try again
+              </button>
+            )}
           <button className={panel === 'model' ? 'is-on' : ''} onClick={() => toggle('model')}>
             Model answer
           </button>
@@ -298,7 +317,7 @@ function QuestionReview({
         </div>
       </section>
 
-      {(panel === 'retry' || review?.retry) && (
+      {q.type !== 'cloze' && (panel === 'retry' || review?.retry) && (
         <section className="qard-panel">
           {review?.retry ? (
             <>
@@ -352,11 +371,7 @@ function QuestionReview({
             <div className="qard-compare">
               <div>
                 <div className="qard-label">You wrote</div>
-                <p className="qard-plain">
-                  {q.type === 'mcq'
-                    ? (q.options?.[answer?.choice ?? -1] ?? '(No answer)')
-                    : answer?.text || '(No answer)'}
-                </p>
+                <p className="qard-plain">{answerText(q, answer) || '(No answer)'}</p>
               </div>
               <div>
                 <div className="qard-label">Model answer</div>

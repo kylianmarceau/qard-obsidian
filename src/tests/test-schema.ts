@@ -1,4 +1,4 @@
-import type { PracticeTest, QuestionMark, TestPlan, Wrapup } from './test-types';
+import type { PracticeTest, Question, QuestionMark, TestPlan, Wrapup } from './test-types';
 
 /** The JSON Schema subset shared by structured outputs and the local validator. */
 export type Schema =
@@ -84,18 +84,19 @@ export const planSchema = obj({
 const question = obj(
   {
     id: str('Unique across the test: q1, q2, …'),
-    type: oneOf(['short', 'long', 'mcq', 'calc']),
+    type: oneOf(['short', 'long', 'mcq', 'calc', 'cloze']),
     prompt: str('Markdown; LaTeX in $…$.'),
     marks: num(),
     options: arr(str()),
     answer: num('Index of the correct option (multiple choice only).'),
+    blanks: arr(obj({ id: str('Slot ID in {{id}}; blank order matches rubric order.') })),
     rubric: arr(obj({ point: str('One checkable idea.'), marks: num() })),
     model: str('A full-marks answer in Markdown.'),
     source: obj({ path: str(), heading: str() }, ['heading']),
     objective: str('Mastery objective id from the list given, if any.'),
     goal: oneOf(['recognise', 'recall', 'explain', 'apply']),
   },
-  ['options', 'answer', 'source', 'objective', 'goal'],
+  ['options', 'answer', 'blanks', 'source', 'objective', 'goal'],
 );
 export const testSchema = obj({
   title: str(),
@@ -156,6 +157,39 @@ export class SchemaError extends Error {
 }
 export const readPlan = (v: unknown) =>
   check<TestPlan>(planSchema, v, (p) => (p.sections.length ? [] : ['result.sections is empty']));
+/** Shared by test generation, probes, and lesson checks. */
+export function validateClozeQuestion(q: Question): string[] {
+  if (q.type !== 'cloze') {
+    return q.blanks === undefined ? [] : [`${q.id}: blanks require cloze type`];
+  }
+  const errors: string[] = [];
+  const blanks = q.blanks ?? [];
+  const ids = blanks.map((blank) => blank.id);
+  const slots = [...q.prompt.matchAll(/\{\{([^{}]+)\}\}/g)].map((match) => match[1]!);
+  if (
+    !blanks.length ||
+    ids.some((id) => !/^[A-Za-z0-9_-]+$/.test(id)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    errors.push(`${q.id}: cloze needs unique nonempty blank IDs`);
+  }
+  if (
+    slots.length !== ids.length ||
+    new Set(slots).size !== slots.length ||
+    slots.some((id) => !ids.includes(id)) ||
+    /\{\{|\}\}/.test(q.prompt.replace(/\{\{([^{}]+)\}\}/g, ''))
+  ) {
+    errors.push(`${q.id}: cloze slots must match blank IDs exactly once`);
+  }
+  if (
+    q.marks !== blanks.length ||
+    q.rubric.length !== blanks.length ||
+    q.rubric.some((point) => point.marks !== 1)
+  ) {
+    errors.push(`${q.id}: cloze needs one mark and one rubric point per blank`);
+  }
+  return errors;
+}
 export function readTest(v: unknown): Omit<PracticeTest, 'version' | 'createdAt'> {
   return check<Omit<PracticeTest, 'version' | 'createdAt'>>(testSchema, v, (t) => {
     const errors: string[] = [],
@@ -169,6 +203,7 @@ export function readTest(v: unknown): Omit<PracticeTest, 'version' | 'createdAt'
           errors.push(`question id ${q.id} is used twice`);
         }
         ids.add(q.id);
+        errors.push(...validateClozeQuestion(q));
         if (!q.rubric.length) {
           errors.push(`${q.id} has no rubric`);
         }

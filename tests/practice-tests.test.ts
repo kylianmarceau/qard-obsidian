@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { answerText, blankAnswer, type Question } from '../src/tests/test-types';
+import { readQuestions, readProbe, readStep } from '../src/learn/learn-schema';
 import { placeAnnotations } from '../src/tests/annotate';
 import {
   readMarks,
@@ -71,6 +73,97 @@ const mark = (score: number, awarded: boolean[]) => ({
   annotations: [{ quote: 'sums', kind: 'wrong', note: 'Viterbi maximises.' }],
   mistake: 'misconception',
   feedback: 'Close.',
+});
+
+const CLOZE: Question = {
+  id: 'c1',
+  type: 'cloze',
+  prompt: 'The {{algorithm}} finds the {{path}}.',
+  marks: 2,
+  rubric: [
+    { point: 'Algorithm', marks: 1 },
+    { point: 'Path', marks: 1 },
+  ],
+  model: 'The Viterbi algorithm finds the best path.',
+  blanks: [{ id: 'algorithm' }, { id: 'path' }],
+};
+
+describe('cloze answers', () => {
+  it('sends explicit submissions in rubric order, including missing slots and safe prototype IDs', () => {
+    const question = { ...CLOZE, prompt: 'The {{path}} is found by {{algorithm}}.' };
+    const block = questionBlock(question, { blanks: { algorithm: 'Viterbi decoding' } });
+    const submissions = JSON.parse(
+      /<cloze_submissions>([\s\S]*?)<\/cloze_submissions>/.exec(block)![1]!,
+    );
+    expect(submissions).toEqual([
+      { id: 'algorithm', rubricPoint: 1, text: 'Viterbi decoding' },
+      { id: 'path', rubricPoint: 2, text: '' },
+    ]);
+    expect(block).toContain('The {{path}} is found by Viterbi decoding.');
+    expect(blankAnswer({}, 'constructor')).toBe('');
+    expect(blankAnswer({ blanks: JSON.parse('{"__proto__":"a tree"}') }, '__proto__')).toBe(
+      'a tree',
+    );
+  });
+
+  it('serializes filled context without inventing missing answers', () => {
+    expect(answerText(CLOZE, { blanks: { algorithm: 'Viterbi' } })).toBe(
+      'The Viterbi finds the {{path}}.',
+    );
+    expect(answerText(CLOZE, { unknown: true })).toBe("I don't know");
+    expect(answerText({ ...CLOZE, type: 'mcq', options: ['a', 'b'] }, { choice: 1 })).toBe('b');
+    expect(answerText({ ...CLOZE, type: 'short' }, { text: 'My answer' })).toBe('My answer');
+  });
+
+  it('validates cloze consistently across tests, questions, probes, and lesson checks', () => {
+    const readers = [
+      (question: Question) =>
+        readTest({
+          title: 'Cloze',
+          sections: [{ id: 's1', title: 'Cloze', questions: [question] }],
+        }),
+      (question: Question) => readQuestions({ questions: [question] }),
+      (question: Question) => readProbe({ questions: [question], note: '' }),
+      (question: Question) =>
+        readStep({
+          title: 'Step',
+          explain: '',
+          connect: '',
+          checkFirst: true,
+          check: question,
+          misconceptions: [],
+        }),
+    ];
+    const invalid: Partial<Question>[] = [
+      { blanks: undefined },
+      {
+        blanks: [{ id: 'algorithm' }, { id: 'algorithm' }],
+      },
+      { blanks: [{ id: '' }, CLOZE.blanks![1]!] },
+      { blanks: [{ id: 'invalid slot' }, CLOZE.blanks![1]!] },
+      { prompt: 'The {{algorithm}} finds {{missing}}.' },
+      { prompt: 'The {{algorithm}} finds {{algorithm}}.' },
+      { prompt: 'The {{algorithm}} finds {{path}} and {{broken.' },
+      { marks: 3 },
+      { rubric: [{ point: 'Both', marks: 2 }] },
+      {
+        rubric: [
+          { point: 'A', marks: 0 },
+          { point: 'B', marks: 2 },
+        ],
+      },
+    ];
+    for (const read of readers) {
+      expect(() => read(CLOZE)).not.toThrow();
+      expect(() =>
+        read({
+          ...CLOZE,
+          blanks: CLOZE.blanks!.map((blank) => ({ ...blank, answers: ['legacy alias'] })),
+        }),
+      ).not.toThrow();
+      for (const patch of invalid) expect(() => read({ ...CLOZE, ...patch })).toThrow();
+    }
+  });
 });
 
 describe('agent replies are validated before Qard saves anything', () => {
@@ -365,6 +458,137 @@ describe('practice test lifecycle', () => {
       ),
     };
   }
+
+  it('marks cloze with the LLM, supports disputes and persists semantic grades without aliases', async () => {
+    const test = { title: 'Cloze', sections: [{ id: 's1', title: 'Fill in', questions: [CLOZE] }] };
+    const { storage, tests, runner } = service([
+      () => test,
+      (prompt) => {
+        expect(prompt).toContain('Viterbi decoding');
+        expect(prompt).toContain('highest-probability hidden-state sequence');
+        return { questions: [{ id: 'c1', ...mark(99, [true, false]) }] };
+      },
+      () => ({ ...mark(99, [true, true]), reply: 'Your wording expresses the same path.' }),
+      () => ({ answer: 'The rubric accepts equivalent meaning.' }),
+    ]);
+    const folder = await tests.generate({ request });
+    await until(() => !!tests.get(folder)?.test);
+    const blanks = {
+      algorithm: 'Viterbi decoding',
+      path: 'highest-probability hidden-state sequence',
+    };
+    tests.answer(folder, 'c1', { blanks });
+    await tests.submit(folder, 's1');
+    await until(() => tests.get(folder)?.attempt?.sections.s1?.status === 'marked');
+    expect(tests.get(folder)?.attempt?.marks.c1).toMatchObject({
+      score: 1,
+      awarded: [true, false],
+    });
+    expect(runner.prompts).toHaveLength(2);
+    await tests.retry(folder, 'c1', 'A free-text retry');
+    expect(runner.prompts).toHaveLength(2);
+    await tests.dispute(folder, 'c1', 'My path means the same thing.');
+    const disputed = tests.get(folder)?.attempt?.marks.c1;
+    expect(disputed).toMatchObject({ score: 2, awarded: [true, true] });
+    expect(tests.get(folder)?.attempt?.review.c1?.dispute?.reply).toContain('same path');
+    expect(tests.get(folder)?.attempt?.review.c1?.retry).toBeUndefined();
+    await tests.ask(folder, 'c1', 'What counts as equivalent?');
+    expect(tests.get(folder)?.attempt?.review.c1?.followups).toHaveLength(1);
+    const reloaded = service([], {}, storage.files);
+    const saved = await reloaded.tests.load(folder);
+    expect(saved.attempt?.answers.c1?.blanks).toEqual(blanks);
+    expect(saved.attempt?.marks.c1).toEqual(disputed);
+    expect(saved.test?.sections[0]?.questions[0]?.blanks).toEqual(CLOZE.blanks);
+    expect(reloaded.runner.prompts).toHaveLength(0);
+  });
+
+  it('defers cloze in end mode, keeps unknown local, and retries provider failures without local fallback', async () => {
+    const unknown = { ...CLOZE, id: 'unknown' };
+    const test = {
+      title: 'Cloze',
+      sections: [{ id: 's1', title: 'Fill in', questions: [CLOZE, unknown] }],
+    };
+    const { storage, tests, runner } = service(
+      [
+        () => test,
+        () => {
+          throw new Error('Provider unavailable');
+        },
+        (prompt) => {
+          expect(prompt).toContain('<question id="c1"');
+          expect(prompt).not.toContain('<question id="unknown"');
+          const submissions = JSON.parse(
+            /<cloze_submissions>([\s\S]*?)<\/cloze_submissions>/.exec(prompt)![1]!,
+          );
+          expect(submissions).toEqual([
+            { id: 'algorithm', rubricPoint: 1, text: 'Viterbi decoding' },
+            { id: 'path', rubricPoint: 2, text: '' },
+          ]);
+          return { questions: [{ id: 'c1', ...mark(99, [true, false]) }] };
+        },
+        () => ({ fixes: [], cards: [], profile: '' }),
+      ],
+      { marking: 'end', useProfile: false },
+    );
+    const folder = await tests.generate({ request });
+    await until(() => !!tests.get(folder)?.test);
+    tests.answer(folder, 'c1', { blanks: { algorithm: 'Viterbi decoding' } });
+    tests.answer(folder, 'unknown', { unknown: true });
+    await tests.submit(folder, 's1');
+    expect(runner.prompts).toHaveLength(1);
+    expect(tests.get(folder)?.attempt?.sections.s1?.status).toBe('submitted');
+    expect(tests.get(folder)?.attempt?.marks.c1).toBeUndefined();
+    expect(tests.get(folder)?.attempt?.marks.unknown).toMatchObject({
+      score: 0,
+      mistake: 'unknown',
+    });
+    await tests.finish(folder);
+    expect(tests.get(folder)?.attempt?.sections.s1).toMatchObject({
+      status: 'error',
+      error: 'Provider unavailable',
+    });
+    expect(tests.get(folder)?.attempt?.marks.c1).toBeUndefined();
+    const persisted = JSON.parse(storage.files[`${folder}/attempt.json`]!);
+    expect(persisted.answers.c1.blanks).toEqual({ algorithm: 'Viterbi decoding' });
+    await tests.finish(folder);
+    await until(() => !!tests.get(folder)?.attempt?.wrapup);
+    expect(tests.get(folder)?.attempt?.sections.s1?.status).toBe('marked');
+    expect(tests.get(folder)?.attempt?.marks.c1).toMatchObject({
+      score: 1,
+      awarded: [true, false],
+    });
+  });
+
+  it('opens legacy cloze records with aliases and preserves their saved grades', async () => {
+    const folder = 'Qard/Tests/Legacy';
+    const legacy = {
+      ...CLOZE,
+      blanks: CLOZE.blanks!.map((blank) => ({ ...blank, answers: ['old exact alias'] })),
+    };
+    const savedMark = mark(1, [true, false]);
+    const { tests, runner } = service(
+      [],
+      {},
+      {
+        [`${folder}/test.json`]: JSON.stringify({
+          title: 'Legacy',
+          sections: [{ id: 's1', title: 'Old', questions: [legacy] }],
+        }),
+        [`${folder}/attempt.json`]: JSON.stringify({
+          version: 1,
+          startedAt: 1,
+          answers: { c1: { blanks: { algorithm: 'old exact alias' } } },
+          sections: { s1: { status: 'marked' } },
+          marks: { c1: savedMark },
+          review: {},
+        }),
+      },
+    );
+    const saved = await tests.load(folder);
+    expect(saved.test?.sections[0]?.questions[0]?.blanks).toEqual(legacy.blanks);
+    expect(saved.attempt?.marks.c1).toEqual(savedMark);
+    expect(runner.prompts).toHaveLength(0);
+  });
 
   it('persists folder attachments and the full note snapshot through planning and generation', async () => {
     const notes = Array.from({ length: 10 }, (_, i) => `Courses/AI/Lecture ${i + 1}.md`);

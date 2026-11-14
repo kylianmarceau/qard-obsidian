@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { QardServices } from '../../views/services';
 import type { AnswerState, Confidence, Question, QuestionMark } from '../../tests/test-types';
+import { blankAnswer } from '../../tests/test-types';
 import { AnswerFeedback, MarkScheme } from './AnswerFeedback';
 import { InlineMarkdown, Markdown } from '../Markdown';
 import { scoreTone } from './FeedbackStatus';
@@ -38,9 +40,22 @@ export function AnswerInput({
           {q.marks} {q.marks === 1 ? 'mark' : 'marks'}
         </span>
       </div>
-      <div className="qard-q-prompt">
-        <Markdown text={q.prompt} path={path} services={services} />
-      </div>
+      {q.type === 'cloze' && <p className="qard-label">Fill in the blanks</p>}
+      {q.type === 'cloze' ? (
+        <ClozePrompt
+          services={services}
+          question={q}
+          answer={answer}
+          path={path}
+          label={label}
+          locked={locked || unknown}
+          onChange={onChange}
+        />
+      ) : (
+        <div className="qard-q-prompt">
+          <Markdown text={q.prompt} path={path} services={services} />
+        </div>
+      )}
       {q.type === 'mcq' ? (
         <div className="qard-options" role="radiogroup" aria-label={`${label} options`}>
           {q.options?.map((o, i) => (
@@ -57,7 +72,7 @@ export function AnswerInput({
             </button>
           ))}
         </div>
-      ) : (
+      ) : q.type !== 'cloze' ? (
         <textarea
           className="qard-answer-input"
           aria-label={`Answer to ${label.toLowerCase()}`}
@@ -67,7 +82,7 @@ export function AnswerInput({
           disabled={unknown}
           onChange={(e) => onChange({ text: e.target.value })}
         />
-      )}
+      ) : null}
       <div className="qard-q-tools">
         <button
           className={'qard-conf qard-dont-know' + (unknown ? ' is-on' : '')}
@@ -101,7 +116,13 @@ export function AnswerInput({
 }
 
 export const answered = (q: Question, a?: AnswerState) =>
-  !!a && (a.unknown || (q.type === 'mcq' ? a.choice !== undefined : !!a.text?.trim()));
+  !!a &&
+  (a.unknown ||
+    (q.type === 'mcq'
+      ? a.choice !== undefined
+      : q.type === 'cloze'
+        ? !!q.blanks?.length && q.blanks.every((blank) => !!blankAnswer(a, blank.id).trim())
+        : !!a.text?.trim()));
 
 /** A marked answer: underlines linked to the marker's notes, the mark scheme, and the model answer on request. */
 export function MarkedAnswer({
@@ -146,6 +167,16 @@ export function MarkedAnswer({
             ))
           )}
         </section>
+      ) : q.type === 'cloze' ? (
+        <ClozePrompt
+          services={services}
+          question={q}
+          answer={answer}
+          path={path}
+          label="Your answer"
+          locked
+          mark={mark}
+        />
       ) : (
         <AnswerFeedback services={services} answer={answer} mark={mark} path={path} />
       )}
@@ -158,6 +189,132 @@ export function MarkedAnswer({
           <Markdown text={q.model} path={path} services={services} />
         </div>
       )}
+    </div>
+  );
+}
+
+type ClozePromptProps = {
+  services: QardServices;
+  question: Question;
+  answer?: AnswerState;
+  path: string;
+  label: string;
+  locked: boolean;
+  onChange?: (patch: Partial<AnswerState>) => void;
+  mark?: QuestionMark;
+};
+
+/** Each question owns its Markdown DOM and portals, including during asynchronous renders. */
+export function ClozePrompt(props: ClozePromptProps) {
+  const { question: q, path } = props;
+  return <ClozePromptContent key={JSON.stringify([q.id, q.prompt, q.blanks, path])} {...props} />;
+}
+
+/** Keep Obsidian's full Markdown render, placing controls only at the named gaps. */
+function ClozePromptContent({
+  services,
+  question: q,
+  answer,
+  path,
+  label,
+  locked,
+  onChange,
+  mark,
+}: ClozePromptProps) {
+  let prefix = 'QARDCLOZESLOT';
+  while (q.prompt.includes(prefix)) {
+    prefix += 'X';
+  }
+  const tokenPattern = new RegExp(`${prefix}(\\d+)END`, 'g');
+  const text = q.prompt.replace(/\{\{([^{}]+)\}\}/g, (token, id: string) => {
+    const index = q.blanks?.findIndex((blank) => blank.id === id) ?? -1;
+    return index < 0 ? token : `${prefix}${index}END`;
+  });
+  const ref = useRef<HTMLDivElement>(null);
+  const [slots, setSlots] = useState<{ id: string; target: HTMLElement }[]>([]);
+  useEffect(() => {
+    const host = ref.current;
+    if (!host) {
+      return;
+    }
+    let targets: { id: string; target: HTMLElement }[] = [];
+    const place = () => {
+      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      const nodes: Text[] = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode as Text;
+        if (!node.parentElement?.closest('.qard-cloze-slot') && node.data.includes(prefix)) {
+          nodes.push(node);
+        }
+      }
+      for (const node of nodes) {
+        const fragment = createFragment();
+        let end = 0;
+        for (const match of node.data.matchAll(tokenPattern)) {
+          const blank = q.blanks?.[Number(match[1])];
+          if (!blank) {
+            continue;
+          }
+          fragment.append(node.data.slice(end, match.index));
+          const target = host.createSpan({ cls: 'qard-cloze-slot' });
+          fragment.append(target);
+          targets.push({ id: blank.id, target });
+          end = match.index + match[0].length;
+        }
+        if (end) {
+          fragment.append(node.data.slice(end));
+          node.replaceWith(fragment);
+        }
+      }
+      targets = targets.filter(({ target }) => host.contains(target));
+      setSlots((previous) =>
+        previous.length === targets.length &&
+        previous.every((slot, i) => slot.target === targets[i]?.target)
+          ? previous
+          : [...targets],
+      );
+    };
+    const observer = new MutationObserver(place);
+    observer.observe(host, { childList: true, subtree: true });
+    place();
+    return () => observer.disconnect();
+  }, [text, prefix]);
+  return (
+    <div className="qard-q-prompt" ref={ref}>
+      <Markdown text={text} path={path} services={services} />
+      {slots.map(({ id, target }, i) => {
+        const index = q.blanks!.findIndex((blank) => blank.id === id);
+        const blank = q.blanks?.[index];
+        if (!blank || !ref.current?.contains(target)) {
+          return null;
+        }
+        const correct = !!mark?.awarded[index];
+        return createPortal(
+          mark ? (
+            <span className={correct ? 'is-full' : 'is-zero'}>
+              <strong>
+                {answer?.unknown ? "I didn't know" : blankAnswer(answer, id) || 'No answer'}
+              </strong>
+              <span> — {correct ? 'Correct' : 'Incorrect'}</span>
+            </span>
+          ) : (
+            <input
+              className="qard-cloze-input"
+              aria-label={`${label}: blank ${index + 1}`}
+              value={blankAnswer(answer, id)}
+              disabled={locked}
+              autoComplete="off"
+              onChange={(event) => {
+                if (!locked && ref.current?.contains(target)) {
+                  onChange?.({ blanks: { ...answer?.blanks, [id]: event.target.value } });
+                }
+              }}
+            />
+          ),
+          target,
+          `${id}-${i}`,
+        );
+      })}
     </div>
   );
 }

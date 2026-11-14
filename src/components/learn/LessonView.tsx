@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { QardServices } from '../../views/services';
 import type { Lesson } from '../../learn/learn-types';
+import { answerText } from '../../tests/test-types';
 import type { Objective } from '../../learn/mastery';
 import { isoDay } from '../../learn/mastery';
 import { InlineMarkdown, Markdown } from '../Markdown';
@@ -326,7 +327,15 @@ function LessonMapView({
               <div key={q.id} className="qard-doc-row">
                 <span className={ok ? 'is-full' : 'is-zero'}>{ok ? '✓' : '✕'}</span>
                 <div className="qard-probe-prompt">
-                  <Markdown text={q.prompt.split(/\n\s*\n/)[0]!} path={where} services={services} />
+                  <Markdown
+                    text={
+                      (q.type === 'cloze' ? answerText(q, probe.answers[q.id]) : q.prompt).split(
+                        /\n\s*\n/,
+                      )[0]!
+                    }
+                    path={where}
+                    services={services}
+                  />
                 </div>
               </div>
             );
@@ -565,7 +574,8 @@ function LessonSteps({
                   <Markdown text={st.reteach} path={where} services={services} />
                 </div>
               )}
-              {st.mark.score < step.check.marks &&
+              {step.check.type !== 'cloze' &&
+                st.mark.score < step.check.marks &&
                 !st.answer?.unknown &&
                 (st.retry ? (
                   <div className="qard-panel">

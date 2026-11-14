@@ -10,6 +10,7 @@ import { type TestNav } from '../../views/navigation';
 import { WhileYouWait, useHold } from '../jobs/WhileYouWait';
 import { AgentLabel } from '../jobs/AgentLabel';
 import { LoadingIndicator } from '../common/LoadingIndicator';
+import { ClozePrompt } from '../common/QuestionAnswer';
 
 const CONFIDENCE: { id: Confidence; label: string }[] = [
   { id: 'sure', label: 'Sure' },
@@ -251,9 +252,24 @@ function QuestionBlock({
           {q.marks} {q.marks === 1 ? 'mark' : 'marks'}
         </span>
       </div>
-      <div className="qard-q-prompt">
-        <Markdown text={q.prompt} path={path} services={services} />
-      </div>
+      {q.type === 'cloze' ? (
+        <>
+          <p className="qard-label">Fill in the blanks</p>
+          <ClozePrompt
+            services={services}
+            question={q}
+            answer={answer}
+            path={path}
+            label={`Question ${number}`}
+            locked={locked || !!answer?.unknown}
+            onChange={set}
+          />
+        </>
+      ) : (
+        <div className="qard-q-prompt">
+          <Markdown text={q.prompt} path={path} services={services} />
+        </div>
+      )}
       {q.type === 'mcq' ? (
         <div className="qard-options" role="radiogroup" aria-label={`Question ${number} options`}>
           {q.options?.map((o, i) => (
@@ -270,7 +286,7 @@ function QuestionBlock({
             </button>
           ))}
         </div>
-      ) : (
+      ) : q.type !== 'cloze' ? (
         <>
           <textarea
             className="qard-answer-input"
@@ -291,7 +307,7 @@ function QuestionBlock({
             </div>
           )}
         </>
-      )}
+      ) : null}
       <div className="qard-q-tools">
         <button
           className={'qard-conf qard-dont-know' + (answer?.unknown ? ' is-on' : '')}

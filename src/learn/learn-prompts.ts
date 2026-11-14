@@ -106,7 +106,7 @@ ${o ? objectiveBlock(o) : ''}Notes to teach from:
 ${notesList(lesson.notes)}
 ${sourcesBlock(sources)}${courseBlock(m)}
 Before planning the lesson, find the edge of what the student knows. List the prerequisite ideas the lesson depends on. Skip any the mastery file already shows as taught, right once or mastered.
-Write at most four quick probe questions, one per remaining prerequisite, each worth 1 mark. Prefer mcq (recognise) or short (recall); they must be answerable in under a minute. Set objective to a mastery id when the prerequisite is one. Ids are p1, p2, …
+Write at most four quick probe questions, one per remaining prerequisite, each worth 1 mark. Prefer mcq (recognise), short or single-slot cloze (recall); they must be answerable in under a minute. Set objective to a mastery id when the prerequisite is one. Ids are p1, p2, …
 Return no questions if the evidence already shows where to start. note says in one sentence what the probe checks.
 ${MCQ_RULES}`;
 }
@@ -116,14 +116,15 @@ function answersBlock(questions: Question[], answers: Record<string, AnswerState
 }
 export function probeMapPrompt(lesson: Lesson, m?: Mastery, o?: Objective, sources?: string) {
   const probe = lesson.probe;
-  const typed = probe?.questions.filter((q) => q.type !== 'mcq') ?? [];
+  const typed =
+    probe?.questions.filter((q) => q.type !== 'mcq' && !probe.answers[q.id]?.unknown) ?? [];
   return `${TEACHING}
 
 The student wants to learn: ${lesson.topic}
 ${o ? objectiveBlock(o) : ''}Notes to teach from:
 ${notesList(lesson.notes)}
 ${sourcesBlock(sources)}${courseBlock(m)}
-${probe?.questions.length ? `Their probe answers (multiple choice is already marked; mark the others):\n${answersBlock(probe.questions, probe.answers)}\n${MARKING}\nReturn marks only for: ${typed.map((q) => q.id).join(', ') || '(none)'}.\n` : 'There was no probe. Return an empty marks list.\n'}
+${probe?.questions.length ? `Their probe answers (multiple choice and "I don't know" are already marked; mark the others):\n${answersBlock(probe.questions, probe.answers)}\n${MARKING}\nReturn marks only for: ${typed.map((q) => q.id).join(', ') || '(none)'}.\n` : 'There was no probe. Return an empty marks list.\n'}
 Then plan the lesson from the edge you found:
 - findings: what the answers show, in one or two sentences (at most 50 words; don't repeat the plan). Name a wrong answer as a slip, an isolated gap or a misconception.
 - map: three to five steps. The first builds on something the student has shown they know; the last reaches the goal. plan says in prose where you will start and why. mermaid is a small graph TD from the starting facts to the goal. Each step has a one-sentence why.${m ? '\n- objective: the mastery id this lesson teaches, if one fits.' : ''}`;

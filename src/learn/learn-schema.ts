@@ -6,6 +6,7 @@ import {
   obj,
   oneOf,
   questionSchema,
+  validateClozeQuestion,
   str,
   type Schema,
 } from '../tests/test-schema';
@@ -117,6 +118,7 @@ function questionErrors(list: Question[], where: string): string[] {
       errors.push(`${where}: question id ${q.id} is used twice`);
     }
     ids.add(q.id);
+    errors.push(...validateClozeQuestion(q));
     if (!q.rubric.length) {
       errors.push(`${q.id} has no rubric`);
     } else if (Math.abs(q.rubric.reduce((n, r) => n + r.marks, 0) - q.marks) > 1e-6) {

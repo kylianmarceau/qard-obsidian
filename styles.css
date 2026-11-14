@@ -8025,3 +8025,15 @@ div.qard-ask-q {
 .qard-deck-options .qard-actions {
   justify-content: flex-end;
 }
+
+/* Gap controls inherit the note's Markdown layout and wrap on narrow screens. */
+.qard-cloze-slot {
+  display: inline;
+}
+
+.qard-app input.qard-cloze-input {
+  width: 12ch;
+  max-width: 100%;
+  margin: 4px;
+  vertical-align: baseline;
+}

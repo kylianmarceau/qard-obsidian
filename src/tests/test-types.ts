@@ -1,6 +1,6 @@
 import type { SourceSnapshot } from '../cards/source-sync-types';
 /** Practice-test files. Qard is the only writer; agents return JSON that Qard validates and saves. */
-export type QuestionType = 'short' | 'long' | 'mcq' | 'calc';
+export type QuestionType = 'short' | 'long' | 'mcq' | 'calc' | 'cloze';
 export type Confidence = 'sure' | 'unsure' | 'guess';
 export type AnnotationKind = 'correct' | 'wrong' | 'vague' | 'missing' | 'insight';
 export type Mistake =
@@ -33,6 +33,7 @@ export interface Question {
   marks: number;
   options?: string[];
   answer?: number;
+  blanks?: { id: string }[];
   rubric: RubricPoint[];
   model: string;
   source?: { path: string; heading?: string };
@@ -71,6 +72,7 @@ export interface QuestionMark {
 export interface AnswerState {
   text?: string;
   choice?: number;
+  blanks?: Record<string, string>;
   confidence?: Confidence;
   flagged?: boolean;
   unknown?: boolean;
@@ -165,4 +167,30 @@ export function markChoice(q: Question, answer: AnswerState | undefined): Questi
     mistake: right ? 'none' : 'misconception',
     feedback: right ? 'Correct.' : `The answer is “${q.options?.[q.answer ?? -1] ?? ''}”.`,
   };
+}
+
+/** Blank order is rubric order; every blank earns one mark. */
+export function blankAnswer(answer: AnswerState | undefined, id: string): string {
+  const blanks = answer?.blanks;
+  if (!blanks || typeof blanks !== 'object' || !Object.prototype.hasOwnProperty.call(blanks, id)) {
+    return '';
+  }
+  const value = blanks[id];
+  return typeof value === 'string' ? value : '';
+}
+
+/** The answer as the student saw it, with unanswered blanks left visible. */
+export function answerText(q: Question, answer: AnswerState | undefined): string {
+  if (answer?.unknown) {
+    return "I don't know";
+  }
+  if (q.type === 'mcq') {
+    return q.options?.[answer?.choice ?? -1] ?? '';
+  }
+  if (q.type === 'cloze') {
+    return q.prompt.replace(/\{\{([^{}]+)\}\}/g, (slot, id: string) => {
+      return blankAnswer(answer, id).trim() || slot;
+    });
+  }
+  return answer?.text ?? '';
 }

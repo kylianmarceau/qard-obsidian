@@ -13,3 +13,38 @@ for (const fixture of fixtures) {
     expect(formatLessonNote(fixture.path, lesson, fixture.summary)).toEqual(fixture.expected);
   });
 }
+
+it('exports filled cloze answers in their Markdown context', () => {
+  const lesson = {
+    version: 1,
+    createdAt: 1,
+    topic: 'Recall',
+    notes: [],
+    current: 0,
+    steps: [
+      {
+        title: 'Method',
+        explain: 'Explanation.',
+        connect: 'Connection.',
+        checkFirst: false,
+        misconceptions: [],
+        check: {
+          id: 'c',
+          type: 'cloze',
+          prompt: 'Use **{{method}}** for {{task}}.',
+          marks: 2,
+          blanks: [{ id: 'method' }, { id: 'task' }],
+          rubric: [
+            { point: 'method', marks: 1 },
+            { point: 'task', marks: 1 },
+          ],
+          model: 'DP for paths.',
+        },
+      },
+    ],
+    state: [{ asks: [], answer: { blanks: { method: 'DP', task: 'paths' } } }],
+  } satisfies Lesson;
+  expect(formatLessonNote('lesson.json', lesson, 'Summary.').text).toContain(
+    '**My answer:** Use **DP** for paths.',
+  );
+});

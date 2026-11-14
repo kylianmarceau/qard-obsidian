@@ -7,7 +7,7 @@ import type {
   TestPlan,
   TestRequest,
 } from './test-types';
-import { questions } from './test-types';
+import { answerText, blankAnswer, questions } from './test-types';
 
 /** Shared by every task. Agents read the vault; Qard writes all files from their JSON. */
 export const PREAMBLE = `You are the study assistant inside Qard, an Obsidian study plugin. You write tests, lessons and checks, teach, and mark answers.
@@ -29,7 +29,8 @@ export const GOAL_RULES = `Each question has a goal, and the goal decides the fo
 - recognise (tell ideas apart): mcq
 - recall (state a fact, name, formula): short
 - explain (why or how): long
-- apply (use it on a new case, calculate, write code): calc, or long for code`;
+- apply (use it on a new case, calculate, write code): calc, or long for code
+Cloze is also available for focused term recall: put named slots such as {{term}} in the prompt and provide blanks: [{id: "term"}]. Use unique slots in plain question text, one rubric point and 1 mark per slot, with blanks and rubric points in the same order. State what each slot must convey in its rubric point and supply a full model answer; the tutor grades meaning rather than matching a prefilled answer list. Avoid ambiguous gaps.`;
 const objectivesBlock = (objectives?: string) =>
   objectives?.trim()
     ? `
@@ -59,7 +60,7 @@ Draft a short test plan for the student to approve. Do not write the questions y
 - title: at most eight words.
 - goal: two to four sentences that restate the request precisely, including any emphasis.
 - sources: keep every note the student chose; add others you found, each with a few words of reason. Read enough to be sure they fit.
-- sections: two to four groups of related questions. Each has a one-sentence focus, the question mix (short answer, long answer, calculation, multiple choice) and its marks.
+- sections: two to four groups of related questions. Each has a one-sentence focus, the question mix (short answer, long answer, calculation, multiple choice, cloze) and its marks.
 - Aim for about ${d.questions} questions unless the request says otherwise. Estimate minutes realistically.
 Keep it brief: this is a plan, not the test.`;
 }
@@ -78,6 +79,7 @@ Question types:
 - long: an explanation or comparison. 4–6 marks.
 - calc: a worked calculation with fresh numbers. The student may write LaTeX.
 - mcq: four options with exactly one correct; set answer to its index. Usually 1 mark.
+- cloze: focused term recall using named {{slots}}, 1 mark per slot.
 ${GOAL_RULES}
 ${MCQ_RULES}
 Rules:
@@ -97,19 +99,30 @@ function studentAnswer(q: Question, a: AnswerState | undefined) {
   if (q.type === 'mcq' && a?.choice !== undefined) {
     return `Picked ${String.fromCharCode(65 + a.choice)}. ${q.options?.[a.choice] ?? ''} (${a.choice === q.answer ? 'correct' : 'wrong'})`;
   }
-  return a?.text?.trim() || '(blank)';
+  return answerText(q, a).trim() || '(blank)';
 }
 export function questionBlock(q: Question, a: AnswerState | undefined) {
+  const submissions =
+    q.type === 'cloze'
+      ? `<cloze_submissions>${JSON.stringify(
+          (q.blanks ?? []).map((blank, i) => ({
+            id: blank.id,
+            rubricPoint: i + 1,
+            text: blankAnswer(a, blank.id),
+          })),
+        )}</cloze_submissions>\n`
+      : '';
   return `<question id="${q.id}" type="${q.type}" marks="${q.marks}">
 <prompt>${q.prompt}</prompt>
 <rubric>
 ${q.rubric.map((r, i) => `${i + 1}. (${r.marks}) ${r.point}`).join('\n')}
 </rubric>
 <model_answer>${q.model}</model_answer>
-${q.options?.length ? `<options>\n${q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}${i === q.answer ? ' (correct)' : ''}`).join('\n')}\n</options>\n` : ''}${q.source ? `<source>${q.source.path}${q.source.heading ? ` › ${q.source.heading}` : ''}</source>\n` : ''}<student_answer confidence="${a?.confidence ?? 'unstated'}">${studentAnswer(q, a)}</student_answer>
+${submissions}${q.options?.length ? `<options>\n${q.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}${i === q.answer ? ' (correct)' : ''}`).join('\n')}\n</options>\n` : ''}${q.source ? `<source>${q.source.path}${q.source.heading ? ` › ${q.source.heading}` : ''}</source>\n` : ''}<student_answer confidence="${a?.confidence ?? 'unstated'}">${studentAnswer(q, a)}</student_answer>
 </question>`;
 }
 export const MARKING = `Mark strictly against each rubric. awarded[i] is true only when the answer clearly makes point i; score is the sum of the awarded points' marks. A blank answer scores 0.
+For cloze, cloze_submissions lists only the student-supplied slot text in blank/rubric order; rubricPoint is the one-based rubric index. Judge each slot in context against its rubric point and accept equivalent meaning, not only the model answer's exact wording. An empty or whitespace-only slot earns no mark. The surrounding sentence and any unfilled {{slot}} placeholders are question context, not evidence of knowledge; never award a point from them.
 Annotate the answer the way a teacher marks a script:
 - quote: text copied exactly from the student's answer (one to twelve words).
 - kind: correct (earned a point), wrong (factually incorrect), vague (the right idea, stated imprecisely), insight (a good point beyond the rubric).

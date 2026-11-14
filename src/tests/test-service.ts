@@ -581,7 +581,7 @@ export class TestService {
       false,
     );
   }
-  /** Multiple choice is marked locally; the rest waits for the agent (now, or at the end). */
+  /** Multiple choice and "I don't know" are marked locally; the rest waits for the agent (now, or at the end). */
   async submit(folder: string, sectionId: string) {
     const { test, attempt } = this.attemptOf(folder);
     const section = test.sections.find((s) => s.id === sectionId);
@@ -736,6 +736,9 @@ export class TestService {
     });
   }
   retry(folder: string, id: string, text: string) {
+    if (questions(this.attemptOf(folder).test).find((q) => q.id === id)?.type === 'cloze') {
+      return Promise.resolve();
+    }
     return this.track(folder, 'retry', id, async (signal) => {
       const { test, attempt } = this.attemptOf(folder),
         q = questions(test).find((x) => x.id === id)!;
